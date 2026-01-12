@@ -39,6 +39,7 @@ add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY
 
 set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_aeron.h
+    include/tensor_pool/tp.h
     include/tensor_pool/tp_client.h
     include/tensor_pool/tp_client_conductor.h
     include/tensor_pool/tp_consumer.h
