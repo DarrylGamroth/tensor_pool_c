@@ -75,10 +75,10 @@ Status: in progress
 
 ## Phase 7 - Tools and examples aligned to the new API
 
-Status: pending
+Status: in progress
 
-- [ ] Update `tp_example_producer.c` and `tp_example_consumer.c` to use only the new API.
-- [ ] Update `tp_control_listen.c` and `tp_shm_inspect.c` as needed.
+- [x] Update `tp_example_producer.c` and `tp_example_consumer.c` to use only the new API.
+- [x] Update `tp_control_listen.c` and `tp_shm_inspect.c` as needed.
 - [ ] Add a BGAPI-style example (queue-claim fixed pool).
 
 ## Phase 8 - Comprehensive tests and CI hooks
