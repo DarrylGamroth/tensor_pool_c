@@ -87,5 +87,11 @@ Status: Complete
 
 Status: Complete
 
+## Follow-up items
+
+- Fully implement partially implemented features (control-plane decoders, per-consumer streams, progress throttling).
+- Fully implement the driver client (complete attach validation, add response decoding for non-attach driver messages).
+- Fully implement the discovery client (decode full response groups, add helper lifecycle cleanup and filters).
+
 - CLI tools for attach/keepalive, SHM inspection, and sample producer/consumer.
 - Example configs and usage docs.
