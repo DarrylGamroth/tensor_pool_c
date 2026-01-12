@@ -289,7 +289,7 @@ tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &consumer);
 while (running)
 {
     tp_consumer_poll_control(&consumer, 10);
-tp_consumer_poll_descriptors(&consumer, 10);
+    tp_consumer_poll_descriptors(&consumer, 10);
 }
 
 tp_consumer_close(&consumer);
@@ -398,11 +398,77 @@ tp_producer_send_data_source_meta(&producer, &meta);
 tp_metadata_poll(&meta_poller, 10);
 ```
 
+### 12.5 Progress (Per-Consumer Stream)
+
+```c
+static void on_progress(void *clientd, const tp_frame_progress_t *progress)
+{
+    (void)clientd;
+    // update local QoS or visibility of consumer progress
+}
+
+tp_progress_handlers_t progress_handlers =
+{
+    .on_progress = on_progress,
+    .clientd = NULL
+};
+
+tp_progress_poller_t progress_poller;
+tp_progress_poller_init(&progress_poller, &client, &progress_handlers);
+
+while (running)
+{
+    tp_progress_poll(&progress_poller, 10);
+}
+```
+
+### 12.6 Driver Attach + Keepalive (Consumer)
+
+```c
+tp_driver_client_t driver;
+tp_driver_attach_request_t attach_req;
+tp_async_attach_t *attach_async = NULL;
+tp_driver_attach_info_t attach_info;
+
+tp_driver_client_init(&driver, &client);
+tp_driver_attach_request_init(&attach_req);
+attach_req.client_id = 42;
+attach_req.stream_id = consumer_ctx.stream_id;
+attach_req.role = TP_ROLE_CONSUMER;
+
+tp_driver_attach_async(&driver, &attach_req, &attach_async);
+while (tp_driver_attach_poll(attach_async, &attach_info) == 0)
+{
+    tp_client_do_work(&client);
+}
+
+while (running)
+{
+    tp_driver_keepalive(&driver, tp_clock_now_ns());
+    tp_client_do_work(&client);
+}
+```
+
+### 12.7 Logging (Client)
+
+```c
+static void on_log(void *clientd, int level, const char *message)
+{
+    (void)clientd;
+    fprintf(stderr, "[tp] %d %s\n", level, message);
+}
+
+tp_client_context_t ctx;
+tp_client_context_init(&ctx);
+tp_client_context_set_log_handler(&ctx, on_log, NULL);
+```
+
 ## 13. Migration Notes (Current -> Proposed)
 
 - Replace direct Aeron usage in tools with pollers: `tp_control_poller`, `tp_qos_poller`, `tp_metadata_poller`.
 - Replace `tp_driver_client_init` + attach with `tp_client_init` + `tp_driver_attach_async/poll`.
 - Keep wire-level structs unchanged; only add ergonomic wrappers.
+- Close order: close producers/consumers/pollers before `tp_client_close`.
 
 ## 14. Suggested Files / Modules
 
@@ -437,3 +503,4 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
 - **Keepalive scheduling**: keepalive work runs inside `tp_client_do_work` and/or `tp_driver_client_do_work` and uses the same idle strategy/intervals configured in the client context.
 - **Fragment limits and polling**: `tp_*_poll` functions take `fragment_limit` like Aeron, and return number of fragments/events processed.
+- **Poll return semantics**: `tp_*_poll` returns fragment count (`>= 0`) or `-1` on error with `tp_errcode()/tp_errmsg()` set.
