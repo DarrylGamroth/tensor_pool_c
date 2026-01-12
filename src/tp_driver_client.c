@@ -24,6 +24,7 @@
 #include "driver/tensor_pool/shmLeaseKeepalive.h"
 #include "driver/tensor_pool/shmLeaseRevoked.h"
 #include "driver/tensor_pool/leaseRevokeReason.h"
+#include "driver/tensor_pool/role.h"
 #include "driver/tensor_pool/responseCode.h"
 #include "driver/tensor_pool/shutdownReason.h"
 
@@ -53,6 +54,12 @@ static void tp_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t s
 
     if (dst_len == 0)
     {
+        return;
+    }
+
+    if (NULL == src)
+    {
+        dst[0] = '\0';
         return;
     }
 
@@ -183,19 +190,6 @@ int tp_driver_decode_attach_response(
             return 0;
         }
 
-        {
-            const char *uri = tensor_pool_shmAttachResponse_headerRegionUri(&response);
-            uint32_t len = tensor_pool_shmAttachResponse_headerRegionUri_length(&response);
-            tp_copy_ascii(out->header_region_uri, sizeof(out->header_region_uri), uri, len);
-            if (out->header_region_uri[0] == '\0')
-            {
-                out->code = tensor_pool_responseCode_INVALID_PARAMS;
-                strncpy(out->error_message, "attach response missing header region uri", sizeof(out->error_message) - 1);
-                out->error_message[sizeof(out->error_message) - 1] = '\0';
-                return 0;
-            }
-        }
-
         tensor_pool_shmAttachResponse_payloadPools_wrap_for_decode(
             &pools,
             (char *)buffer,
@@ -258,8 +252,15 @@ int tp_driver_decode_attach_response(
                 return 0;
             }
 
-            uri = tensor_pool_shmAttachResponse_payloadPools_regionUri(&pools);
             len = tensor_pool_shmAttachResponse_payloadPools_regionUri_length(&pools);
+            uri = tensor_pool_shmAttachResponse_payloadPools_regionUri(&pools);
+            if (NULL == uri)
+            {
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response invalid payload uri", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
+            }
             tp_copy_ascii(pool->region_uri, sizeof(pool->region_uri), uri, len);
             if (pool->region_uri[0] == '\0')
             {
@@ -269,11 +270,31 @@ int tp_driver_decode_attach_response(
                 return 0;
             }
         }
+
+        {
+            uint32_t len = tensor_pool_shmAttachResponse_headerRegionUri_length(&response);
+            const char *uri = tensor_pool_shmAttachResponse_headerRegionUri(&response);
+            if (NULL == uri)
+            {
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response invalid header uri", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
+            }
+            tp_copy_ascii(out->header_region_uri, sizeof(out->header_region_uri), uri, len);
+            if (out->header_region_uri[0] == '\0')
+            {
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response missing header region uri", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
+            }
+        }
     }
     else
     {
-        const char *err = tensor_pool_shmAttachResponse_errorMessage(&response);
         uint32_t len = tensor_pool_shmAttachResponse_errorMessage_length(&response);
+        const char *err = tensor_pool_shmAttachResponse_errorMessage(&response);
         tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
     }
 
@@ -337,8 +358,8 @@ int tp_driver_decode_detach_response(
     }
 
     {
-        const char *err = tensor_pool_shmDetachResponse_errorMessage(&response);
         uint32_t len = tensor_pool_shmDetachResponse_errorMessage_length(&response);
+        const char *err = tensor_pool_shmDetachResponse_errorMessage(&response);
         tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
     }
 
@@ -393,7 +414,7 @@ int tp_driver_decode_lease_revoked(
     out->stream_id = tensor_pool_shmLeaseRevoked_streamId(&revoked);
     out->client_id = tensor_pool_shmLeaseRevoked_clientId(&revoked);
     {
-        enum tensor_pool_Role role;
+        enum tensor_pool_role role;
         if (!tensor_pool_shmLeaseRevoked_role(&revoked, &role))
         {
             out->role = 0;
@@ -404,7 +425,7 @@ int tp_driver_decode_lease_revoked(
         }
     }
     {
-        enum tensor_pool_LeaseRevokeReason reason;
+        enum tensor_pool_leaseRevokeReason reason;
         if (!tensor_pool_shmLeaseRevoked_reason(&revoked, &reason))
         {
             out->reason = 0;
@@ -415,8 +436,8 @@ int tp_driver_decode_lease_revoked(
         }
     }
     {
-        const char *err = tensor_pool_shmLeaseRevoked_errorMessage(&revoked);
         uint32_t len = tensor_pool_shmLeaseRevoked_errorMessage_length(&revoked);
+        const char *err = tensor_pool_shmLeaseRevoked_errorMessage(&revoked);
         tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
     }
 
@@ -468,7 +489,7 @@ int tp_driver_decode_shutdown(
 
     out->timestamp_ns = tensor_pool_shmDriverShutdown_timestampNs(&shutdown);
     {
-        enum tensor_pool_ShutdownReason reason;
+        enum tensor_pool_shutdownReason reason;
         if (!tensor_pool_shmDriverShutdown_reason(&shutdown, &reason))
         {
             out->reason = 0;
@@ -479,8 +500,8 @@ int tp_driver_decode_shutdown(
         }
     }
     {
-        const char *err = tensor_pool_shmDriverShutdown_errorMessage(&shutdown);
         uint32_t len = tensor_pool_shmDriverShutdown_errorMessage_length(&shutdown);
+        const char *err = tensor_pool_shmDriverShutdown_errorMessage(&shutdown);
         tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
     }
 

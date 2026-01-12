@@ -18,6 +18,7 @@
 #include "discovery/tensor_pool/discoveryRequest.h"
 #include "discovery/tensor_pool/discoveryResponse.h"
 #include "discovery/tensor_pool/discoveryStatus.h"
+#include "discovery/tensor_pool/varAsciiEncoding.h"
 
 typedef struct tp_discovery_response_ctx_stct
 {
@@ -45,6 +46,12 @@ static void tp_discovery_copy_ascii(char *dst, size_t dst_len, const char *src, 
 
     if (dst_len == 0)
     {
+        return;
+    }
+
+    if (NULL == src)
+    {
+        dst[0] = '\0';
         return;
     }
 
@@ -124,8 +131,8 @@ int tp_discovery_decode_response(
 
     if (out->status != tensor_pool_discoveryStatus_OK)
     {
-        const char *err = tensor_pool_discoveryResponse_errorMessage(&response);
         uint32_t len = tensor_pool_discoveryResponse_errorMessage_length(&response);
+        const char *err = tensor_pool_discoveryResponse_errorMessage(&response);
         tp_discovery_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
         return 0;
     }
@@ -236,8 +243,8 @@ int tp_discovery_decode_response(
                 pool->nslots = tensor_pool_discoveryResponse_results_payloadPools_poolNslots(&pools);
                 pool->stride_bytes = tensor_pool_discoveryResponse_results_payloadPools_strideBytes(&pools);
 
-                uri = tensor_pool_discoveryResponse_results_payloadPools_regionUri(&pools);
                 len = tensor_pool_discoveryResponse_results_payloadPools_regionUri_length(&pools);
+                uri = tensor_pool_discoveryResponse_results_payloadPools_regionUri(&pools);
                 tp_discovery_copy_ascii(pool->region_uri, sizeof(pool->region_uri), uri, len);
                 if (pool->region_uri[0] == '\0')
                 {
@@ -272,6 +279,7 @@ int tp_discovery_decode_response(
 
             for (t = 0; t < tag_count; t++)
             {
+                struct tensor_pool_varAsciiEncoding tag_codec;
                 const char *tag;
                 uint32_t len;
 
@@ -280,8 +288,18 @@ int tp_discovery_decode_response(
                     break;
                 }
 
-                tag = tensor_pool_discoveryResponse_results_tags_tag(&tags);
-                len = tensor_pool_discoveryResponse_results_tags_tag_length(&tags);
+                if (NULL == tensor_pool_discoveryResponse_results_tags_tag(&tags, &tag_codec))
+                {
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response tag decode failed", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
+
+                len = tensor_pool_varAsciiEncoding_length(&tag_codec);
+                tag = tensor_pool_varAsciiEncoding_buffer(&tag_codec) +
+                    tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                    tensor_pool_varAsciiEncoding_varData_encoding_offset();
                 result->tags[t] = NULL;
                 if (len > 0)
                 {
@@ -295,11 +313,22 @@ int tp_discovery_decode_response(
                     memcpy(result->tags[t], tag, len);
                     result->tags[t][len] = '\0';
                 }
+
+                if (!tensor_pool_discoveryResponse_results_tags_set_sbe_position(
+                    &tags,
+                    tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                        tensor_pool_varAsciiEncoding_varData_encoding_offset() + len))
+                {
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response tag position update failed", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
             }
 
             {
-                const char *uri = tensor_pool_discoveryResponse_results_headerRegionUri(&results);
                 uint32_t len = tensor_pool_discoveryResponse_results_headerRegionUri_length(&results);
+                const char *uri = tensor_pool_discoveryResponse_results_headerRegionUri(&results);
                 tp_discovery_copy_ascii(result->header_region_uri, sizeof(result->header_region_uri), uri, len);
                 if (result->header_region_uri[0] == '\0')
                 {
@@ -311,20 +340,20 @@ int tp_discovery_decode_response(
             }
 
             {
-                const char *name = tensor_pool_discoveryResponse_results_dataSourceName(&results);
                 uint32_t len = tensor_pool_discoveryResponse_results_dataSourceName_length(&results);
+                const char *name = tensor_pool_discoveryResponse_results_dataSourceName(&results);
                 tp_discovery_copy_ascii(result->data_source_name, sizeof(result->data_source_name), name, len);
             }
 
             {
-                const char *inst = tensor_pool_discoveryResponse_results_driverInstanceId(&results);
                 uint32_t len = tensor_pool_discoveryResponse_results_driverInstanceId_length(&results);
+                const char *inst = tensor_pool_discoveryResponse_results_driverInstanceId(&results);
                 tp_discovery_copy_ascii(result->driver_instance_id, sizeof(result->driver_instance_id), inst, len);
             }
 
             {
-                const char *channel = tensor_pool_discoveryResponse_results_driverControlChannel(&results);
                 uint32_t len = tensor_pool_discoveryResponse_results_driverControlChannel_length(&results);
+                const char *channel = tensor_pool_discoveryResponse_results_driverControlChannel(&results);
                 tp_discovery_copy_ascii(result->driver_control_channel, sizeof(result->driver_control_channel), channel, len);
             }
         }
@@ -504,25 +533,39 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
         {
             const char *tag = request->tags[i];
             size_t len = tag ? strlen(tag) : 0;
+            struct tensor_pool_varAsciiEncoding tag_codec;
 
             if (NULL == tensor_pool_discoveryRequest_tags_next(&tags))
             {
                 return -1;
             }
 
+            if (NULL == tensor_pool_discoveryRequest_tags_tag(&tags, &tag_codec))
+            {
+                return -1;
+            }
+
+            if (tensor_pool_varAsciiEncoding_set_length(&tag_codec, (uint32_t)len) == NULL)
+            {
+                return -1;
+            }
+
             if (len > 0)
             {
-                if (tensor_pool_discoveryRequest_tags_put_tag(&tags, tag, len) < 0)
-                {
-                    return -1;
-                }
+                memcpy(
+                    (char *)tensor_pool_varAsciiEncoding_mut_buffer(&tag_codec) +
+                        tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                        tensor_pool_varAsciiEncoding_varData_encoding_offset(),
+                    tag,
+                    len);
             }
-            else
+
+            if (!tensor_pool_discoveryRequest_tags_set_sbe_position(
+                &tags,
+                tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                    tensor_pool_varAsciiEncoding_varData_encoding_offset() + len))
             {
-                if (tensor_pool_discoveryRequest_tags_put_tag(&tags, "", 0) < 0)
-                {
-                    return -1;
-                }
+                return -1;
             }
         }
     }
@@ -654,7 +697,7 @@ int tp_discovery_result_matches(
         return 0;
     }
 
-    if (NULL != data_source_name && data_source_name[0] != '\\0' &&
+    if (NULL != data_source_name && data_source_name[0] != '\0' &&
         strcmp(result->data_source_name, data_source_name) != 0)
     {
         return 0;

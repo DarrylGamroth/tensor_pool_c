@@ -4,6 +4,7 @@
 #include "discovery/tensor_pool/messageHeader.h"
 #include "discovery/tensor_pool/discoveryResponse.h"
 #include "discovery/tensor_pool/discoveryStatus.h"
+#include "discovery/tensor_pool/varAsciiEncoding.h"
 
 #include <assert.h>
 #include <string.h>
@@ -97,13 +98,53 @@ static void test_decode_discovery_response_with_tags(void)
     {
         goto cleanup;
     }
-    tensor_pool_discoveryResponse_results_tags_put_tag(&tags, "vision", 6);
+    {
+        struct tensor_pool_varAsciiEncoding tag_codec;
+        if (NULL == tensor_pool_discoveryResponse_results_tags_tag(&tags, &tag_codec))
+        {
+            goto cleanup;
+        }
+        tensor_pool_varAsciiEncoding_set_length(&tag_codec, 6);
+        memcpy(
+            (char *)tensor_pool_varAsciiEncoding_mut_buffer(&tag_codec) +
+                tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                tensor_pool_varAsciiEncoding_varData_encoding_offset(),
+            "vision",
+            6);
+        if (!tensor_pool_discoveryResponse_results_tags_set_sbe_position(
+            &tags,
+            tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                tensor_pool_varAsciiEncoding_varData_encoding_offset() + 6))
+        {
+            goto cleanup;
+        }
+    }
 
     if (NULL == tensor_pool_discoveryResponse_results_tags_next(&tags))
     {
         goto cleanup;
     }
-    tensor_pool_discoveryResponse_results_tags_put_tag(&tags, "fp32", 4);
+    {
+        struct tensor_pool_varAsciiEncoding tag_codec;
+        if (NULL == tensor_pool_discoveryResponse_results_tags_tag(&tags, &tag_codec))
+        {
+            goto cleanup;
+        }
+        tensor_pool_varAsciiEncoding_set_length(&tag_codec, 4);
+        memcpy(
+            (char *)tensor_pool_varAsciiEncoding_mut_buffer(&tag_codec) +
+                tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                tensor_pool_varAsciiEncoding_varData_encoding_offset(),
+            "fp32",
+            4);
+        if (!tensor_pool_discoveryResponse_results_tags_set_sbe_position(
+            &tags,
+            tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                tensor_pool_varAsciiEncoding_varData_encoding_offset() + 4))
+        {
+            goto cleanup;
+        }
+    }
 
     tensor_pool_discoveryResponse_results_put_headerRegionUri(&results, "shm:file?path=/dev/shm/hdr", 26);
     tensor_pool_discoveryResponse_results_put_dataSourceName(&results, "camera", 6);

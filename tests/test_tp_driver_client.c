@@ -9,6 +9,7 @@
 #include "driver/tensor_pool/responseCode.h"
 #include "driver/tensor_pool/leaseRevokeReason.h"
 #include "driver/tensor_pool/shutdownReason.h"
+#include "driver/tensor_pool/role.h"
 
 #include <assert.h>
 #include <string.h>
@@ -46,7 +47,6 @@ static void test_decode_attach_response_valid(void)
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, TP_HEADER_SLOT_BYTES);
     tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
-    tensor_pool_shmAttachResponse_put_headerRegionUri(&response, "shm:file?path=/dev/shm/hdr", 26);
 
     if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
         &pools,
@@ -67,6 +67,7 @@ static void test_decode_attach_response_valid(void)
     tensor_pool_shmAttachResponse_payloadPools_set_poolNslots(&pools, 16);
     tensor_pool_shmAttachResponse_payloadPools_set_strideBytes(&pools, 4096);
     tensor_pool_shmAttachResponse_payloadPools_put_regionUri(&pools, "shm:file?path=/dev/shm/pool", 27);
+    tensor_pool_shmAttachResponse_put_headerRegionUri(&response, "shm:file?path=/dev/shm/hdr", 26);
 
     if (tp_driver_decode_attach_response(buffer, sizeof(buffer), 101, &info) != 0)
     {
@@ -117,6 +118,30 @@ static void test_decode_attach_response_invalid_slot_bytes(void)
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, 128);
     tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
+    {
+        struct tensor_pool_shmAttachResponse_payloadPools pools;
+
+        if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
+            &pools,
+            (char *)buffer,
+            1,
+            tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
+            tensor_pool_shmAttachResponse_sbe_schema_version(),
+            sizeof(buffer)))
+        {
+            goto cleanup;
+        }
+
+        if (NULL == tensor_pool_shmAttachResponse_payloadPools_next(&pools))
+        {
+            goto cleanup;
+        }
+        tensor_pool_shmAttachResponse_payloadPools_set_poolId(&pools, 2);
+        tensor_pool_shmAttachResponse_payloadPools_set_poolNslots(&pools, 16);
+        tensor_pool_shmAttachResponse_payloadPools_set_strideBytes(&pools, 4096);
+        tensor_pool_shmAttachResponse_payloadPools_put_regionUri(&pools, "shm:file?path=/dev/shm/pool", 27);
+    }
+
     tensor_pool_shmAttachResponse_put_headerRegionUri(&response, "shm:file?path=/dev/shm/hdr", 26);
 
     if (tp_driver_decode_attach_response(buffer, sizeof(buffer), 202, &info) != 0)
@@ -199,8 +224,8 @@ static void test_decode_lease_revoked(void)
     tensor_pool_shmLeaseRevoked_set_leaseId(&revoked, 101);
     tensor_pool_shmLeaseRevoked_set_streamId(&revoked, 202);
     tensor_pool_shmLeaseRevoked_set_clientId(&revoked, 303);
-    tensor_pool_shmLeaseRevoked_set_role(&revoked, tensor_pool_Role_PRODUCER);
-    tensor_pool_shmLeaseRevoked_set_reason(&revoked, tensor_pool_LeaseRevokeReason_EXPIRED);
+    tensor_pool_shmLeaseRevoked_set_role(&revoked, tensor_pool_role_PRODUCER);
+    tensor_pool_shmLeaseRevoked_set_reason(&revoked, tensor_pool_leaseRevokeReason_EXPIRED);
     tensor_pool_shmLeaseRevoked_put_errorMessage(&revoked, "expired", 7);
 
     if (tp_driver_decode_lease_revoked(buffer, sizeof(buffer), &info) != 0)
@@ -210,7 +235,7 @@ static void test_decode_lease_revoked(void)
 
     assert(info.timestamp_ns == 99);
     assert(info.stream_id == 202);
-    assert(info.reason == tensor_pool_LeaseRevokeReason_EXPIRED);
+    assert(info.reason == tensor_pool_leaseRevokeReason_EXPIRED);
 
     result = 0;
 
@@ -241,7 +266,7 @@ static void test_decode_shutdown(void)
 
     tensor_pool_shmDriverShutdown_wrap_for_encode(&shutdown, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
     tensor_pool_shmDriverShutdown_set_timestampNs(&shutdown, 500);
-    tensor_pool_shmDriverShutdown_set_reason(&shutdown, tensor_pool_ShutdownReason_ADMIN_REQUESTED);
+    tensor_pool_shmDriverShutdown_set_reason(&shutdown, tensor_pool_shutdownReason_ADMIN);
     tensor_pool_shmDriverShutdown_put_errorMessage(&shutdown, "admin", 5);
 
     if (tp_driver_decode_shutdown(buffer, sizeof(buffer), &info) != 0)
@@ -250,7 +275,7 @@ static void test_decode_shutdown(void)
     }
 
     assert(info.timestamp_ns == 500);
-    assert(info.reason == tensor_pool_ShutdownReason_ADMIN_REQUESTED);
+    assert(info.reason == tensor_pool_shutdownReason_ADMIN);
 
     result = 0;
 
