@@ -189,3 +189,6 @@ target_link_libraries(tp_example_producer PRIVATE tensor_pool)
 
 add_executable(tp_example_consumer tools/tp_example_consumer.c)
 target_link_libraries(tp_example_consumer PRIVATE tensor_pool)
+
+add_executable(tp_control_listen tools/tp_control_listen.c)
+target_link_libraries(tp_control_listen PRIVATE tensor_pool)
