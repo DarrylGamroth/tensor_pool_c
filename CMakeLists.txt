@@ -69,6 +69,7 @@ set(TP_SOURCES
     src/tp_aeron.c
     src/tp_client.c
     src/tp_client_conductor.c
+    src/tp_clock.c
     src/tp_consumer.c
     src/tp_consumer_manager.c
     src/tp_consumer_registry.c
@@ -185,8 +186,10 @@ add_executable(tensor_pool_tests
     tests/test_tp_consumer_registry.c
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c
-    tests/test_tp_client_conductor.c)
-target_link_libraries(tensor_pool_tests PRIVATE tensor_pool)
+    tests/test_tp_client_conductor.c
+    tests/test_tp_pollers.c
+    tests/test_tp_producer_claim.c)
+target_link_libraries(tensor_pool_tests PRIVATE tensor_pool aeron)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 
 add_executable(tp_shm_inspect tools/tp_shm_inspect.c)
@@ -200,3 +203,6 @@ target_link_libraries(tp_example_consumer PRIVATE tensor_pool)
 
 add_executable(tp_control_listen tools/tp_control_listen.c)
 target_link_libraries(tp_control_listen PRIVATE tensor_pool)
+
+add_executable(tp_example_bgapi tools/tp_example_bgapi.c)
+target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
