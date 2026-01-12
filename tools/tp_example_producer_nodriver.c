@@ -169,15 +169,29 @@ int main(int argc, char **argv)
     meta.timestamp_ns = 0;
     meta.meta_version = 0;
 
-    for (int i = 0; i < frame_count; i++)
     {
-        int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
-        if (position < 0)
+        const char *delay_env = getenv("TP_FRAME_DELAY_US");
+        long delay_us = delay_env ? strtol(delay_env, NULL, 10) : 1000;
+        if (delay_us < 0)
         {
-            fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
-            break;
+            delay_us = 0;
         }
-        printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
+
+        for (int i = 0; i < frame_count; i++)
+        {
+            int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
+            if (position < 0)
+            {
+                fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
+                break;
+            }
+            printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
+            if (delay_us > 0)
+            {
+                struct timespec ts = { 0, delay_us * 1000 };
+                nanosleep(&ts, NULL);
+            }
+        }
     }
 
 

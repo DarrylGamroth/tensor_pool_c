@@ -72,7 +72,6 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     }
     else if (read_result == 1)
     {
-        state->errors++;
         fprintf(stderr, "Frame not ready for seq=%" PRIu64 "\n", desc->seq);
     }
     else if (read_result < 0)
@@ -220,12 +219,15 @@ int main(int argc, char **argv)
             tp_consumer_poll_control(&consumer, 10);
             tp_consumer_poll_descriptors(&consumer, 10);
         }
-    }
-
-    if (state.received < state.limit)
-    {
-        state.errors++;
-        fprintf(stderr, "Timed out waiting for frames\n");
+        if (state.received == 0)
+        {
+            state.errors++;
+            fprintf(stderr, "Timed out waiting for frames\n");
+        }
+        else if (state.received < state.limit)
+        {
+            fprintf(stderr, "Timed out with gaps: received=%d expected=%d\n", state.received, state.limit);
+        }
     }
 
     tp_consumer_close(&consumer);
