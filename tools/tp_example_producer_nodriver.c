@@ -1,15 +1,40 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "tensor_pool/tp.h"
 
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void usage(const char *name)
 {
     fprintf(stderr,
         "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <header_uri> <pool_uri> <pool_id> <pool_stride> <header_nslots> <epoch> <layout_version>\n",
         name);
+}
+
+static int wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_publication_is_connected(publication))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -111,6 +136,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (wait_for_publication(&client, producer.descriptor_publication) < 0)
+    {
+        fprintf(stderr, "Descriptor publication not connected\n");
+        tp_producer_close(&producer);
+        tp_client_close(&client);
+        return 1;
+    }
+
     memset(&header, 0, sizeof(header));
     header.dtype = TP_DTYPE_FLOAT32;
     header.major_order = TP_MAJOR_ORDER_ROW;
@@ -141,6 +174,7 @@ int main(int argc, char **argv)
             printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
         }
     }
+
 
     tp_producer_close(&producer);
     tp_client_close(&client);

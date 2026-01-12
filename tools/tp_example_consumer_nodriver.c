@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void usage(const char *name)
 {
@@ -30,13 +31,23 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     tp_consumer_state_t *state = (tp_consumer_state_t *)clientd;
     tp_frame_view_t frame;
     const float expected[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    int read_result;
+    int64_t deadline;
 
     if (NULL == state || NULL == desc || NULL == state->consumer)
     {
         return;
     }
 
-    if (tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame) == 0)
+    deadline = tp_clock_now_ns() + 100 * 1000 * 1000LL;
+    read_result = tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame);
+    while (read_result == 1 && tp_clock_now_ns() < deadline)
+    {
+        struct timespec ts = { 0, 1000000 };
+        nanosleep(&ts, NULL);
+        read_result = tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame);
+    }
+    if (read_result == 0)
     {
         state->received++;
         fprintf(stdout, "Frame seq=%" PRIu64 " pool_id=%u payload=%u\n",
@@ -59,6 +70,36 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
             fprintf(stdout, "Validation ok for seq=%" PRIu64 "\n", desc->seq);
         }
     }
+    else if (read_result == 1)
+    {
+        state->errors++;
+        fprintf(stderr, "Frame not ready for seq=%" PRIu64 "\n", desc->seq);
+    }
+    else if (read_result < 0)
+    {
+        state->errors++;
+        fprintf(stderr, "Read failed for seq=%" PRIu64 ": %s\n", desc->seq, tp_errmsg());
+    }
+}
+
+static int wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_subscription_is_connected(subscription))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -157,6 +198,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (wait_for_subscription(&client, consumer.descriptor_subscription) < 0)
+    {
+        fprintf(stderr, "Descriptor subscription not connected\n");
+        tp_consumer_close(&consumer);
+        tp_client_close(&client);
+        return 1;
+    }
+
     state.consumer = &consumer;
     state.received = 0;
     state.limit = max_frames;
@@ -164,10 +213,19 @@ int main(int argc, char **argv)
 
     tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
 
-    while (state.received < state.limit)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_consumer_poll_descriptors(&consumer, 10);
+        int64_t deadline = tp_clock_now_ns() + 5 * 1000 * 1000 * 1000LL;
+        while (state.received < state.limit && tp_clock_now_ns() < deadline)
+        {
+            tp_consumer_poll_control(&consumer, 10);
+            tp_consumer_poll_descriptors(&consumer, 10);
+        }
+    }
+
+    if (state.received < state.limit)
+    {
+        state.errors++;
+        fprintf(stderr, "Timed out waiting for frames\n");
     }
 
     tp_consumer_close(&consumer);

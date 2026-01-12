@@ -735,12 +735,12 @@ int tp_producer_publish_frame(
         return -1;
     }
 
-    if (tensor_pool_slotHeader_put_headerBytes(
-        &slot_header,
-        (const char *)header_bytes,
-        tensor_pool_messageHeader_encoded_length() + tensor_pool_tensorHeader_sbe_block_length()) < 0)
     {
-        return -1;
+        uint32_t header_len = (uint32_t)(tensor_pool_messageHeader_encoded_length() + tensor_pool_tensorHeader_sbe_block_length());
+        uint32_t header_len_le = SBE_LITTLE_ENDIAN_ENCODE_32(header_len);
+        uint8_t *header_dst = slot + tensor_pool_slotHeader_sbe_block_length();
+        memcpy(header_dst, &header_len_le, sizeof(header_len_le));
+        memcpy(header_dst + sizeof(header_len_le), header_bytes, header_len);
     }
 
     __atomic_thread_fence(__ATOMIC_RELEASE);

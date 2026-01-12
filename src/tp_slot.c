@@ -46,6 +46,8 @@ int tp_slot_decode(tp_slot_view_t *view, const uint8_t *slot, size_t slot_length
     view->timestamp_ns = tensor_pool_slotHeader_timestampNs(&header);
     view->meta_version = tensor_pool_slotHeader_metaVersion(&header);
 
+    view->header_bytes_length = tensor_pool_slotHeader_headerBytes_length(&header);
+
     header_bytes = tensor_pool_slotHeader_headerBytes(&header);
     if (NULL == header_bytes)
     {
@@ -53,7 +55,6 @@ int tp_slot_decode(tp_slot_view_t *view, const uint8_t *slot, size_t slot_length
         return -1;
     }
 
-    view->header_bytes_length = tensor_pool_slotHeader_headerBytes_length(&header);
     view->header_bytes = (const uint8_t *)header_bytes;
 
     if (NULL != log)

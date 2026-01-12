@@ -2,6 +2,7 @@
 #define TENSOR_POOL_TP_H
 
 #include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_control_adapter.h"
