@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.24)
 
 project(tensor_pool_c LANGUAGES C)
 
+include(CheckIncludeFile)
+include(CheckSymbolExists)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
