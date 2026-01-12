@@ -2,13 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_control.h"
-#include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_driver_client.h"
-#include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_tensor.h"
-#include "tensor_pool/tp_types.h"
+#include "tensor_pool/tp.h"
 
 #include "driver/tensor_pool/publishMode.h"
 #include "driver/tensor_pool/role.h"

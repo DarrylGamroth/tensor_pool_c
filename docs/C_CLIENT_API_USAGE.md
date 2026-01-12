@@ -8,6 +8,12 @@ Authoritative references:
 
 This guide focuses on practical usage patterns and callback flow. The API uses TensorPool enums (`tp_mode_t`, `tp_progress_state_t`) so SBE symbols do not leak into application code.
 
+Include the umbrella header for client-facing APIs:
+
+```c
+#include "tensor_pool/tp.h"
+```
+
 ## 1. Client Setup
 
 ```c
