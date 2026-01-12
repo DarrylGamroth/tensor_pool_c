@@ -231,6 +231,10 @@ tp_client_t client;
 tp_consumer_context_t consumer_ctx;
 tp_consumer_t consumer;
 tp_frame_descriptor_handler_t on_descriptor;
+tp_discovery_client_t discovery;
+tp_discovery_request_t request;
+tp_discovery_response_t response;
+const tp_discovery_result_t *result;
 
 // Descriptor callback
 static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
@@ -254,9 +258,25 @@ tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
 tp_client_init(&client, &ctx);
 tp_client_start(&client);
 
+// Discovery: find a pool and stream id
+tp_discovery_request_init(&request);
+request.request_id = 1;
+request.client_id = 42;
+request.response_channel = "aeron:ipc";
+request.response_stream_id = 7001;
+request.tags = (const char *const[]){"role:vision"};
+request.tags_count = 1;
+
+tp_discovery_client_init(&discovery, &client, "aeron:ipc", 7000);
+tp_discovery_request(&discovery, &request);
+tp_discovery_poll(&discovery, request.request_id, &response, 5 * 1000 * 1000 * 1000LL);
+
+// Select a result (example: first match)
+result = &response.results[0];
+
 // Consumer
 tp_consumer_context_init(&consumer_ctx);
-consumer_ctx.stream_id = 10000;
+consumer_ctx.stream_id = result->stream_id;
 consumer_ctx.consumer_id = 42;
 consumer_ctx.use_driver = true;
 consumer_ctx.hello.descriptor_channel = "aeron:ipc";
@@ -269,10 +289,12 @@ tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &consumer);
 while (running)
 {
     tp_consumer_poll_control(&consumer, 10);
-    tp_consumer_poll_descriptors(&consumer, 10);
+tp_consumer_poll_descriptors(&consumer, 10);
 }
 
 tp_consumer_close(&consumer);
+tp_discovery_response_close(&response);
+tp_discovery_client_close(&discovery);
 tp_client_close(&client);
 ```
 
