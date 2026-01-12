@@ -21,6 +21,7 @@ typedef struct tp_consumer_state_stct
     tp_consumer_t *consumer;
     int received;
     int limit;
+    int errors;
 }
 tp_consumer_state_t;
 
@@ -28,6 +29,7 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 {
     tp_consumer_state_t *state = (tp_consumer_state_t *)clientd;
     tp_frame_view_t frame;
+    const float expected[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
 
     if (NULL == state || NULL == desc || NULL == state->consumer)
     {
@@ -41,6 +43,21 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
             desc->seq,
             frame.pool_id,
             frame.payload_len);
+        if (frame.payload_len != sizeof(expected) ||
+            frame.tensor.dtype != TP_DTYPE_FLOAT32 ||
+            frame.tensor.major_order != TP_MAJOR_ORDER_ROW ||
+            frame.tensor.ndims != 2 ||
+            frame.tensor.dims[0] != 2 ||
+            frame.tensor.dims[1] != 2 ||
+            memcmp(frame.payload, expected, sizeof(expected)) != 0)
+        {
+            state->errors++;
+            fprintf(stderr, "Validation failed for seq=%" PRIu64 "\n", desc->seq);
+        }
+        else
+        {
+            fprintf(stdout, "Validation ok for seq=%" PRIu64 "\n", desc->seq);
+        }
     }
 }
 
@@ -143,6 +160,7 @@ int main(int argc, char **argv)
     state.consumer = &consumer;
     state.received = 0;
     state.limit = max_frames;
+    state.errors = 0;
 
     tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
 
@@ -155,5 +173,5 @@ int main(int argc, char **argv)
     tp_consumer_close(&consumer);
     tp_client_close(&client);
 
-    return 0;
+    return state.errors == 0 ? 0 : 2;
 }

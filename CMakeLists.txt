@@ -210,3 +210,6 @@ target_link_libraries(tp_control_listen PRIVATE tensor_pool)
 
 add_executable(tp_example_bgapi tools/tp_example_bgapi.c)
 target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
+
+add_executable(tp_shm_create tools/tp_shm_create.c)
+target_link_libraries(tp_shm_create PRIVATE tensor_pool)
