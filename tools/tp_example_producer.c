@@ -13,6 +13,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define TP_ROLE_PRODUCER tensor_pool_role_PRODUCER
+#define TP_PUBLISH_MODE_EXISTING_OR_CREATE tensor_pool_publishMode_EXISTING_OR_CREATE
+#define TP_HUGEPAGES_UNSPECIFIED tensor_pool_hugepagesPolicy_UNSPECIFIED
+#define TP_RESPONSE_OK tensor_pool_responseCode_OK
+#define TP_DTYPE_FLOAT32 tensor_pool_dtype_FLOAT32
+#define TP_MAJOR_ORDER_ROW tensor_pool_majorOrder_ROW
+#define TP_PROGRESS_NONE tensor_pool_progressUnit_NONE
+
 static void usage(const char *name)
 {
     fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id>\n", name);
@@ -74,10 +82,10 @@ int main(int argc, char **argv)
     request.correlation_id = 1;
     request.stream_id = stream_id;
     request.client_id = client_id;
-    request.role = tensor_pool_role_PRODUCER;
+    request.role = TP_ROLE_PRODUCER;
     request.expected_layout_version = 0;
-    request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
-    request.require_hugepages = tensor_pool_hugepagesPolicy_UNSPECIFIED;
+    request.publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
+    request.require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
 
     if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
@@ -86,7 +94,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (info.code != tensor_pool_responseCode_OK)
+    if (info.code != TP_RESPONSE_OK)
     {
         fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
         tp_driver_attach_info_close(&info);
@@ -153,10 +161,10 @@ int main(int argc, char **argv)
     }
 
     memset(&header, 0, sizeof(header));
-    header.dtype = tensor_pool_dtype_FLOAT32;
-    header.major_order = tensor_pool_majorOrder_ROW;
+    header.dtype = TP_DTYPE_FLOAT32;
+    header.major_order = TP_MAJOR_ORDER_ROW;
     header.ndims = 2;
-    header.progress_unit = tensor_pool_progressUnit_NONE;
+    header.progress_unit = TP_PROGRESS_NONE;
     header.dims[0] = 2;
     header.dims[1] = 2;
 
