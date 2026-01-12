@@ -11,6 +11,10 @@
 
 #define TP_NULL_U32 UINT32_MAX
 #define TP_NULL_U64 UINT64_MAX
+#define TP_URI_MAX_LENGTH 4096u
+
+#define TP_PROGRESS_INTERVAL_DEFAULT_US 250u
+#define TP_PROGRESS_BYTES_DELTA_DEFAULT 65536u
 
 typedef enum tp_log_level_enum
 {

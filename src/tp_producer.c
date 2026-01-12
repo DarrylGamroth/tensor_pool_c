@@ -37,8 +37,9 @@ static int tp_is_power_of_two(uint32_t value)
     return value != 0 && (value & (value - 1)) == 0;
 }
 
-static int tp_producer_publish_descriptor(
+int tp_producer_publish_descriptor_to(
     tp_producer_t *producer,
+    aeron_publication_t *publication,
     uint64_t seq,
     uint32_t header_index,
     uint64_t timestamp_ns,
@@ -50,6 +51,12 @@ static int tp_producer_publish_descriptor(
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_frameDescriptor_sbe_block_length();
     int64_t result;
+
+    if (NULL == producer || NULL == publication)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_descriptor_to: publication unavailable");
+        return -1;
+    }
 
     tensor_pool_messageHeader_wrap(
         &msg_header,
@@ -76,7 +83,7 @@ static int tp_producer_publish_descriptor(
     tensor_pool_frameDescriptor_set_metaVersion(&descriptor, meta_version);
 
     result = aeron_publication_offer(
-        producer->descriptor_publication,
+        publication,
         buffer,
         header_len + body_len,
         NULL,
@@ -88,6 +95,22 @@ static int tp_producer_publish_descriptor(
     }
 
     return 0;
+}
+
+static int tp_producer_publish_descriptor(
+    tp_producer_t *producer,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t timestamp_ns,
+    uint32_t meta_version)
+{
+    return tp_producer_publish_descriptor_to(
+        producer,
+        producer->descriptor_publication,
+        seq,
+        header_index,
+        timestamp_ns,
+        meta_version);
 }
 
 int tp_producer_init(tp_producer_t *producer, const tp_context_t *context)
@@ -413,8 +436,9 @@ int tp_producer_publish_frame(
     return tp_producer_publish_descriptor(producer, seq, header_index, timestamp_ns, meta_version);
 }
 
-int tp_producer_publish_progress(
+int tp_producer_publish_progress_to(
     tp_producer_t *producer,
+    aeron_publication_t *publication,
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
@@ -427,9 +451,9 @@ int tp_producer_publish_progress(
     const size_t body_len = tensor_pool_frameProgress_sbe_block_length();
     int64_t result;
 
-    if (NULL == producer || NULL == producer->control_publication)
+    if (NULL == producer || NULL == publication)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_progress: control publication unavailable");
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_progress_to: control publication unavailable");
         return -1;
     }
 
@@ -452,13 +476,29 @@ int tp_producer_publish_progress(
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, payload_bytes_filled);
     tensor_pool_frameProgress_set_state(&progress, state);
 
-    result = aeron_publication_offer(producer->control_publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(publication, buffer, header_len + body_len, NULL, NULL);
     if (result < 0)
     {
         return (int)result;
     }
 
     return 0;
+}
+
+int tp_producer_publish_progress(
+    tp_producer_t *producer,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t payload_bytes_filled,
+    uint8_t state)
+{
+    return tp_producer_publish_progress_to(
+        producer,
+        producer->control_publication,
+        seq,
+        header_index,
+        payload_bytes_filled,
+        state);
 }
 
 int tp_producer_close(tp_producer_t *producer)

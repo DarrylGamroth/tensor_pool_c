@@ -75,8 +75,22 @@ int tp_producer_publish_frame(
     uint16_t pool_id,
     uint64_t timestamp_ns,
     uint32_t meta_version);
+int tp_producer_publish_descriptor_to(
+    tp_producer_t *producer,
+    aeron_publication_t *publication,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t timestamp_ns,
+    uint32_t meta_version);
 int tp_producer_publish_progress(
     tp_producer_t *producer,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t payload_bytes_filled,
+    uint8_t state);
+int tp_producer_publish_progress_to(
+    tp_producer_t *producer,
+    aeron_publication_t *publication,
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
