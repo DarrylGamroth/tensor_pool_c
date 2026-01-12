@@ -166,5 +166,32 @@ Deliverables
 - `src/tp_discovery_client.c` updates + cleanup helpers.
 - `include/tensor_pool/tp_discovery_client.h` filter APIs.
 
+### Align client with Aeron conductor model
+
+Scope
+- Adopt Aeron-style conductor/agent lifecycle for client state management.
+- Introduce async add publication/subscription patterns and polling.
+
+Steps
+1. Add conductor-style context and lifecycle
+   - Create a client context that owns conductor state, idle strategy, and agent loop.
+   - Split setup into init/start/close to mirror Aeron.
+2. Async add/poll for publications and subscriptions
+   - Replace synchronous add with async add + poll loops.
+   - Expose non-blocking APIs that mirror Aeron return semantics.
+3. Proxies and adapters
+   - Add request proxies for control-plane messages (attach, keepalive, detach).
+   - Add response adapters for driver/discovery/control-plane events.
+4. Threading model and idle strategies
+   - Support manual vs agent-invoked conductor modes.
+   - Provide idle strategy configuration (busy/yield/sleep/backoff).
+5. Tests
+   - Add tests for async add lifecycle and error propagation.
+   - Add tests for agent loop start/stop correctness.
+
+Deliverables
+- New `tp_client_context` + conductor/agent modules.
+- Async add APIs for publications/subscriptions.
+
 - CLI tools for attach/keepalive, SHM inspection, and sample producer/consumer.
 - Example configs and usage docs.
