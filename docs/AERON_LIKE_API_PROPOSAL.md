@@ -39,6 +39,11 @@ int tp_client_context_init(tp_client_context_t *ctx);
 void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir);
 void tp_client_context_set_aeron(tp_client_context_t *ctx, aeron_t *aeron);
 void tp_client_context_set_owns_aeron_client(tp_client_context_t *ctx, bool owns);
+void tp_client_context_set_client_name(tp_client_context_t *ctx, const char *name);
+void tp_client_context_set_message_timeout_ns(tp_client_context_t *ctx, int64_t timeout_ns);
+void tp_client_context_set_message_retry_attempts(tp_client_context_t *ctx, int32_t attempts);
+void tp_client_context_set_error_handler(tp_client_context_t *ctx, tp_error_handler_t handler, void *clientd);
+void tp_client_context_set_delegating_invoker(tp_client_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
@@ -669,3 +674,10 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Claim lifetime**: claims remain valid until `commit`, `abort`, or `recycle`; applications must not hold claims after closing the producer.
 - **Discovery responses**: responses delivered via callback are transient; copy data if needed beyond the callback.
+
+## 18. Aeron Archive Patterns Adopted
+
+- **Context configuration**: client name, message timeout, retry attempts, error handler, and delegating invoker are configured on the context.
+- **Proxy + poller**: request senders are separated from response pollers; responses are correlated by request IDs.
+- **Async connect**: preferred for driver attach/discovery workflows (state machine + poll) rather than blocking calls.
+- **Delegating invoker**: `tp_client_context_set_delegating_invoker` enables agent-invoker integration, mirroring `aeron_archive_context_invoke_aeron_client`.
