@@ -115,6 +115,7 @@ int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
+int tp_producer_recycle_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 
 // Per-consumer routing managed internally when enabled.
@@ -126,6 +127,7 @@ Behavior:
 - Producer owns descriptor/control/qos/metadata publications; app never touches Aeron pubs.
 - `tp_producer_poll_control` uses a control adapter and a consumer manager to handle ConsumerHello, per-consumer streams, and progress throttling.
 - `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
+- `tp_producer_recycle_claim` advances the sequence and updates descriptors while retaining the same slot reservation for fixed buffer pools.
 
 ## 6. Consumer API (Aeron-like)
 
@@ -384,7 +386,7 @@ static int tp_bgapi_refill(tp_producer_t *producer)
 // BGAPI "buffer filled" callback
 static void on_bgapi_buffer_filled(tp_producer_t *producer, tp_bgapi_slot_t *slot, const tp_frame_metadata_t *meta)
 {
-    tp_producer_commit_claim(producer, &slot->claim, meta);
+    tp_producer_recycle_claim(producer, &slot->claim, meta);
     slot->in_use = false;
     tp_bgapi_refill(producer); // keep the ring full
 }
