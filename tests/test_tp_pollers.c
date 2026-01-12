@@ -53,10 +53,10 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     }
 
     tp_client_context_set_aeron_dir(ctx, aeron_dir);
-    tp_client_context_set_control_channel(ctx, "aeron:ipc", 30100);
-    tp_client_context_set_qos_channel(ctx, "aeron:ipc", 30101);
-    tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 30102);
-    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 30104);
+    tp_client_context_set_control_channel(ctx, "aeron:ipc", 1000);
+    tp_client_context_set_qos_channel(ctx, "aeron:ipc", 1200);
+    tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
+    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -243,32 +243,32 @@ void tp_test_pollers(void)
         }
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 30100, &control_pub) < 0)
+    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 30101, &qos_pub) < 0)
+    if (tp_test_add_publication(&client, "aeron:ipc", 1200, &qos_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 30102, &meta_pub) < 0)
+    if (tp_test_add_publication(&client, "aeron:ipc", 1300, &meta_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 30103, &progress_pub) < 0)
+    if (tp_test_add_publication(&client, "aeron:ipc", 1003, &progress_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 30104, &descriptor_pub) < 0)
+    if (tp_test_add_publication(&client, "aeron:ipc", 1100, &descriptor_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 30103, &progress_sub) < 0)
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
     {
         goto cleanup;
     }

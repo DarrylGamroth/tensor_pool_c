@@ -113,7 +113,7 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     }
 
     tp_client_context_set_aeron_dir(ctx, aeron_dir);
-    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 30200);
+    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -242,7 +242,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
         client.context.base.allowed_paths = ctx.base.allowed_paths;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 30200, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
