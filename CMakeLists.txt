@@ -42,6 +42,7 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_consumer.h
     include/tensor_pool/tp_context.h
     include/tensor_pool/tp_control.h
+    include/tensor_pool/tp_control_adapter.h
     include/tensor_pool/tp_discovery_client.h
     include/tensor_pool/tp_driver_client.h
     include/tensor_pool/tp_error.h
@@ -62,6 +63,7 @@ set(TP_SOURCES
     src/tp_consumer.c
     src/tp_context.c
     src/tp_control.c
+    src/tp_control_adapter.c
     src/tp_discovery_client.c
     src/tp_driver_client.c
     src/tp_log.c
@@ -163,7 +165,7 @@ target_link_libraries(tensor_pool PUBLIC aeron::aeron_static)
 
 enable_testing()
 
-add_executable(tensor_pool_tests tests/test_tp_smoke.c)
+add_executable(tensor_pool_tests tests/test_tp_smoke.c tests/test_tp_control.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 

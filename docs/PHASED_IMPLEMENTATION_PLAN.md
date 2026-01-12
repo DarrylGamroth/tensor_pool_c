@@ -119,13 +119,14 @@ Deliverables
 - Per-consumer stream manager module.
 
 Checklist
-- [ ] Add SBE decoders for ConsumerHello/ConsumerConfig/DataSourceAnnounce/DataSourceMeta.
-- [ ] Implement control-plane poller with schemaId/templateId gating.
-- [ ] Add handler callbacks and clientd wiring (Aeron-style).
+- [x] Add SBE decoders for ConsumerHello/ConsumerConfig/DataSourceAnnounce/DataSourceMeta.
+- [x] Implement control-plane poller with schemaId/templateId gating.
+- [x] Add handler callbacks and clientd wiring (Aeron-style).
 - [ ] Implement per-consumer stream negotiation and validation.
 - [ ] Track per-consumer publications/subscriptions and stale cleanup.
 - [ ] Add progress throttling aggregation + emit logic.
-- [ ] Add unit tests for decoders, negotiation, throttling.
+- [x] Add unit tests for decoders.
+- [ ] Add unit tests for negotiation and throttling.
 
 ### Fully implement the driver client
 

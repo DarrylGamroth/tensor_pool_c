@@ -23,6 +23,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+void tp_test_decode_consumer_hello(void);
+void tp_test_decode_data_source_meta(void);
+
 static void test_version(void)
 {
     uint32_t version = tp_version_compose(TP_VERSION_MAJOR, TP_VERSION_MINOR, TP_VERSION_PATCH);
@@ -165,6 +168,8 @@ int main(void)
     test_uri_parse();
     test_shm_superblock();
     test_tensor_header();
+    tp_test_decode_consumer_hello();
+    tp_test_decode_data_source_meta();
 
     return 0;
 }

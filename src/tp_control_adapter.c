@@ -1,0 +1,570 @@
+#include "tensor_pool/tp_control_adapter.h"
+
+#include <errno.h>
+#include <string.h>
+
+#include "aeron_agent.h"
+#include "aeron_subscription.h"
+
+#include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_types.h"
+
+#include "wire/tensor_pool/consumerConfig.h"
+#include "wire/tensor_pool/consumerHello.h"
+#include "wire/tensor_pool/dataSourceAnnounce.h"
+#include "wire/tensor_pool/dataSourceMeta.h"
+#include "wire/tensor_pool/messageHeader.h"
+
+static tp_string_view_t tp_string_view_from_parts(const char *data, size_t length)
+{
+    tp_string_view_t out;
+
+    out.data = data;
+    out.length = (uint32_t)length;
+
+    if (out.length == 0)
+    {
+        out.data = NULL;
+    }
+
+    return out;
+}
+
+int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_consumer_hello_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_consumerHello hello;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+    uint32_t opt_value;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_consumerHello_sbe_schema_id() ||
+        template_id != tensor_pool_consumerHello_sbe_template_id())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: header mismatch");
+        return -1;
+    }
+
+    tensor_pool_consumerHello_wrap_for_decode(
+        &hello,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_consumerHello_streamId(&hello);
+    out->consumer_id = tensor_pool_consumerHello_consumerId(&hello);
+    {
+        enum tensor_pool_bool bool_val;
+        if (!tensor_pool_consumerHello_supportsShm(&hello, &bool_val))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid supportsShm");
+            return -1;
+        }
+        out->supports_shm = (uint8_t)bool_val;
+    }
+    {
+        enum tensor_pool_bool bool_val;
+        if (!tensor_pool_consumerHello_supportsProgress(&hello, &bool_val))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid supportsProgress");
+            return -1;
+        }
+        out->supports_progress = (uint8_t)bool_val;
+    }
+    {
+        enum tensor_pool_mode mode_val;
+        if (!tensor_pool_consumerHello_mode(&hello, &mode_val))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid mode");
+            return -1;
+        }
+        out->mode = (uint8_t)mode_val;
+    }
+    out->max_rate_hz = tensor_pool_consumerHello_maxRateHz(&hello);
+    out->expected_layout_version = tensor_pool_consumerHello_expectedLayoutVersion(&hello);
+
+    opt_value = tensor_pool_consumerHello_progressIntervalUs(&hello);
+    out->progress_interval_us = (opt_value == tensor_pool_consumerHello_progressIntervalUs_null_value()) ? TP_NULL_U32 : opt_value;
+
+    opt_value = tensor_pool_consumerHello_progressBytesDelta(&hello);
+    out->progress_bytes_delta = (opt_value == tensor_pool_consumerHello_progressBytesDelta_null_value()) ? TP_NULL_U32 : opt_value;
+
+    opt_value = tensor_pool_consumerHello_progressMajorDeltaUnits(&hello);
+    out->progress_major_delta_units =
+        (opt_value == tensor_pool_consumerHello_progressMajorDeltaUnits_null_value()) ? TP_NULL_U32 : opt_value;
+
+    out->descriptor_stream_id = tensor_pool_consumerHello_descriptorStreamId(&hello);
+    out->control_stream_id = tensor_pool_consumerHello_controlStreamId(&hello);
+
+    {
+        struct tensor_pool_consumerHello_string_view channel_view =
+            tensor_pool_consumerHello_get_descriptorChannel_as_string_view(&hello);
+        out->descriptor_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+    }
+    {
+        struct tensor_pool_consumerHello_string_view channel_view =
+            tensor_pool_consumerHello_get_controlChannel_as_string_view(&hello);
+        out->control_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+    }
+
+    return 0;
+}
+
+int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_consumer_config_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_consumerConfig cfg;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_consumerConfig_sbe_schema_id() ||
+        template_id != tensor_pool_consumerConfig_sbe_template_id())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: header mismatch");
+        return -1;
+    }
+
+    tensor_pool_consumerConfig_wrap_for_decode(
+        &cfg,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_consumerConfig_streamId(&cfg);
+    out->consumer_id = tensor_pool_consumerConfig_consumerId(&cfg);
+    {
+        enum tensor_pool_bool bool_val;
+        if (!tensor_pool_consumerConfig_useShm(&cfg, &bool_val))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid useShm");
+            return -1;
+        }
+        out->use_shm = (uint8_t)bool_val;
+    }
+    {
+        enum tensor_pool_mode mode_val;
+        if (!tensor_pool_consumerConfig_mode(&cfg, &mode_val))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid mode");
+            return -1;
+        }
+        out->mode = (uint8_t)mode_val;
+    }
+    out->descriptor_stream_id = tensor_pool_consumerConfig_descriptorStreamId(&cfg);
+    out->control_stream_id = tensor_pool_consumerConfig_controlStreamId(&cfg);
+
+    {
+        struct tensor_pool_consumerConfig_string_view uri_view =
+            tensor_pool_consumerConfig_get_payloadFallbackUri_as_string_view(&cfg);
+        out->payload_fallback_uri = tp_string_view_from_parts(uri_view.data, uri_view.length);
+    }
+    {
+        struct tensor_pool_consumerConfig_string_view channel_view =
+            tensor_pool_consumerConfig_get_descriptorChannel_as_string_view(&cfg);
+        out->descriptor_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+    }
+    {
+        struct tensor_pool_consumerConfig_string_view channel_view =
+            tensor_pool_consumerConfig_get_controlChannel_as_string_view(&cfg);
+        out->control_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+    }
+
+    return 0;
+}
+
+int tp_control_decode_data_source_announce(const uint8_t *buffer, size_t length, tp_data_source_announce_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_dataSourceAnnounce announce;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_dataSourceAnnounce_sbe_schema_id() ||
+        template_id != tensor_pool_dataSourceAnnounce_sbe_template_id())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: header mismatch");
+        return -1;
+    }
+
+    tensor_pool_dataSourceAnnounce_wrap_for_decode(
+        &announce,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_dataSourceAnnounce_streamId(&announce);
+    out->producer_id = tensor_pool_dataSourceAnnounce_producerId(&announce);
+    out->epoch = tensor_pool_dataSourceAnnounce_epoch(&announce);
+    out->meta_version = tensor_pool_dataSourceAnnounce_metaVersion(&announce);
+    {
+        struct tensor_pool_dataSourceAnnounce_string_view view =
+            tensor_pool_dataSourceAnnounce_get_name_as_string_view(&announce);
+        out->name = tp_string_view_from_parts(view.data, view.length);
+    }
+    {
+        struct tensor_pool_dataSourceAnnounce_string_view view =
+            tensor_pool_dataSourceAnnounce_get_summary_as_string_view(&announce);
+        out->summary = tp_string_view_from_parts(view.data, view.length);
+    }
+
+    return 0;
+}
+
+int tp_control_decode_data_source_meta(
+    const uint8_t *buffer,
+    size_t length,
+    tp_data_source_meta_view_t *out,
+    tp_on_data_source_meta_attr_t on_attr,
+    void *clientd)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_dataSourceMeta meta;
+    struct tensor_pool_dataSourceMeta_attributes attrs;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+    uint32_t attr_count;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_dataSourceMeta_sbe_schema_id() ||
+        template_id != tensor_pool_dataSourceMeta_sbe_template_id())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: header mismatch");
+        return -1;
+    }
+
+    tensor_pool_dataSourceMeta_wrap_for_decode(
+        &meta,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_dataSourceMeta_streamId(&meta);
+    out->meta_version = tensor_pool_dataSourceMeta_metaVersion(&meta);
+    out->timestamp_ns = tensor_pool_dataSourceMeta_timestampNs(&meta);
+
+    tensor_pool_dataSourceMeta_attributes_wrap_for_decode(
+        &attrs,
+        (char *)buffer,
+        tensor_pool_dataSourceMeta_sbe_position_ptr(&meta),
+        version,
+        length);
+
+    attr_count = (uint32_t)tensor_pool_dataSourceMeta_attributes_count(&attrs);
+    out->attribute_count = attr_count;
+
+    if (NULL != on_attr)
+    {
+        uint32_t i;
+        for (i = 0; i < attr_count; i++)
+        {
+            tp_data_source_meta_attr_view_t attr_view;
+            struct tensor_pool_dataSourceMeta_string_view key_view;
+            struct tensor_pool_dataSourceMeta_string_view fmt_view;
+            struct tensor_pool_dataSourceMeta_string_view val_view;
+
+            if (NULL == tensor_pool_dataSourceMeta_attributes_next(&attrs))
+            {
+                break;
+            }
+
+            key_view = tensor_pool_dataSourceMeta_attributes_get_key_as_string_view(&attrs);
+            fmt_view = tensor_pool_dataSourceMeta_attributes_get_format_as_string_view(&attrs);
+            val_view = tensor_pool_dataSourceMeta_attributes_get_value_as_string_view(&attrs);
+
+            attr_view.key.data = key_view.data;
+            attr_view.key.length = (uint32_t)key_view.length;
+            attr_view.format.data = fmt_view.data;
+            attr_view.format.length = (uint32_t)fmt_view.length;
+            attr_view.value.data = val_view.data;
+            attr_view.value.length = (uint32_t)val_view.length;
+
+            on_attr(&attr_view, clientd);
+        }
+    }
+
+    return 0;
+}
+
+static void tp_control_fragment_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_control_subscription_t *control = (tp_control_subscription_t *)clientd;
+    struct tensor_pool_messageHeader msg_header;
+    uint16_t template_id;
+    uint16_t schema_id;
+
+    (void)header;
+
+    if (NULL == control || NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    {
+        return;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+
+    if (schema_id != tensor_pool_consumerHello_sbe_schema_id())
+    {
+        return;
+    }
+
+    if (template_id == tensor_pool_consumerHello_sbe_template_id() && control->adapter.on_consumer_hello)
+    {
+        tp_consumer_hello_view_t view;
+        if (tp_control_decode_consumer_hello(buffer, length, &view) == 0)
+        {
+            control->adapter.on_consumer_hello(&view, control->adapter.clientd);
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_consumerConfig_sbe_template_id() && control->adapter.on_consumer_config)
+    {
+        tp_consumer_config_view_t view;
+        if (tp_control_decode_consumer_config(buffer, length, &view) == 0)
+        {
+            control->adapter.on_consumer_config(&view, control->adapter.clientd);
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_dataSourceAnnounce_sbe_template_id() && control->adapter.on_data_source_announce)
+    {
+        tp_data_source_announce_view_t view;
+        if (tp_control_decode_data_source_announce(buffer, length, &view) == 0)
+        {
+            control->adapter.on_data_source_announce(&view, control->adapter.clientd);
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_dataSourceMeta_sbe_template_id() && control->adapter.on_data_source_meta_begin)
+    {
+        tp_data_source_meta_view_t view;
+        if (tp_control_decode_data_source_meta(buffer, length, &view, NULL, NULL) == 0)
+        {
+            control->adapter.on_data_source_meta_begin(&view, control->adapter.clientd);
+            if (control->adapter.on_data_source_meta_attr)
+            {
+                tp_control_decode_data_source_meta(
+                    buffer,
+                    length,
+                    &view,
+                    control->adapter.on_data_source_meta_attr,
+                    control->adapter.clientd);
+            }
+            if (control->adapter.on_data_source_meta_end)
+            {
+                control->adapter.on_data_source_meta_end(&view, control->adapter.clientd);
+            }
+        }
+    }
+}
+
+int tp_control_subscription_init(
+    tp_control_subscription_t *control,
+    aeron_t *aeron,
+    const char *channel,
+    int32_t stream_id,
+    const tp_control_adapter_t *adapter)
+{
+    aeron_async_add_subscription_t *async_add = NULL;
+
+    if (NULL == control || NULL == aeron || NULL == channel || NULL == adapter)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_subscription_init: null input");
+        return -1;
+    }
+
+    memset(control, 0, sizeof(*control));
+    control->adapter = *adapter;
+
+    if (aeron_async_add_subscription(
+        &async_add,
+        aeron,
+        channel,
+        stream_id,
+        NULL,
+        NULL,
+        NULL,
+        NULL) < 0)
+    {
+        return -1;
+    }
+
+    while (NULL == control->subscription)
+    {
+        if (aeron_async_add_subscription_poll(&control->subscription, async_add) < 0)
+        {
+            return -1;
+        }
+        aeron_idle_strategy_sleeping_idle(NULL, 0);
+    }
+
+    if (aeron_fragment_assembler_create(&control->assembler, tp_control_fragment_handler, control) < 0)
+    {
+        aeron_subscription_close(control->subscription, NULL, NULL);
+        control->subscription = NULL;
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_control_subscription_close(tp_control_subscription_t *control)
+{
+    if (NULL == control)
+    {
+        return -1;
+    }
+
+    if (control->subscription)
+    {
+        aeron_subscription_close(control->subscription, NULL, NULL);
+        control->subscription = NULL;
+    }
+
+    if (control->assembler)
+    {
+        aeron_fragment_assembler_delete(control->assembler);
+        control->assembler = NULL;
+    }
+
+    return 0;
+}
+
+int tp_control_poll(tp_control_subscription_t *control, int fragment_limit)
+{
+    if (NULL == control || NULL == control->subscription || NULL == control->assembler)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_poll: subscription not initialized");
+        return -1;
+    }
+
+    return aeron_subscription_poll(
+        control->subscription,
+        aeron_fragment_assembler_handler,
+        control->assembler,
+        fragment_limit);
+}
