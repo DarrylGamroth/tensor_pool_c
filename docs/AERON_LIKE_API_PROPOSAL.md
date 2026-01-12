@@ -112,6 +112,9 @@ int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *dire
 int tp_producer_close(tp_producer_t *producer);
 
 int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
+int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
+int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
+int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 
 // Per-consumer routing managed internally when enabled.
@@ -122,6 +125,7 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit);
 Behavior:
 - Producer owns descriptor/control/qos/metadata publications; app never touches Aeron pubs.
 - `tp_producer_poll_control` uses a control adapter and a consumer manager to handle ConsumerHello, per-consumer streams, and progress throttling.
+- `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
 
 ## 6. Consumer API (Aeron-like)
 
@@ -325,6 +329,26 @@ while (running)
 }
 ```
 
+### 12.2.1 Producer (Zero-Copy / DMA Try-Claim)
+
+```c
+tp_buffer_claim_t claim;
+tp_frame_metadata_t meta;
+int64_t result;
+
+result = tp_producer_try_claim(&producer, payload_len, &claim);
+if (result >= 0)
+{
+    // claim.data points at the payload slot; camera/driver fills it
+    // populate meta fields as needed (timestamp, dims, etc)
+    tp_producer_commit_claim(&producer, &claim, &meta);
+}
+else if (result == TP_BACK_PRESSURED || result == TP_NOT_CONNECTED)
+{
+    // retry later
+}
+```
+
 ### 12.3 QoS (Producer + Consumer)
 
 ```c
@@ -499,6 +523,7 @@ These align with Aeron C client patterns so the API feels familiar.
   - `typedef void (*tp_metadata_handler_t)(void *clientd, const tp_metadata_event_t *event);`
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
+- **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
 - **Keepalive scheduling**: keepalive work runs inside `tp_client_do_work` and/or `tp_driver_client_do_work` and uses the same idle strategy/intervals configured in the client context.
