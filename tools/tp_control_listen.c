@@ -16,6 +16,9 @@
 #include "wire/tensor_pool/frameProgress.h"
 #include "wire/tensor_pool/frameProgressState.h"
 #include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/qosConsumer.h"
+#include "wire/tensor_pool/qosProducer.h"
+#include "wire/tensor_pool/mode.h"
 
 #include <inttypes.h>
 #include <signal.h>
@@ -30,6 +33,12 @@ static void tp_handle_sigint(int signo)
     (void)signo;
     tp_running = 0;
 }
+
+typedef struct tp_listen_state_stct
+{
+    int json;
+}
+tp_listen_state_t;
 
 static void tp_print_string_view(const char *label, const tp_string_view_t *view)
 {
@@ -48,28 +57,68 @@ static void tp_print_string_view(const char *label, const tp_string_view_t *view
     }
 }
 
+static void tp_print_json_string_view(const char *label, const tp_string_view_t *view)
+{
+    size_t i;
+
+    printf("\"%s\":\"", label);
+    if (view && view->data)
+    {
+        for (i = 0; i < view->length; i++)
+        {
+            char c = view->data[i];
+            if (c == '\\' || c == '\"')
+            {
+                putchar('\\');
+            }
+            putchar(c);
+        }
+    }
+    printf("\"");
+}
+
 typedef struct tp_meta_ctx_stct
 {
     uint32_t attr_index;
+    void *clientd;
 }
 tp_meta_ctx_t;
 
 static void tp_on_meta_attr(const tp_data_source_meta_attr_view_t *attr, void *clientd)
 {
     tp_meta_ctx_t *ctx = (tp_meta_ctx_t *)clientd;
+    tp_listen_state_t *state = NULL;
 
     if (NULL == attr)
     {
         return;
     }
 
-    printf("  attr[%u] ", ctx ? ctx->attr_index : 0);
-    tp_print_string_view("key", &attr->key);
-    printf(" ");
-    tp_print_string_view("format", &attr->format);
-    printf(" ");
-    tp_print_string_view("value", &attr->value);
-    printf("\n");
+    if (ctx)
+    {
+        state = (tp_listen_state_t *)ctx->clientd;
+    }
+
+    if (state && state->json)
+    {
+        printf("{\"type\":\"DataSourceMetaAttr\",\"index\":%u,", ctx ? ctx->attr_index : 0);
+        tp_print_json_string_view("key", &attr->key);
+        printf(",");
+        tp_print_json_string_view("format", &attr->format);
+        printf(",");
+        tp_print_json_string_view("value", &attr->value);
+        printf("}\n");
+    }
+    else
+    {
+        printf("  attr[%u] ", ctx ? ctx->attr_index : 0);
+        tp_print_string_view("key", &attr->key);
+        printf(" ");
+        tp_print_string_view("format", &attr->format);
+        printf(" ");
+        tp_print_string_view("value", &attr->value);
+        printf("\n");
+    }
 
     if (ctx)
     {
@@ -83,13 +132,13 @@ static void tp_on_control_fragment(
     size_t length,
     aeron_header_t *header)
 {
+    tp_listen_state_t *state = (tp_listen_state_t *)clientd;
     struct tensor_pool_messageHeader msg_header;
     uint16_t template_id;
     uint16_t schema_id;
     uint16_t block_length;
     uint16_t version;
 
-    (void)clientd;
     (void)header;
 
     if (NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
@@ -119,25 +168,41 @@ static void tp_on_control_fragment(
         tp_consumer_hello_view_t view;
         if (tp_control_decode_consumer_hello(buffer, length, &view) == 0)
         {
-            printf("ConsumerHello stream=%u consumer=%u supports_shm=%u supports_progress=%u mode=%u max_rate=%u\n",
-                view.stream_id,
-                view.consumer_id,
-                view.supports_shm,
-                view.supports_progress,
-                view.mode,
-                view.max_rate_hz);
-            printf("  expected_layout=%u progress_interval=%u progress_bytes=%u progress_major=%u\n",
-                view.expected_layout_version,
-                view.progress_interval_us,
-                view.progress_bytes_delta,
-                view.progress_major_delta_units);
-            printf("  descriptor_stream=%u control_stream=%u ",
-                view.descriptor_stream_id,
-                view.control_stream_id);
-            tp_print_string_view("descriptor_channel", &view.descriptor_channel);
-            printf(" ");
-            tp_print_string_view("control_channel", &view.control_channel);
-            printf("\n");
+            if (state && state->json)
+            {
+                printf("{\"type\":\"ConsumerHello\",\"stream\":%u,\"consumer\":%u,", view.stream_id, view.consumer_id);
+                printf("\"supports_shm\":%u,\"supports_progress\":%u,\"mode\":%u,\"max_rate\":%u,",
+                    view.supports_shm, view.supports_progress, view.mode, view.max_rate_hz);
+                printf("\"expected_layout\":%u,\"progress_interval\":%u,\"progress_bytes\":%u,\"progress_major\":%u,",
+                    view.expected_layout_version, view.progress_interval_us, view.progress_bytes_delta, view.progress_major_delta_units);
+                printf("\"descriptor_stream\":%u,\"control_stream\":%u,", view.descriptor_stream_id, view.control_stream_id);
+                tp_print_json_string_view("descriptor_channel", &view.descriptor_channel);
+                printf(",");
+                tp_print_json_string_view("control_channel", &view.control_channel);
+                printf("}\n");
+            }
+            else
+            {
+                printf("ConsumerHello stream=%u consumer=%u supports_shm=%u supports_progress=%u mode=%u max_rate=%u\n",
+                    view.stream_id,
+                    view.consumer_id,
+                    view.supports_shm,
+                    view.supports_progress,
+                    view.mode,
+                    view.max_rate_hz);
+                printf("  expected_layout=%u progress_interval=%u progress_bytes=%u progress_major=%u\n",
+                    view.expected_layout_version,
+                    view.progress_interval_us,
+                    view.progress_bytes_delta,
+                    view.progress_major_delta_units);
+                printf("  descriptor_stream=%u control_stream=%u ",
+                    view.descriptor_stream_id,
+                    view.control_stream_id);
+                tp_print_string_view("descriptor_channel", &view.descriptor_channel);
+                printf(" ");
+                tp_print_string_view("control_channel", &view.control_channel);
+                printf("\n");
+            }
         }
         return;
     }
@@ -147,20 +212,35 @@ static void tp_on_control_fragment(
         tp_consumer_config_view_t view;
         if (tp_control_decode_consumer_config(buffer, length, &view) == 0)
         {
-            printf("ConsumerConfig stream=%u consumer=%u use_shm=%u mode=%u descriptor_stream=%u control_stream=%u\n",
-                view.stream_id,
-                view.consumer_id,
-                view.use_shm,
-                view.mode,
-                view.descriptor_stream_id,
-                view.control_stream_id);
-            printf("  ");
-            tp_print_string_view("payload_fallback", &view.payload_fallback_uri);
-            printf(" ");
-            tp_print_string_view("descriptor_channel", &view.descriptor_channel);
-            printf(" ");
-            tp_print_string_view("control_channel", &view.control_channel);
-            printf("\n");
+            if (state && state->json)
+            {
+                printf("{\"type\":\"ConsumerConfig\",\"stream\":%u,\"consumer\":%u,", view.stream_id, view.consumer_id);
+                printf("\"use_shm\":%u,\"mode\":%u,\"descriptor_stream\":%u,\"control_stream\":%u,",
+                    view.use_shm, view.mode, view.descriptor_stream_id, view.control_stream_id);
+                tp_print_json_string_view("payload_fallback", &view.payload_fallback_uri);
+                printf(",");
+                tp_print_json_string_view("descriptor_channel", &view.descriptor_channel);
+                printf(",");
+                tp_print_json_string_view("control_channel", &view.control_channel);
+                printf("}\n");
+            }
+            else
+            {
+                printf("ConsumerConfig stream=%u consumer=%u use_shm=%u mode=%u descriptor_stream=%u control_stream=%u\n",
+                    view.stream_id,
+                    view.consumer_id,
+                    view.use_shm,
+                    view.mode,
+                    view.descriptor_stream_id,
+                    view.control_stream_id);
+                printf("  ");
+                tp_print_string_view("payload_fallback", &view.payload_fallback_uri);
+                printf(" ");
+                tp_print_string_view("descriptor_channel", &view.descriptor_channel);
+                printf(" ");
+                tp_print_string_view("control_channel", &view.control_channel);
+                printf("\n");
+            }
         }
         return;
     }
@@ -170,15 +250,27 @@ static void tp_on_control_fragment(
         tp_data_source_announce_view_t view;
         if (tp_control_decode_data_source_announce(buffer, length, &view) == 0)
         {
-            printf("DataSourceAnnounce stream=%u producer=%u epoch=%" PRIu64 " meta_version=%u ",
-                view.stream_id,
-                view.producer_id,
-                view.epoch,
-                view.meta_version);
-            tp_print_string_view("name", &view.name);
-            printf(" ");
-            tp_print_string_view("summary", &view.summary);
-            printf("\n");
+            if (state && state->json)
+            {
+                printf("{\"type\":\"DataSourceAnnounce\",\"stream\":%u,\"producer\":%u,\"epoch\":%" PRIu64 ",\"meta_version\":%u,",
+                    view.stream_id, view.producer_id, view.epoch, view.meta_version);
+                tp_print_json_string_view("name", &view.name);
+                printf(",");
+                tp_print_json_string_view("summary", &view.summary);
+                printf("}\n");
+            }
+            else
+            {
+                printf("DataSourceAnnounce stream=%u producer=%u epoch=%" PRIu64 " meta_version=%u ",
+                    view.stream_id,
+                    view.producer_id,
+                    view.epoch,
+                    view.meta_version);
+                tp_print_string_view("name", &view.name);
+                printf(" ");
+                tp_print_string_view("summary", &view.summary);
+                printf("\n");
+            }
         }
         return;
     }
@@ -189,13 +281,25 @@ static void tp_on_control_fragment(
         tp_meta_ctx_t meta_ctx;
 
         memset(&meta_ctx, 0, sizeof(meta_ctx));
+        meta_ctx.clientd = state;
         if (tp_control_decode_data_source_meta(buffer, length, &view, tp_on_meta_attr, &meta_ctx) == 0)
         {
-            printf("DataSourceMeta stream=%u meta_version=%u timestamp_ns=%" PRIu64 " attrs=%u\n",
-                view.stream_id,
-                view.meta_version,
-                view.timestamp_ns,
-                view.attribute_count);
+            if (state && state->json)
+            {
+                printf("{\"type\":\"DataSourceMeta\",\"stream\":%u,\"meta_version\":%u,\"timestamp_ns\":%" PRIu64 ",\"attrs\":%u}\n",
+                    view.stream_id,
+                    view.meta_version,
+                    view.timestamp_ns,
+                    view.attribute_count);
+            }
+            else
+            {
+                printf("DataSourceMeta stream=%u meta_version=%u timestamp_ns=%" PRIu64 " attrs=%u\n",
+                    view.stream_id,
+                    view.meta_version,
+                    view.timestamp_ns,
+                    view.attribute_count);
+            }
         }
         return;
     }
@@ -203,7 +307,7 @@ static void tp_on_control_fragment(
     if (template_id == tensor_pool_frameProgress_sbe_template_id())
     {
         struct tensor_pool_frameProgress progress;
-        enum tensor_pool_frameProgressState state;
+        enum tensor_pool_frameProgressState progress_state;
         uint8_t state_value = 0;
 
         tensor_pool_frameProgress_wrap_for_decode(
@@ -214,17 +318,136 @@ static void tp_on_control_fragment(
             version,
             length);
 
-        if (tensor_pool_frameProgress_state(&progress, &state))
+        if (tensor_pool_frameProgress_state(&progress, &progress_state))
         {
-            state_value = (uint8_t)state;
+            state_value = (uint8_t)progress_state;
         }
 
-        printf("FrameProgress stream=%u seq=%" PRIu64 " header_index=%u bytes=%" PRIu64 " state=%u\n",
-            tensor_pool_frameProgress_streamId(&progress),
-            tensor_pool_frameProgress_frameId(&progress),
-            tensor_pool_frameProgress_headerIndex(&progress),
-            tensor_pool_frameProgress_payloadBytesFilled(&progress),
-            state_value);
+        if (state && state->json)
+        {
+            printf("{\"type\":\"FrameProgress\",\"stream\":%u,\"seq\":%" PRIu64 ",\"header_index\":%u,\"bytes\":%" PRIu64 ",\"state\":%u}\n",
+                tensor_pool_frameProgress_streamId(&progress),
+                tensor_pool_frameProgress_frameId(&progress),
+                tensor_pool_frameProgress_headerIndex(&progress),
+                tensor_pool_frameProgress_payloadBytesFilled(&progress),
+                state_value);
+        }
+        else
+        {
+            printf("FrameProgress stream=%u seq=%" PRIu64 " header_index=%u bytes=%" PRIu64 " state=%u\n",
+                tensor_pool_frameProgress_streamId(&progress),
+                tensor_pool_frameProgress_frameId(&progress),
+                tensor_pool_frameProgress_headerIndex(&progress),
+                tensor_pool_frameProgress_payloadBytesFilled(&progress),
+                state_value);
+        }
+        return;
+    }
+}
+
+static void tp_on_qos_fragment(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_listen_state_t *state = (tp_listen_state_t *)clientd;
+    struct tensor_pool_messageHeader msg_header;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    (void)header;
+
+    if (NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    {
+        return;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+    block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+    version = tensor_pool_messageHeader_version(&msg_header);
+
+    if (schema_id != tensor_pool_messageHeader_sbe_schema_id())
+    {
+        return;
+    }
+
+    if (template_id == tensor_pool_qosProducer_sbe_template_id())
+    {
+        struct tensor_pool_qosProducer qos;
+        tensor_pool_qosProducer_wrap_for_decode(
+            &qos,
+            (char *)buffer,
+            tensor_pool_messageHeader_encoded_length(),
+            block_length,
+            version,
+            length);
+        if (state && state->json)
+        {
+            printf("{\"type\":\"QosProducer\",\"stream\":%u,\"producer\":%u,\"epoch\":%" PRIu64 ",\"current_seq\":%" PRIu64 "}\n",
+                tensor_pool_qosProducer_streamId(&qos),
+                tensor_pool_qosProducer_producerId(&qos),
+                tensor_pool_qosProducer_epoch(&qos),
+                tensor_pool_qosProducer_currentSeq(&qos));
+        }
+        else
+        {
+            printf("QosProducer stream=%u producer=%u epoch=%" PRIu64 " current_seq=%" PRIu64 "\n",
+                tensor_pool_qosProducer_streamId(&qos),
+                tensor_pool_qosProducer_producerId(&qos),
+                tensor_pool_qosProducer_epoch(&qos),
+                tensor_pool_qosProducer_currentSeq(&qos));
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_qosConsumer_sbe_template_id())
+    {
+        struct tensor_pool_qosConsumer qos;
+        enum tensor_pool_mode mode;
+        uint8_t mode_value = 0;
+        tensor_pool_qosConsumer_wrap_for_decode(
+            &qos,
+            (char *)buffer,
+            tensor_pool_messageHeader_encoded_length(),
+            block_length,
+            version,
+            length);
+        if (tensor_pool_qosConsumer_mode(&qos, &mode))
+        {
+            mode_value = (uint8_t)mode;
+        }
+        if (state && state->json)
+        {
+            printf("{\"type\":\"QosConsumer\",\"stream\":%u,\"consumer\":%u,\"epoch\":%" PRIu64 ",\"last_seq\":%" PRIu64 ",\"drops_gap\":%" PRIu64 ",\"drops_late\":%" PRIu64 ",\"mode\":%u}\n",
+                tensor_pool_qosConsumer_streamId(&qos),
+                tensor_pool_qosConsumer_consumerId(&qos),
+                tensor_pool_qosConsumer_epoch(&qos),
+                tensor_pool_qosConsumer_lastSeqSeen(&qos),
+                tensor_pool_qosConsumer_dropsGap(&qos),
+                tensor_pool_qosConsumer_dropsLate(&qos),
+                mode_value);
+        }
+        else
+        {
+            printf("QosConsumer stream=%u consumer=%u epoch=%" PRIu64 " last_seq=%" PRIu64 " drops_gap=%" PRIu64 " drops_late=%" PRIu64 " mode=%u\n",
+                tensor_pool_qosConsumer_streamId(&qos),
+                tensor_pool_qosConsumer_consumerId(&qos),
+                tensor_pool_qosConsumer_epoch(&qos),
+                tensor_pool_qosConsumer_lastSeqSeen(&qos),
+                tensor_pool_qosConsumer_dropsGap(&qos),
+                tensor_pool_qosConsumer_dropsLate(&qos),
+                mode_value);
+        }
         return;
     }
 }
@@ -233,23 +456,51 @@ int main(int argc, char **argv)
 {
     const char *aeron_dir = NULL;
     const char *control_channel = "aeron:ipc";
+    const char *metadata_channel = "aeron:ipc";
+    const char *qos_channel = "aeron:ipc";
     int32_t control_stream_id = 1000;
+    int32_t metadata_stream_id = 1300;
+    int32_t qos_stream_id = 1200;
+    tp_listen_state_t state;
     tp_context_t context;
     tp_aeron_client_t aeron;
-    aeron_subscription_t *subscription = NULL;
-    aeron_fragment_assembler_t *assembler = NULL;
+    aeron_subscription_t *control_subscription = NULL;
+    aeron_subscription_t *metadata_subscription = NULL;
+    aeron_subscription_t *qos_subscription = NULL;
+    aeron_fragment_assembler_t *control_assembler = NULL;
+    aeron_fragment_assembler_t *metadata_assembler = NULL;
+    aeron_fragment_assembler_t *qos_assembler = NULL;
+    int arg_index = 1;
 
-    if (argc > 1)
+    memset(&state, 0, sizeof(state));
+
+    while (arg_index < argc && strncmp(argv[arg_index], "--", 2) == 0)
     {
-        aeron_dir = argv[1];
+        if (strcmp(argv[arg_index], "--json") == 0)
+        {
+            state.json = 1;
+        }
+        else
+        {
+            fprintf(stderr, "Unknown option: %s\n", argv[arg_index]);
+            return 1;
+        }
+        arg_index++;
     }
-    if (argc > 2)
+
+    if (arg_index < argc)
     {
-        control_channel = argv[2];
+        aeron_dir = argv[arg_index++];
     }
-    if (argc > 3)
+    if (arg_index < argc)
     {
-        control_stream_id = (int32_t)strtol(argv[3], NULL, 10);
+        control_channel = argv[arg_index++];
+        metadata_channel = control_channel;
+        qos_channel = control_channel;
+    }
+    if (arg_index < argc)
+    {
+        control_stream_id = (int32_t)strtol(argv[arg_index++], NULL, 10);
     }
 
     if (tp_context_init(&context) < 0)
@@ -269,31 +520,92 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_aeron_add_subscription(&subscription, &aeron, control_channel, control_stream_id, NULL, NULL, NULL, NULL) < 0)
+    if (tp_aeron_add_subscription(&control_subscription, &aeron, control_channel, control_stream_id, NULL, NULL, NULL, NULL) < 0)
     {
-        fprintf(stderr, "Subscription failed: %s\n", tp_errmsg());
+        fprintf(stderr, "Control subscription failed: %s\n", tp_errmsg());
         tp_aeron_client_close(&aeron);
         return 1;
     }
 
-    if (aeron_fragment_assembler_create(&assembler, tp_on_control_fragment, NULL) < 0)
+    if (tp_aeron_add_subscription(&metadata_subscription, &aeron, metadata_channel, metadata_stream_id, NULL, NULL, NULL, NULL) < 0)
+    {
+        fprintf(stderr, "Metadata subscription failed: %s\n", tp_errmsg());
+        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_aeron_client_close(&aeron);
+        return 1;
+    }
+
+    if (tp_aeron_add_subscription(&qos_subscription, &aeron, qos_channel, qos_stream_id, NULL, NULL, NULL, NULL) < 0)
+    {
+        fprintf(stderr, "QoS subscription failed: %s\n", tp_errmsg());
+        aeron_subscription_close(metadata_subscription, NULL, NULL);
+        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_aeron_client_close(&aeron);
+        return 1;
+    }
+
+    if (aeron_fragment_assembler_create(&control_assembler, tp_on_control_fragment, &state) < 0)
     {
         fprintf(stderr, "Fragment assembler failed: %s\n", tp_errmsg());
-        aeron_subscription_close(subscription, NULL, NULL);
+        aeron_subscription_close(qos_subscription, NULL, NULL);
+        aeron_subscription_close(metadata_subscription, NULL, NULL);
+        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_aeron_client_close(&aeron);
+        return 1;
+    }
+
+    if (aeron_fragment_assembler_create(&metadata_assembler, tp_on_control_fragment, &state) < 0)
+    {
+        fprintf(stderr, "Metadata assembler failed: %s\n", tp_errmsg());
+        aeron_fragment_assembler_delete(control_assembler);
+        aeron_subscription_close(qos_subscription, NULL, NULL);
+        aeron_subscription_close(metadata_subscription, NULL, NULL);
+        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_aeron_client_close(&aeron);
+        return 1;
+    }
+
+    if (aeron_fragment_assembler_create(&qos_assembler, tp_on_qos_fragment, &state) < 0)
+    {
+        fprintf(stderr, "QoS assembler failed: %s\n", tp_errmsg());
+        aeron_fragment_assembler_delete(metadata_assembler);
+        aeron_fragment_assembler_delete(control_assembler);
+        aeron_subscription_close(qos_subscription, NULL, NULL);
+        aeron_subscription_close(metadata_subscription, NULL, NULL);
+        aeron_subscription_close(control_subscription, NULL, NULL);
         tp_aeron_client_close(&aeron);
         return 1;
     }
 
     signal(SIGINT, tp_handle_sigint);
 
-    printf("Listening on %s:%d (Ctrl+C to stop)\n", control_channel, control_stream_id);
+    printf("Listening on control=%s:%d metadata=%s:%d qos=%s:%d (Ctrl+C to stop)\n",
+        control_channel, control_stream_id,
+        metadata_channel, metadata_stream_id,
+        qos_channel, qos_stream_id);
 
     while (tp_running)
     {
-        int fragments = aeron_subscription_poll(subscription, aeron_fragment_assembler_handler, assembler, 10);
+        int fragments;
+
+        fragments = aeron_subscription_poll(control_subscription, aeron_fragment_assembler_handler, control_assembler, 10);
         if (fragments < 0)
         {
-            fprintf(stderr, "Poll failed: %d\n", fragments);
+            fprintf(stderr, "Control poll failed: %d\n", fragments);
+            break;
+        }
+
+        fragments = aeron_subscription_poll(metadata_subscription, aeron_fragment_assembler_handler, metadata_assembler, 10);
+        if (fragments < 0)
+        {
+            fprintf(stderr, "Metadata poll failed: %d\n", fragments);
+            break;
+        }
+
+        fragments = aeron_subscription_poll(qos_subscription, aeron_fragment_assembler_handler, qos_assembler, 10);
+        if (fragments < 0)
+        {
+            fprintf(stderr, "QoS poll failed: %d\n", fragments);
             break;
         }
 
@@ -306,8 +618,12 @@ int main(int argc, char **argv)
         }
     }
 
-    aeron_fragment_assembler_delete(assembler);
-    aeron_subscription_close(subscription, NULL, NULL);
+    aeron_fragment_assembler_delete(qos_assembler);
+    aeron_fragment_assembler_delete(metadata_assembler);
+    aeron_fragment_assembler_delete(control_assembler);
+    aeron_subscription_close(qos_subscription, NULL, NULL);
+    aeron_subscription_close(metadata_subscription, NULL, NULL);
+    aeron_subscription_close(control_subscription, NULL, NULL);
     tp_aeron_client_close(&aeron);
 
     return 0;
