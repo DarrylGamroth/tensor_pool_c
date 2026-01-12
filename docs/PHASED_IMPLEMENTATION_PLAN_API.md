@@ -57,12 +57,12 @@ Status: in progress
 
 ## Phase 5 - Control/QoS/Metadata/Progress pollers
 
-Status: pending
+Status: in progress
 
-- [ ] Implement control poller and handlers (ConsumerHello/ConsumerConfig/DataSource*).
-- [ ] Implement QoS poller + publish helpers.
-- [ ] Implement metadata poller + announce/meta helpers.
-- [ ] Implement progress poller for per-consumer streams.
+- [x] Implement control poller and handlers (ConsumerHello/ConsumerConfig/DataSource*).
+- [x] Implement QoS poller + publish helpers.
+- [x] Implement metadata poller + announce/meta helpers.
+- [x] Implement progress poller for per-consumer streams.
 - [ ] Unit tests for each poller and handler wiring.
 
 ## Phase 6 - Discovery client/poller
