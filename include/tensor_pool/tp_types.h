@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "driver/tensor_pool/hugepagesPolicy.h"
+#include "driver/tensor_pool/publishMode.h"
+#include "driver/tensor_pool/responseCode.h"
+#include "driver/tensor_pool/role.h"
+#include "wire/tensor_pool/dtype.h"
+#include "wire/tensor_pool/majorOrder.h"
+#include "wire/tensor_pool/progressUnit.h"
+
 #define TP_SUPERBLOCK_SIZE_BYTES 64u
 #define TP_HEADER_SLOT_BYTES 256u
 #define TP_MAX_DIMS 8u
@@ -50,6 +58,24 @@ typedef enum tp_progress_state_enum
     TP_PROGRESS_NULL = 255
 }
 tp_progress_state_t;
+
+#define TP_ROLE_PRODUCER tensor_pool_role_PRODUCER
+#define TP_ROLE_CONSUMER tensor_pool_role_CONSUMER
+#define TP_PUBLISH_MODE_EXISTING_OR_CREATE tensor_pool_publishMode_EXISTING_OR_CREATE
+#define TP_PUBLISH_MODE_EXISTING tensor_pool_publishMode_EXISTING
+#define TP_PUBLISH_MODE_CREATE tensor_pool_publishMode_CREATE
+#define TP_HUGEPAGES_UNSPECIFIED tensor_pool_hugepagesPolicy_UNSPECIFIED
+#define TP_HUGEPAGES_REQUIRED tensor_pool_hugepagesPolicy_REQUIRED
+#define TP_HUGEPAGES_FORBIDDEN tensor_pool_hugepagesPolicy_FORBIDDEN
+#define TP_RESPONSE_OK tensor_pool_responseCode_OK
+#define TP_RESPONSE_ERROR tensor_pool_responseCode_ERROR
+#define TP_DTYPE_UINT8 tensor_pool_dtype_UINT8
+#define TP_DTYPE_FLOAT32 tensor_pool_dtype_FLOAT32
+#define TP_MAJOR_ORDER_ROW tensor_pool_majorOrder_ROW
+#define TP_MAJOR_ORDER_COLUMN tensor_pool_majorOrder_COLUMN
+#define TP_PROGRESS_NONE tensor_pool_progressUnit_NONE
+#define TP_PROGRESS_ROWS tensor_pool_progressUnit_ROWS
+#define TP_PROGRESS_COLUMNS tensor_pool_progressUnit_COLUMNS
 
 enum
 {

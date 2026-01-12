@@ -1,25 +1,9 @@
 #include "tensor_pool/tp.h"
 
-#include "driver/tensor_pool/publishMode.h"
-#include "driver/tensor_pool/role.h"
-#include "driver/tensor_pool/hugepagesPolicy.h"
-#include "driver/tensor_pool/responseCode.h"
-#include "wire/tensor_pool/dtype.h"
-#include "wire/tensor_pool/majorOrder.h"
-#include "wire/tensor_pool/progressUnit.h"
-
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define TP_ROLE_PRODUCER tensor_pool_role_PRODUCER
-#define TP_PUBLISH_MODE_EXISTING_OR_CREATE tensor_pool_publishMode_EXISTING_OR_CREATE
-#define TP_HUGEPAGES_UNSPECIFIED tensor_pool_hugepagesPolicy_UNSPECIFIED
-#define TP_RESPONSE_OK tensor_pool_responseCode_OK
-#define TP_DTYPE_UINT8 tensor_pool_dtype_UINT8
-#define TP_MAJOR_ORDER_ROW tensor_pool_majorOrder_ROW
-#define TP_PROGRESS_NONE tensor_pool_progressUnit_NONE
 
 typedef struct tp_bgapi_slot_stct
 {
