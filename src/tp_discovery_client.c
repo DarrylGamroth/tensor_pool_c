@@ -39,13 +39,33 @@ static int64_t tp_discovery_now_ns(void)
     return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
-static void tp_discovery_response_handler(
-    void *clientd,
+static void tp_discovery_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t src_len)
+{
+    uint32_t len = src_len;
+
+    if (dst_len == 0)
+    {
+        return;
+    }
+
+    if (len >= dst_len)
+    {
+        len = (uint32_t)dst_len - 1;
+    }
+
+    if (len > 0)
+    {
+        memcpy(dst, src, len);
+    }
+    dst[len] = '\0';
+}
+
+int tp_discovery_decode_response(
     const uint8_t *buffer,
     size_t length,
-    aeron_header_t *header)
+    uint64_t request_id,
+    tp_discovery_response_t *out)
 {
-    tp_discovery_response_ctx_t *ctx = (tp_discovery_response_ctx_t *)clientd;
     struct tensor_pool_messageHeader msg_header;
     struct tensor_pool_discoveryResponse response;
     uint16_t template_id;
@@ -53,11 +73,10 @@ static void tp_discovery_response_handler(
     uint16_t block_length;
     uint16_t version;
 
-    (void)header;
-
-    if (NULL == ctx || NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    if (NULL == buffer || NULL == out || length < tensor_pool_messageHeader_encoded_length())
     {
-        return;
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_decode_response: invalid input");
+        return -1;
     }
 
     tensor_pool_messageHeader_wrap(
@@ -71,14 +90,10 @@ static void tp_discovery_response_handler(
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
     version = tensor_pool_messageHeader_version(&msg_header);
 
-    if (schema_id != tensor_pool_discoveryResponse_sbe_schema_id())
+    if (schema_id != tensor_pool_discoveryResponse_sbe_schema_id() ||
+        template_id != tensor_pool_discoveryResponse_sbe_template_id())
     {
-        return;
-    }
-
-    if (template_id != tensor_pool_discoveryResponse_sbe_template_id())
-    {
-        return;
+        return 1;
     }
 
     tensor_pool_discoveryResponse_wrap_for_decode(
@@ -89,36 +104,30 @@ static void tp_discovery_response_handler(
         version,
         length);
 
-    if (tensor_pool_discoveryResponse_requestId(&response) != ctx->request_id)
+    if (tensor_pool_discoveryResponse_requestId(&response) != request_id)
     {
-        return;
+        return 1;
     }
 
-    ctx->out->request_id = ctx->request_id;
+    out->request_id = request_id;
     {
         enum tensor_pool_discoveryStatus status;
         if (!tensor_pool_discoveryResponse_status(&response, &status))
         {
-            ctx->out->status = tensor_pool_discoveryStatus_ERROR;
+            out->status = tensor_pool_discoveryStatus_ERROR;
         }
         else
         {
-            ctx->out->status = (uint8_t)status;
+            out->status = (uint8_t)status;
         }
     }
 
-    if (ctx->out->status != tensor_pool_discoveryStatus_OK)
+    if (out->status != tensor_pool_discoveryStatus_OK)
     {
         const char *err = tensor_pool_discoveryResponse_errorMessage(&response);
         uint32_t len = tensor_pool_discoveryResponse_errorMessage_length(&response);
-        if (len >= sizeof(ctx->out->error_message))
-        {
-            len = sizeof(ctx->out->error_message) - 1;
-        }
-        memcpy(ctx->out->error_message, err, len);
-        ctx->out->error_message[len] = '\0';
-        ctx->done = 1;
-        return;
+        tp_discovery_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+        return 0;
     }
 
     {
@@ -134,24 +143,29 @@ static void tp_discovery_response_handler(
             length);
 
         result_count = (size_t)tensor_pool_discoveryResponse_results_count(&results);
-        ctx->out->result_count = result_count;
+        out->result_count = result_count;
 
         if (result_count > 0)
         {
-            if (aeron_alloc((void **)&ctx->out->results, sizeof(tp_discovery_result_t) * result_count) < 0)
+            if (aeron_alloc((void **)&out->results, sizeof(tp_discovery_result_t) * result_count) < 0)
             {
-                ctx->out->result_count = 0;
-                ctx->done = 1;
-                return;
+                out->result_count = 0;
+                out->status = tensor_pool_discoveryStatus_ERROR;
+                strncpy(out->error_message, "discovery response allocation failed", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
         }
 
         for (i = 0; i < result_count; i++)
         {
-            tp_discovery_result_t *result = &ctx->out->results[i];
+            tp_discovery_result_t *result = &out->results[i];
             struct tensor_pool_discoveryResponse_results_payloadPools pools;
+            struct tensor_pool_discoveryResponse_results_tags tags;
             size_t pool_count;
+            size_t tag_count;
             size_t p;
+            size_t t;
 
             if (NULL == tensor_pool_discoveryResponse_results_next(&results))
             {
@@ -169,48 +183,12 @@ static void tp_discovery_response_handler(
             result->data_source_id = tensor_pool_discoveryResponse_results_dataSourceId(&results);
             result->driver_control_stream_id = tensor_pool_discoveryResponse_results_driverControlStreamId(&results);
 
+            if (result->header_slot_bytes != TP_HEADER_SLOT_BYTES || result->max_dims != TP_MAX_DIMS)
             {
-                const char *uri = tensor_pool_discoveryResponse_results_headerRegionUri(&results);
-                uint32_t len = tensor_pool_discoveryResponse_results_headerRegionUri_length(&results);
-                if (len >= sizeof(result->header_region_uri))
-                {
-                    len = sizeof(result->header_region_uri) - 1;
-                }
-                memcpy(result->header_region_uri, uri, len);
-                result->header_region_uri[len] = '\0';
-            }
-
-            {
-                const char *name = tensor_pool_discoveryResponse_results_dataSourceName(&results);
-                uint32_t len = tensor_pool_discoveryResponse_results_dataSourceName_length(&results);
-                if (len >= sizeof(result->data_source_name))
-                {
-                    len = sizeof(result->data_source_name) - 1;
-                }
-                memcpy(result->data_source_name, name, len);
-                result->data_source_name[len] = '\0';
-            }
-
-            {
-                const char *inst = tensor_pool_discoveryResponse_results_driverInstanceId(&results);
-                uint32_t len = tensor_pool_discoveryResponse_results_driverInstanceId_length(&results);
-                if (len >= sizeof(result->driver_instance_id))
-                {
-                    len = sizeof(result->driver_instance_id) - 1;
-                }
-                memcpy(result->driver_instance_id, inst, len);
-                result->driver_instance_id[len] = '\0';
-            }
-
-            {
-                const char *channel = tensor_pool_discoveryResponse_results_driverControlChannel(&results);
-                uint32_t len = tensor_pool_discoveryResponse_results_driverControlChannel_length(&results);
-                if (len >= sizeof(result->driver_control_channel))
-                {
-                    len = sizeof(result->driver_control_channel) - 1;
-                }
-                memcpy(result->driver_control_channel, channel, len);
-                result->driver_control_channel[len] = '\0';
+                out->status = tensor_pool_discoveryStatus_ERROR;
+                strncpy(out->error_message, "discovery response slot bytes/max dims mismatch", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
 
             tensor_pool_discoveryResponse_results_payloadPools_wrap_for_decode(
@@ -223,12 +201,23 @@ static void tp_discovery_response_handler(
             pool_count = (size_t)tensor_pool_discoveryResponse_results_payloadPools_count(&pools);
             result->pool_count = pool_count;
 
+            if (pool_count == 0)
+            {
+                out->status = tensor_pool_discoveryStatus_ERROR;
+                strncpy(out->error_message, "discovery response missing payload pools", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
+            }
+
             if (pool_count > 0)
             {
                 if (aeron_alloc((void **)&result->pools, sizeof(tp_discovery_pool_info_t) * pool_count) < 0)
                 {
                     result->pool_count = 0;
-                    continue;
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response pool allocation failed", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
                 }
             }
 
@@ -249,17 +238,122 @@ static void tp_discovery_response_handler(
 
                 uri = tensor_pool_discoveryResponse_results_payloadPools_regionUri(&pools);
                 len = tensor_pool_discoveryResponse_results_payloadPools_regionUri_length(&pools);
-                if (len >= sizeof(pool->region_uri))
+                tp_discovery_copy_ascii(pool->region_uri, sizeof(pool->region_uri), uri, len);
+                if (pool->region_uri[0] == '\0')
                 {
-                    len = sizeof(pool->region_uri) - 1;
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response missing payload uri", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
                 }
-                memcpy(pool->region_uri, uri, len);
-                pool->region_uri[len] = '\0';
+            }
+
+            tensor_pool_discoveryResponse_results_tags_wrap_for_decode(
+                &tags,
+                (char *)buffer,
+                tensor_pool_discoveryResponse_results_sbe_position_ptr(&results),
+                version,
+                length);
+
+            tag_count = (size_t)tensor_pool_discoveryResponse_results_tags_count(&tags);
+            result->tag_count = tag_count;
+
+            if (tag_count > 0)
+            {
+                if (aeron_alloc((void **)&result->tags, sizeof(char *) * tag_count) < 0)
+                {
+                    result->tag_count = 0;
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response tag allocation failed", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
+            }
+
+            for (t = 0; t < tag_count; t++)
+            {
+                const char *tag;
+                uint32_t len;
+
+                if (NULL == tensor_pool_discoveryResponse_results_tags_next(&tags))
+                {
+                    break;
+                }
+
+                tag = tensor_pool_discoveryResponse_results_tags_tag(&tags);
+                len = tensor_pool_discoveryResponse_results_tags_tag_length(&tags);
+                result->tags[t] = NULL;
+                if (len > 0)
+                {
+                    if (aeron_alloc((void **)&result->tags[t], len + 1) < 0)
+                    {
+                        out->status = tensor_pool_discoveryStatus_ERROR;
+                        strncpy(out->error_message, "discovery response tag string allocation failed", sizeof(out->error_message) - 1);
+                        out->error_message[sizeof(out->error_message) - 1] = '\0';
+                        return 0;
+                    }
+                    memcpy(result->tags[t], tag, len);
+                    result->tags[t][len] = '\0';
+                }
+            }
+
+            {
+                const char *uri = tensor_pool_discoveryResponse_results_headerRegionUri(&results);
+                uint32_t len = tensor_pool_discoveryResponse_results_headerRegionUri_length(&results);
+                tp_discovery_copy_ascii(result->header_region_uri, sizeof(result->header_region_uri), uri, len);
+                if (result->header_region_uri[0] == '\0')
+                {
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response missing header uri", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
+            }
+
+            {
+                const char *name = tensor_pool_discoveryResponse_results_dataSourceName(&results);
+                uint32_t len = tensor_pool_discoveryResponse_results_dataSourceName_length(&results);
+                tp_discovery_copy_ascii(result->data_source_name, sizeof(result->data_source_name), name, len);
+            }
+
+            {
+                const char *inst = tensor_pool_discoveryResponse_results_driverInstanceId(&results);
+                uint32_t len = tensor_pool_discoveryResponse_results_driverInstanceId_length(&results);
+                tp_discovery_copy_ascii(result->driver_instance_id, sizeof(result->driver_instance_id), inst, len);
+            }
+
+            {
+                const char *channel = tensor_pool_discoveryResponse_results_driverControlChannel(&results);
+                uint32_t len = tensor_pool_discoveryResponse_results_driverControlChannel_length(&results);
+                tp_discovery_copy_ascii(result->driver_control_channel, sizeof(result->driver_control_channel), channel, len);
             }
         }
     }
 
-    ctx->done = 1;
+    return 0;
+}
+
+static void tp_discovery_response_handler(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_discovery_response_ctx_t *ctx = (tp_discovery_response_ctx_t *)clientd;
+    int decode_result;
+
+    (void)header;
+
+    if (NULL == ctx || NULL == buffer)
+    {
+        return;
+    }
+
+    decode_result = tp_discovery_decode_response(buffer, length, ctx->request_id, ctx->out);
+    if (decode_result == 0 || decode_result < 0)
+    {
+        ctx->done = 1;
+    }
 }
 
 int tp_discovery_client_init(
@@ -324,9 +418,10 @@ int tp_discovery_client_close(tp_discovery_client_t *client)
 
 int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_request_t *request)
 {
-    uint8_t buffer[512];
+    uint8_t buffer[1024];
     struct tensor_pool_messageHeader msg_header;
     struct tensor_pool_discoveryRequest req;
+    struct tensor_pool_discoveryRequest_tags tags;
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_discoveryRequest_sbe_block_length();
     int64_t result;
@@ -340,6 +435,12 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
     if (NULL == request->response_channel || request->response_stream_id == 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_discovery_request: response channel required");
+        return -1;
+    }
+
+    if (request->tag_count > 0 && NULL == request->tags)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_request: tags array required");
         return -1;
     }
 
@@ -383,6 +484,47 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
     else
     {
         tensor_pool_discoveryRequest_set_dataSourceId(&req, request->data_source_id);
+    }
+
+    if (NULL == tensor_pool_discoveryRequest_tags_wrap_for_encode(
+        &tags,
+        (char *)buffer,
+        (uint16_t)request->tag_count,
+        tensor_pool_discoveryRequest_sbe_position_ptr(&req),
+        tensor_pool_discoveryRequest_sbe_schema_version(),
+        sizeof(buffer)))
+    {
+        return -1;
+    }
+
+    if (request->tag_count > 0)
+    {
+        size_t i;
+        for (i = 0; i < request->tag_count; i++)
+        {
+            const char *tag = request->tags[i];
+            size_t len = tag ? strlen(tag) : 0;
+
+            if (NULL == tensor_pool_discoveryRequest_tags_next(&tags))
+            {
+                return -1;
+            }
+
+            if (len > 0)
+            {
+                if (tensor_pool_discoveryRequest_tags_put_tag(&tags, tag, len) < 0)
+                {
+                    return -1;
+                }
+            }
+            else
+            {
+                if (tensor_pool_discoveryRequest_tags_put_tag(&tags, "", 0) < 0)
+                {
+                    return -1;
+                }
+            }
+        }
     }
 
     if (tensor_pool_discoveryRequest_put_responseChannel(&req, request->response_channel, strlen(request->response_channel)) < 0)
@@ -456,6 +598,71 @@ int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_dis
     return 0;
 }
 
+void tp_discovery_request_init(tp_discovery_request_t *request)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+
+    memset(request, 0, sizeof(*request));
+    request->stream_id = TP_NULL_U32;
+    request->producer_id = TP_NULL_U32;
+    request->data_source_id = TP_NULL_U64;
+    request->tags = NULL;
+    request->tag_count = 0;
+}
+
+int tp_discovery_result_has_tag(const tp_discovery_result_t *result, const char *tag)
+{
+    size_t i;
+
+    if (NULL == result || NULL == tag)
+    {
+        return 0;
+    }
+
+    for (i = 0; i < result->tag_count; i++)
+    {
+        if (result->tags && result->tags[i] && strcmp(result->tags[i], tag) == 0)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int tp_discovery_result_matches(
+    const tp_discovery_result_t *result,
+    uint32_t stream_id,
+    uint32_t producer_id,
+    const char *data_source_name)
+{
+    if (NULL == result)
+    {
+        return 0;
+    }
+
+    if (stream_id != TP_NULL_U32 && result->stream_id != stream_id)
+    {
+        return 0;
+    }
+
+    if (producer_id != TP_NULL_U32 && result->producer_id != producer_id)
+    {
+        return 0;
+    }
+
+    if (NULL != data_source_name && data_source_name[0] != '\\0' &&
+        strcmp(result->data_source_name, data_source_name) != 0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 void tp_discovery_response_close(tp_discovery_response_t *response)
 {
     size_t i;
@@ -473,6 +680,22 @@ void tp_discovery_response_close(tp_discovery_response_t *response)
             aeron_free(result->pools);
             result->pools = NULL;
         }
+
+        if (result->tags)
+        {
+            size_t t;
+            for (t = 0; t < result->tag_count; t++)
+            {
+                if (result->tags[t])
+                {
+                    aeron_free(result->tags[t]);
+                    result->tags[t] = NULL;
+                }
+            }
+            aeron_free(result->tags);
+            result->tags = NULL;
+        }
+        result->tag_count = 0;
     }
 
     if (response->results)

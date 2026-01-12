@@ -18,9 +18,14 @@
 #include "driver/tensor_pool/messageHeader.h"
 #include "driver/tensor_pool/shmAttachRequest.h"
 #include "driver/tensor_pool/shmAttachResponse.h"
+#include "driver/tensor_pool/shmDetachResponse.h"
 #include "driver/tensor_pool/shmDetachRequest.h"
+#include "driver/tensor_pool/shmDriverShutdown.h"
 #include "driver/tensor_pool/shmLeaseKeepalive.h"
+#include "driver/tensor_pool/shmLeaseRevoked.h"
+#include "driver/tensor_pool/leaseRevokeReason.h"
 #include "driver/tensor_pool/responseCode.h"
+#include "driver/tensor_pool/shutdownReason.h"
 
 typedef struct tp_driver_response_ctx_stct
 {
@@ -42,13 +47,33 @@ static int64_t tp_time_now_ns(void)
     return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
-static void tp_driver_response_handler(
-    void *clientd,
+static void tp_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t src_len)
+{
+    uint32_t len = src_len;
+
+    if (dst_len == 0)
+    {
+        return;
+    }
+
+    if (len >= dst_len)
+    {
+        len = (uint32_t)dst_len - 1;
+    }
+
+    if (len > 0)
+    {
+        memcpy(dst, src, len);
+    }
+    dst[len] = '\0';
+}
+
+int tp_driver_decode_attach_response(
     const uint8_t *buffer,
     size_t length,
-    aeron_header_t *header)
+    int64_t correlation_id,
+    tp_driver_attach_info_t *out)
 {
-    tp_driver_response_ctx_t *ctx = (tp_driver_response_ctx_t *)clientd;
     struct tensor_pool_messageHeader msg_header;
     struct tensor_pool_shmAttachResponse response;
     uint16_t template_id;
@@ -56,11 +81,10 @@ static void tp_driver_response_handler(
     uint16_t block_length;
     uint16_t version;
 
-    (void)header;
-
-    if (NULL == ctx || NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    if (NULL == buffer || NULL == out || length < tensor_pool_messageHeader_encoded_length())
     {
-        return;
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_attach_response: invalid input");
+        return -1;
     }
 
     tensor_pool_messageHeader_wrap(
@@ -74,14 +98,10 @@ static void tp_driver_response_handler(
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
     version = tensor_pool_messageHeader_version(&msg_header);
 
-    if (schema_id != tensor_pool_shmAttachResponse_sbe_schema_id())
+    if (schema_id != tensor_pool_shmAttachResponse_sbe_schema_id() ||
+        template_id != tensor_pool_shmAttachResponse_sbe_template_id())
     {
-        return;
-    }
-
-    if (template_id != tensor_pool_shmAttachResponse_sbe_template_id())
-    {
-        return;
+        return 1;
     }
 
     tensor_pool_shmAttachResponse_wrap_for_decode(
@@ -92,77 +112,87 @@ static void tp_driver_response_handler(
         version,
         length);
 
-    if (tensor_pool_shmAttachResponse_correlationId(&response) != ctx->correlation_id)
+    if (tensor_pool_shmAttachResponse_correlationId(&response) != correlation_id)
     {
-        return;
+        return 1;
     }
 
     {
         enum tensor_pool_responseCode code;
         if (!tensor_pool_shmAttachResponse_code(&response, &code))
         {
-            ctx->out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+            out->code = tensor_pool_responseCode_INTERNAL_ERROR;
         }
         else
         {
-            ctx->out->code = code;
+            out->code = code;
         }
     }
 
-    if (ctx->out->code == tensor_pool_responseCode_OK)
+    if (out->code == tensor_pool_responseCode_OK)
     {
         struct tensor_pool_shmAttachResponse_payloadPools pools;
         size_t pool_count = 0;
         size_t i = 0;
 
-        ctx->out->lease_id = tensor_pool_shmAttachResponse_leaseId(&response);
-        ctx->out->lease_expiry_timestamp_ns = tensor_pool_shmAttachResponse_leaseExpiryTimestampNs(&response);
-        ctx->out->stream_id = tensor_pool_shmAttachResponse_streamId(&response);
-        ctx->out->epoch = tensor_pool_shmAttachResponse_epoch(&response);
-        ctx->out->layout_version = tensor_pool_shmAttachResponse_layoutVersion(&response);
-        ctx->out->header_nslots = tensor_pool_shmAttachResponse_headerNslots(&response);
-        ctx->out->header_slot_bytes = tensor_pool_shmAttachResponse_headerSlotBytes(&response);
-        ctx->out->max_dims = tensor_pool_shmAttachResponse_maxDims(&response);
+        out->lease_id = tensor_pool_shmAttachResponse_leaseId(&response);
+        out->lease_expiry_timestamp_ns = tensor_pool_shmAttachResponse_leaseExpiryTimestampNs(&response);
+        out->stream_id = tensor_pool_shmAttachResponse_streamId(&response);
+        out->epoch = tensor_pool_shmAttachResponse_epoch(&response);
+        out->layout_version = tensor_pool_shmAttachResponse_layoutVersion(&response);
+        out->header_nslots = tensor_pool_shmAttachResponse_headerNslots(&response);
+        out->header_slot_bytes = tensor_pool_shmAttachResponse_headerSlotBytes(&response);
+        out->max_dims = tensor_pool_shmAttachResponse_maxDims(&response);
 
-        if (ctx->out->stream_id == tensor_pool_shmAttachResponse_streamId_null_value() ||
-            ctx->out->epoch == tensor_pool_shmAttachResponse_epoch_null_value() ||
-            ctx->out->layout_version == tensor_pool_shmAttachResponse_layoutVersion_null_value() ||
-            ctx->out->header_nslots == tensor_pool_shmAttachResponse_headerNslots_null_value() ||
-            ctx->out->header_slot_bytes == tensor_pool_shmAttachResponse_headerSlotBytes_null_value() ||
-            ctx->out->max_dims == tensor_pool_shmAttachResponse_maxDims_null_value())
+        if (out->lease_id == tensor_pool_shmAttachResponse_leaseId_null_value() ||
+            out->lease_expiry_timestamp_ns == tensor_pool_shmAttachResponse_leaseExpiryTimestampNs_null_value() ||
+            out->stream_id == tensor_pool_shmAttachResponse_streamId_null_value() ||
+            out->epoch == tensor_pool_shmAttachResponse_epoch_null_value() ||
+            out->layout_version == tensor_pool_shmAttachResponse_layoutVersion_null_value() ||
+            out->header_nslots == tensor_pool_shmAttachResponse_headerNslots_null_value() ||
+            out->header_slot_bytes == tensor_pool_shmAttachResponse_headerSlotBytes_null_value() ||
+            out->max_dims == tensor_pool_shmAttachResponse_maxDims_null_value())
         {
-            ctx->out->code = tensor_pool_responseCode_INTERNAL_ERROR;
-            strncpy(ctx->out->error_message, "attach response missing required fields", sizeof(ctx->out->error_message) - 1);
-            ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-            ctx->done = 1;
-            return;
+            out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+            strncpy(out->error_message, "attach response missing required fields", sizeof(out->error_message) - 1);
+            out->error_message[sizeof(out->error_message) - 1] = '\0';
+            return 0;
         }
 
-        if (ctx->out->header_slot_bytes != TP_HEADER_SLOT_BYTES)
+        if (out->header_slot_bytes != TP_HEADER_SLOT_BYTES)
         {
-            ctx->out->code = tensor_pool_responseCode_INVALID_PARAMS;
-            strncpy(ctx->out->error_message, "attach response header_slot_bytes mismatch", sizeof(ctx->out->error_message) - 1);
-            ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-            ctx->done = 1;
-            return;
+            out->code = tensor_pool_responseCode_INVALID_PARAMS;
+            strncpy(out->error_message, "attach response header_slot_bytes mismatch", sizeof(out->error_message) - 1);
+            out->error_message[sizeof(out->error_message) - 1] = '\0';
+            return 0;
+        }
+
+        if (out->max_dims != TP_MAX_DIMS)
+        {
+            out->code = tensor_pool_responseCode_INVALID_PARAMS;
+            strncpy(out->error_message, "attach response max_dims mismatch", sizeof(out->error_message) - 1);
+            out->error_message[sizeof(out->error_message) - 1] = '\0';
+            return 0;
+        }
+
+        if (out->header_nslots == 0)
+        {
+            out->code = tensor_pool_responseCode_INVALID_PARAMS;
+            strncpy(out->error_message, "attach response header_nslots invalid", sizeof(out->error_message) - 1);
+            out->error_message[sizeof(out->error_message) - 1] = '\0';
+            return 0;
         }
 
         {
             const char *uri = tensor_pool_shmAttachResponse_headerRegionUri(&response);
             uint32_t len = tensor_pool_shmAttachResponse_headerRegionUri_length(&response);
-            if (len >= sizeof(ctx->out->header_region_uri))
+            tp_copy_ascii(out->header_region_uri, sizeof(out->header_region_uri), uri, len);
+            if (out->header_region_uri[0] == '\0')
             {
-                len = sizeof(ctx->out->header_region_uri) - 1;
-            }
-            memcpy(ctx->out->header_region_uri, uri, len);
-            ctx->out->header_region_uri[len] = '\0';
-            if (len == 0)
-            {
-                ctx->out->code = tensor_pool_responseCode_INVALID_PARAMS;
-                strncpy(ctx->out->error_message, "attach response missing header region uri", sizeof(ctx->out->error_message) - 1);
-                ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-                ctx->done = 1;
-                return;
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response missing header region uri", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
         }
 
@@ -174,30 +204,31 @@ static void tp_driver_response_handler(
             length);
 
         pool_count = (size_t)tensor_pool_shmAttachResponse_payloadPools_count(&pools);
-        ctx->out->pool_count = pool_count;
+        out->pool_count = pool_count;
 
         if (pool_count == 0)
         {
-            ctx->out->code = tensor_pool_responseCode_INVALID_PARAMS;
-            strncpy(ctx->out->error_message, "attach response missing payload pools", sizeof(ctx->out->error_message) - 1);
-            ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-            ctx->done = 1;
-            return;
+            out->code = tensor_pool_responseCode_INVALID_PARAMS;
+            strncpy(out->error_message, "attach response missing payload pools", sizeof(out->error_message) - 1);
+            out->error_message[sizeof(out->error_message) - 1] = '\0';
+            return 0;
         }
 
         if (pool_count > 0)
         {
-            if (aeron_alloc((void **)&ctx->out->pools, sizeof(tp_driver_pool_info_t) * pool_count) < 0)
+            if (aeron_alloc((void **)&out->pools, sizeof(tp_driver_pool_info_t) * pool_count) < 0)
             {
-                ctx->out->pool_count = 0;
-                ctx->done = 1;
-                return;
+                out->pool_count = 0;
+                out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+                strncpy(out->error_message, "attach response pool allocation failed", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
         }
 
         for (i = 0; i < pool_count; i++)
         {
-            tp_driver_pool_info_t *pool = &ctx->out->pools[i];
+            tp_driver_pool_info_t *pool = &out->pools[i];
             const char *uri;
             uint32_t len;
 
@@ -210,30 +241,32 @@ static void tp_driver_response_handler(
             pool->nslots = tensor_pool_shmAttachResponse_payloadPools_poolNslots(&pools);
             pool->stride_bytes = tensor_pool_shmAttachResponse_payloadPools_strideBytes(&pools);
 
-            if (pool->nslots != ctx->out->header_nslots)
+            if (pool->nslots == tensor_pool_shmAttachResponse_payloadPools_poolNslots_null_value() ||
+                pool->stride_bytes == tensor_pool_shmAttachResponse_payloadPools_strideBytes_null_value())
             {
-                ctx->out->code = tensor_pool_responseCode_INVALID_PARAMS;
-                strncpy(ctx->out->error_message, "attach response pool nslots mismatch", sizeof(ctx->out->error_message) - 1);
-                ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-                ctx->done = 1;
-                return;
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response pool missing required fields", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
+            }
+
+            if (pool->nslots != out->header_nslots)
+            {
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response pool nslots mismatch", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
 
             uri = tensor_pool_shmAttachResponse_payloadPools_regionUri(&pools);
             len = tensor_pool_shmAttachResponse_payloadPools_regionUri_length(&pools);
-            if (len >= sizeof(pool->region_uri))
+            tp_copy_ascii(pool->region_uri, sizeof(pool->region_uri), uri, len);
+            if (pool->region_uri[0] == '\0')
             {
-                len = sizeof(pool->region_uri) - 1;
-            }
-            memcpy(pool->region_uri, uri, len);
-            pool->region_uri[len] = '\0';
-            if (len == 0)
-            {
-                ctx->out->code = tensor_pool_responseCode_INVALID_PARAMS;
-                strncpy(ctx->out->error_message, "attach response missing payload uri", sizeof(ctx->out->error_message) - 1);
-                ctx->out->error_message[sizeof(ctx->out->error_message) - 1] = '\0';
-                ctx->done = 1;
-                return;
+                out->code = tensor_pool_responseCode_INVALID_PARAMS;
+                strncpy(out->error_message, "attach response missing payload uri", sizeof(out->error_message) - 1);
+                out->error_message[sizeof(out->error_message) - 1] = '\0';
+                return 0;
             }
         }
     }
@@ -241,16 +274,240 @@ static void tp_driver_response_handler(
     {
         const char *err = tensor_pool_shmAttachResponse_errorMessage(&response);
         uint32_t len = tensor_pool_shmAttachResponse_errorMessage_length(&response);
-
-        if (len >= sizeof(ctx->out->error_message))
-        {
-            len = sizeof(ctx->out->error_message) - 1;
-        }
-        memcpy(ctx->out->error_message, err, len);
-        ctx->out->error_message[len] = '\0';
+        tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
     }
 
-    ctx->done = 1;
+    return 0;
+}
+
+int tp_driver_decode_detach_response(
+    const uint8_t *buffer,
+    size_t length,
+    tp_driver_detach_info_t *out)
+{
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_shmDetachResponse response;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out || length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_detach_response: invalid input");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+    block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+    version = tensor_pool_messageHeader_version(&msg_header);
+
+    if (schema_id != tensor_pool_shmDetachResponse_sbe_schema_id() ||
+        template_id != tensor_pool_shmDetachResponse_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_shmDetachResponse_wrap_for_decode(
+        &response,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    out->correlation_id = tensor_pool_shmDetachResponse_correlationId(&response);
+    {
+        enum tensor_pool_responseCode code;
+        if (!tensor_pool_shmDetachResponse_code(&response, &code))
+        {
+            out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+        }
+        else
+        {
+            out->code = code;
+        }
+    }
+
+    {
+        const char *err = tensor_pool_shmDetachResponse_errorMessage(&response);
+        uint32_t len = tensor_pool_shmDetachResponse_errorMessage_length(&response);
+        tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+    }
+
+    return 0;
+}
+
+int tp_driver_decode_lease_revoked(
+    const uint8_t *buffer,
+    size_t length,
+    tp_driver_lease_revoked_t *out)
+{
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_shmLeaseRevoked revoked;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out || length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_lease_revoked: invalid input");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+    block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+    version = tensor_pool_messageHeader_version(&msg_header);
+
+    if (schema_id != tensor_pool_shmLeaseRevoked_sbe_schema_id() ||
+        template_id != tensor_pool_shmLeaseRevoked_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_shmLeaseRevoked_wrap_for_decode(
+        &revoked,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    out->timestamp_ns = tensor_pool_shmLeaseRevoked_timestampNs(&revoked);
+    out->lease_id = tensor_pool_shmLeaseRevoked_leaseId(&revoked);
+    out->stream_id = tensor_pool_shmLeaseRevoked_streamId(&revoked);
+    out->client_id = tensor_pool_shmLeaseRevoked_clientId(&revoked);
+    {
+        enum tensor_pool_Role role;
+        if (!tensor_pool_shmLeaseRevoked_role(&revoked, &role))
+        {
+            out->role = 0;
+        }
+        else
+        {
+            out->role = (uint8_t)role;
+        }
+    }
+    {
+        enum tensor_pool_LeaseRevokeReason reason;
+        if (!tensor_pool_shmLeaseRevoked_reason(&revoked, &reason))
+        {
+            out->reason = 0;
+        }
+        else
+        {
+            out->reason = (uint8_t)reason;
+        }
+    }
+    {
+        const char *err = tensor_pool_shmLeaseRevoked_errorMessage(&revoked);
+        uint32_t len = tensor_pool_shmLeaseRevoked_errorMessage_length(&revoked);
+        tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+    }
+
+    return 0;
+}
+
+int tp_driver_decode_shutdown(
+    const uint8_t *buffer,
+    size_t length,
+    tp_driver_shutdown_t *out)
+{
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_shmDriverShutdown shutdown;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out || length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_shutdown: invalid input");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+    block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+    version = tensor_pool_messageHeader_version(&msg_header);
+
+    if (schema_id != tensor_pool_shmDriverShutdown_sbe_schema_id() ||
+        template_id != tensor_pool_shmDriverShutdown_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_shmDriverShutdown_wrap_for_decode(
+        &shutdown,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    out->timestamp_ns = tensor_pool_shmDriverShutdown_timestampNs(&shutdown);
+    {
+        enum tensor_pool_ShutdownReason reason;
+        if (!tensor_pool_shmDriverShutdown_reason(&shutdown, &reason))
+        {
+            out->reason = 0;
+        }
+        else
+        {
+            out->reason = (uint8_t)reason;
+        }
+    }
+    {
+        const char *err = tensor_pool_shmDriverShutdown_errorMessage(&shutdown);
+        uint32_t len = tensor_pool_shmDriverShutdown_errorMessage_length(&shutdown);
+        tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+    }
+
+    return 0;
+}
+
+static void tp_driver_response_handler(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_driver_response_ctx_t *ctx = (tp_driver_response_ctx_t *)clientd;
+    int decode_result;
+
+    (void)header;
+
+    if (NULL == ctx || NULL == buffer)
+    {
+        return;
+    }
+
+    decode_result = tp_driver_decode_attach_response(buffer, length, ctx->correlation_id, ctx->out);
+    if (decode_result == 0 || decode_result < 0)
+    {
+        ctx->done = 1;
+    }
 }
 
 int tp_driver_client_init(tp_driver_client_t *client, const tp_context_t *context)
@@ -424,6 +681,15 @@ int tp_driver_attach(
     }
 
     aeron_fragment_assembler_delete(assembler);
+
+    if (out->code == tensor_pool_responseCode_OK)
+    {
+        if (tp_driver_client_update_lease(client, out, request->client_id, request->role) < 0)
+        {
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -464,6 +730,11 @@ int tp_driver_keepalive(tp_driver_client_t *client, uint64_t lease_id, uint32_t 
     if (result < 0)
     {
         return (int)result;
+    }
+
+    if (tp_driver_client_record_keepalive(client, timestamp_ns) < 0)
+    {
+        return -1;
     }
 
     return 0;
@@ -525,4 +796,172 @@ void tp_driver_attach_info_close(tp_driver_attach_info_t *info)
     }
 
     info->pool_count = 0;
+}
+
+static void tp_driver_event_handler(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_driver_event_poller_t *poller = (tp_driver_event_poller_t *)clientd;
+    tp_driver_detach_info_t detach_info;
+    tp_driver_lease_revoked_t revoked;
+    tp_driver_shutdown_t shutdown;
+
+    (void)header;
+
+    if (NULL == poller || NULL == buffer)
+    {
+        return;
+    }
+
+    if (poller->handlers.on_detach_response)
+    {
+        if (tp_driver_decode_detach_response(buffer, length, &detach_info) == 0)
+        {
+            poller->handlers.on_detach_response(&detach_info, poller->handlers.clientd);
+            return;
+        }
+    }
+
+    if (poller->handlers.on_lease_revoked)
+    {
+        if (tp_driver_decode_lease_revoked(buffer, length, &revoked) == 0)
+        {
+            poller->handlers.on_lease_revoked(&revoked, poller->handlers.clientd);
+            return;
+        }
+    }
+
+    if (poller->handlers.on_shutdown)
+    {
+        if (tp_driver_decode_shutdown(buffer, length, &shutdown) == 0)
+        {
+            poller->handlers.on_shutdown(&shutdown, poller->handlers.clientd);
+            return;
+        }
+    }
+}
+
+int tp_driver_event_poller_init(
+    tp_driver_event_poller_t *poller,
+    aeron_subscription_t *subscription,
+    const tp_driver_event_handlers_t *handlers)
+{
+    if (NULL == poller || NULL == subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_event_poller_init: null input");
+        return -1;
+    }
+
+    memset(poller, 0, sizeof(*poller));
+    poller->subscription = subscription;
+    if (NULL != handlers)
+    {
+        poller->handlers = *handlers;
+    }
+
+    if (aeron_fragment_assembler_create(&poller->assembler, tp_driver_event_handler, poller) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_driver_event_poller_close(tp_driver_event_poller_t *poller)
+{
+    if (NULL == poller)
+    {
+        return -1;
+    }
+
+    if (poller->assembler)
+    {
+        aeron_fragment_assembler_delete(poller->assembler);
+        poller->assembler = NULL;
+    }
+
+    poller->subscription = NULL;
+    return 0;
+}
+
+int tp_driver_event_poll(tp_driver_event_poller_t *poller, int fragment_limit)
+{
+    if (NULL == poller || NULL == poller->assembler || NULL == poller->subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_event_poll: poller not initialized");
+        return -1;
+    }
+
+    return aeron_subscription_poll(
+        poller->subscription,
+        aeron_fragment_assembler_handler,
+        poller->assembler,
+        fragment_limit);
+}
+
+int tp_driver_client_update_lease(
+    tp_driver_client_t *client,
+    const tp_driver_attach_info_t *attach_info,
+    uint32_t client_id,
+    uint8_t role)
+{
+    if (NULL == client || NULL == attach_info)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_update_lease: null input");
+        return -1;
+    }
+
+    client->active_lease_id = attach_info->lease_id;
+    client->lease_expiry_timestamp_ns = attach_info->lease_expiry_timestamp_ns;
+    client->active_stream_id = attach_info->stream_id;
+    client->client_id = client_id;
+    client->role = role;
+    return 0;
+}
+
+int tp_driver_client_record_keepalive(tp_driver_client_t *client, uint64_t now_ns)
+{
+    if (NULL == client)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_record_keepalive: null input");
+        return -1;
+    }
+
+    client->last_keepalive_ns = now_ns;
+    return 0;
+}
+
+int tp_driver_client_keepalive_due(const tp_driver_client_t *client, uint64_t now_ns, uint64_t interval_ns)
+{
+    if (NULL == client)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_keepalive_due: null input");
+        return -1;
+    }
+
+    if (client->active_lease_id == 0 || interval_ns == 0)
+    {
+        return 0;
+    }
+
+    return (now_ns - client->last_keepalive_ns >= interval_ns) ? 1 : 0;
+}
+
+int tp_driver_client_lease_expired(const tp_driver_client_t *client, uint64_t now_ns)
+{
+    if (NULL == client)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_lease_expired: null input");
+        return -1;
+    }
+
+    if (client->active_lease_id == 0)
+    {
+        return 0;
+    }
+
+    return (now_ns >= client->lease_expiry_timestamp_ns) ? 1 : 0;
 }

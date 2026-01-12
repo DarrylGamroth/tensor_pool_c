@@ -1,6 +1,7 @@
 #ifndef TENSOR_POOL_TP_DISCOVERY_CLIENT_H
 #define TENSOR_POOL_TP_DISCOVERY_CLIENT_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "tensor_pool/tp_aeron.h"
@@ -36,6 +37,8 @@ typedef struct tp_discovery_result_stct
     char driver_control_channel[1024];
     tp_discovery_pool_info_t *pools;
     size_t pool_count;
+    char **tags;
+    size_t tag_count;
 }
 tp_discovery_result_t;
 
@@ -59,6 +62,8 @@ typedef struct tp_discovery_request_stct
     uint32_t producer_id;
     uint64_t data_source_id;
     const char *data_source_name;
+    const char **tags;
+    size_t tag_count;
 }
 tp_discovery_request_t;
 
@@ -83,11 +88,25 @@ int tp_discovery_request(
     tp_discovery_client_t *client,
     const tp_discovery_request_t *request);
 
+void tp_discovery_request_init(tp_discovery_request_t *request);
+int tp_discovery_result_has_tag(const tp_discovery_result_t *result, const char *tag);
+int tp_discovery_result_matches(
+    const tp_discovery_result_t *result,
+    uint32_t stream_id,
+    uint32_t producer_id,
+    const char *data_source_name);
+
 int tp_discovery_poll(
     tp_discovery_client_t *client,
     uint64_t request_id,
     tp_discovery_response_t *out,
     int64_t timeout_ns);
+
+int tp_discovery_decode_response(
+    const uint8_t *buffer,
+    size_t length,
+    uint64_t request_id,
+    tp_discovery_response_t *out);
 
 void tp_discovery_response_close(tp_discovery_response_t *response);
 
