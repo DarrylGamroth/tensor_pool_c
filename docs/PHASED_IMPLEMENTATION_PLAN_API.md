@@ -15,44 +15,44 @@ Status: in progress
 
 - [ ] Confirm all API names, signatures, and behaviors match `docs/AERON_LIKE_API_PROPOSAL.md`.
 - [ ] Align error model with Aeron (`0/-1` for init/close/poll, negative codes for offer/claim/queue).
-- [ ] Add/confirm shared error helpers (`tp_errcode()/tp_errmsg()`).
+- [x] Add/confirm shared error helpers (`tp_errcode()/tp_errmsg()`).
 - [ ] Add logging hook plumbing across all modules.
 
 ## Phase 1 - Core client/context + conductor ownership
 
-Status: pending
+Status: completed
 
-- [ ] Add/extend `tp_client_context_t` with Aeron Archive-style knobs (client name, timeouts, retry attempts, error handler, delegating invoker, log handler).
-- [ ] Implement `tp_client_t` lifecycle and ownership semantics (own or reuse Aeron instance).
-- [ ] Implement async add wrappers for publication/subscription.
-- [ ] Ensure `tp_client_do_work` drives keepalive timers and conductor work.
+- [x] Add/extend `tp_client_context_t` with Aeron Archive-style knobs (client name, timeouts, retry attempts, error handler, delegating invoker, log handler).
+- [x] Implement `tp_client_t` lifecycle and ownership semantics (own or reuse Aeron instance).
+- [x] Implement async add wrappers for publication/subscription.
+- [x] Ensure `tp_client_do_work` drives keepalive timers and conductor work.
 
 ## Phase 2 - Driver client + attach/keepalive/detach
 
-Status: pending
+Status: in progress
 
-- [ ] Implement async attach/detach state machine and pollers.
+- [x] Implement async attach/detach state machine and pollers.
 - [ ] Implement keepalive scheduling and error handling (lease revoked/shutdown events).
 - [ ] Add driver event poller integration with client shared subscriptions.
 - [ ] Unit tests for attach/detach/keepalive and error paths (goto unwind for multi-resource teardown).
 
 ## Phase 3 - Producer API and fixed pool support
 
-Status: pending
+Status: in progress
 
-- [ ] Implement `tp_producer_t` lifecycle, attach paths, and publications.
-- [ ] Implement `offer_frame`, `offer_progress`, and QoS publishing.
-- [ ] Implement `try_claim`, `commit_claim`, `abort_claim`, `queue_claim`.
-- [ ] Implement `fixed_pool_mode` semantics (claim persists across commit/queue).
+- [x] Implement `tp_producer_t` lifecycle, attach paths, and publications.
+- [x] Implement `offer_frame`, `offer_progress`, and QoS publishing.
+- [x] Implement `try_claim`, `commit_claim`, `abort_claim`, `queue_claim`.
+- [x] Implement `fixed_pool_mode` semantics (claim persists across commit/queue).
 - [ ] Unit tests for claim lifecycle and backpressure codes.
 
 ## Phase 4 - Consumer API and descriptor callbacks
 
-Status: pending
+Status: in progress
 
-- [ ] Implement consumer lifecycle and control/descriptor subscriptions.
-- [ ] Implement descriptor poller with callback registration (`tp_consumer_set_descriptor_handler`).
-- [ ] Implement frame read and view lifetime rules.
+- [x] Implement consumer lifecycle and control/descriptor subscriptions.
+- [x] Implement descriptor poller with callback registration (`tp_consumer_set_descriptor_handler`).
+- [x] Implement frame read and view lifetime rules.
 - [ ] Unit tests for descriptor callbacks and per-consumer stream switching.
 
 ## Phase 5 - Control/QoS/Metadata/Progress pollers
@@ -67,10 +67,10 @@ Status: pending
 
 ## Phase 6 - Discovery client/poller
 
-Status: pending
+Status: in progress
 
-- [ ] Implement discovery context, request/response flow, and poller callbacks.
-- [ ] Enforce schema header checks and response validation.
+- [x] Implement discovery context, request/response flow, and poller callbacks.
+- [x] Enforce schema header checks and response validation.
 - [ ] Unit tests for request/response decode and poller callback delivery.
 
 ## Phase 7 - Tools and examples aligned to the new API
