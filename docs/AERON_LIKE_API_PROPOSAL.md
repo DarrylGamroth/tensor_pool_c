@@ -110,10 +110,12 @@ typedef struct tp_producer_context_stct
     uint32_t stream_id;
     uint32_t producer_id;
     bool use_driver;
+    bool fixed_pool_mode;
     tp_driver_attach_request_t driver_request;  // if use_driver
 } tp_producer_context_t;
 
 int tp_producer_context_init(tp_producer_context_t *ctx);
+void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
 
 int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *ctx);
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *direct_cfg); // direct SHM path
@@ -136,6 +138,7 @@ Behavior:
 - `tp_producer_poll_control` uses a control adapter and a consumer manager to handle ConsumerHello, per-consumer streams, and progress throttling.
 - `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
 - `tp_producer_queue_claim` re-queues a previously claimed slot without re-claiming; use this for fixed announced buffer pools.
+- When `fixed_pool_mode` is enabled, claims remain valid across `commit` and `queue_claim` until explicitly aborted after acquisition stops.
 
 ## 6. Consumer API (Aeron-like)
 
@@ -345,6 +348,7 @@ tp_producer_context_init(&prod_ctx);
 prod_ctx.stream_id = 10000;
 prod_ctx.producer_id = 7;
 prod_ctx.use_driver = true;
+prod_ctx.fixed_pool_mode = true;
 
 tp_producer_init(&producer, &client, &prod_ctx);
 tp_producer_enable_consumer_manager(&producer, 128);
@@ -670,7 +674,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
-- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame; `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
+- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame (claims persist if `fixed_pool_mode`); `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next call to `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
