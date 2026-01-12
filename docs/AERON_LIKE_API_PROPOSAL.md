@@ -312,3 +312,19 @@ while (running)
 - Per-consumer stream assignment is handled internally and not exposed as a public event.
 - Client API hides SBE types; user-facing callbacks and structs are TensorPool abstractions.
 - Consumer descriptor poller invokes registered callbacks on `FrameDescriptor` arrival; no local buffering required.
+
+## 16. Aeron-Style API Decisions
+
+These align with Aeron C client patterns so the API feels familiar.
+
+- **Callback signatures**: match Aeron fragment-handler style.
+  - `typedef void (*tp_frame_descriptor_handler_t)(void *clientd, const tp_frame_descriptor_t *desc);`
+  - `typedef void (*tp_control_handler_t)(void *clientd, const tp_control_event_t *event);`
+  - `typedef void (*tp_qos_handler_t)(void *clientd, const tp_qos_event_t *event);`
+  - `typedef void (*tp_metadata_handler_t)(void *clientd, const tp_metadata_event_t *event);`
+- **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
+- **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
+- **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
+- **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
+- **Keepalive scheduling**: keepalive work runs inside `tp_client_do_work` and/or `tp_driver_client_do_work` and uses the same idle strategy/intervals configured in the client context.
+- **Fragment limits and polling**: `tp_*_poll` functions take `fragment_limit` like Aeron, and return number of fragments/events processed.
