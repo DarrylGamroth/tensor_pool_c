@@ -169,3 +169,9 @@ add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 
 add_executable(tp_shm_inspect tools/tp_shm_inspect.c)
 target_link_libraries(tp_shm_inspect PRIVATE tensor_pool)
+
+add_executable(tp_example_producer tools/tp_example_producer.c)
+target_link_libraries(tp_example_producer PRIVATE tensor_pool)
+
+add_executable(tp_example_consumer tools/tp_example_consumer.c)
+target_link_libraries(tp_example_consumer PRIVATE tensor_pool)

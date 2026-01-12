@@ -83,15 +83,23 @@ static void test_shm_superblock(void)
 {
     char path_template[] = "/tmp/tp_shm_testXXXXXX";
     int fd = mkstemp(path_template);
-    tp_shm_region_t region;
+    tp_shm_region_t region = { 0 };
     tp_shm_expected_t expected;
     char uri[512];
     tp_allowed_paths_t allowed;
     const char *allowed_paths[1];
     size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
+    int result = -1;
 
-    assert(fd >= 0);
-    assert(ftruncate(fd, (off_t)file_size) == 0);
+    if (fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(fd, (off_t)file_size) != 0)
+    {
+        goto cleanup;
+    }
 
     write_superblock(fd, 100, 7, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
 
@@ -100,7 +108,10 @@ static void test_shm_superblock(void)
     allowed.paths = allowed_paths;
     allowed.length = 1;
 
-    assert(tp_shm_map(&region, uri, 0, &allowed, NULL) == 0);
+    if (tp_shm_map(&region, uri, 0, &allowed, NULL) != 0)
+    {
+        goto cleanup;
+    }
 
     memset(&expected, 0, sizeof(expected));
     expected.stream_id = 100;
@@ -112,11 +123,22 @@ static void test_shm_superblock(void)
     expected.slot_bytes = TP_HEADER_SLOT_BYTES;
     expected.stride_bytes = TP_NULL_U32;
 
-    assert(tp_shm_validate_superblock(&region, &expected, NULL) == 0);
+    if (tp_shm_validate_superblock(&region, &expected, NULL) != 0)
+    {
+        goto cleanup;
+    }
 
-    assert(tp_shm_unmap(&region, NULL) == 0);
-    close(fd);
-    unlink(path_template);
+    result = 0;
+
+cleanup:
+    if (fd >= 0)
+    {
+        tp_shm_unmap(&region, NULL);
+        close(fd);
+        unlink(path_template);
+    }
+
+    assert(result == 0);
 }
 
 static void test_tensor_header(void)
