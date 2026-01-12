@@ -18,6 +18,8 @@
 #include "driver/tensor_pool/responseCode.h"
 
 #include "wire/tensor_pool/frameDescriptor.h"
+#include "wire/tensor_pool/frameProgress.h"
+#include "wire/tensor_pool/frameProgressState.h"
 #include "wire/tensor_pool/messageHeader.h"
 
 #include <inttypes.h>
@@ -46,6 +48,9 @@ typedef struct tp_descriptor_poll_state_stct
     uint32_t pending_descriptor_stream_id;
     char pending_control_channel[TP_URI_MAX_LENGTH];
     uint32_t pending_control_stream_id;
+    aeron_subscription_t *progress_subscription;
+    char active_progress_channel[TP_URI_MAX_LENGTH];
+    uint32_t active_progress_stream_id;
     int pending_update;
     int received;
     int limit;
@@ -142,6 +147,69 @@ static void tp_on_frame_descriptor(
     state->received++;
 }
 
+static void tp_on_frame_progress(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_descriptor_poll_state_t *state = (tp_descriptor_poll_state_t *)clientd;
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_frameProgress progress;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    (void)header;
+
+    if (NULL == state || NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    {
+        return;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+    block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+    version = tensor_pool_messageHeader_version(&msg_header);
+
+    if (schema_id != tensor_pool_frameProgress_sbe_schema_id() ||
+        template_id != tensor_pool_frameProgress_sbe_template_id())
+    {
+        return;
+    }
+
+    tensor_pool_frameProgress_wrap_for_decode(
+        &progress,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    {
+        enum tensor_pool_frameProgressState state;
+        uint8_t state_value = 0;
+
+        if (tensor_pool_frameProgress_state(&progress, &state))
+        {
+            state_value = (uint8_t)state;
+        }
+
+        printf("Progress seq=%" PRIu64 " header_index=%u bytes=%" PRIu64 " state=%u\n",
+        tensor_pool_frameProgress_frameId(&progress),
+        tensor_pool_frameProgress_headerIndex(&progress),
+        tensor_pool_frameProgress_payloadBytesFilled(&progress),
+        state_value);
+    }
+}
+
 static void tp_on_consumer_config(const tp_consumer_config_view_t *view, void *clientd)
 {
     tp_descriptor_poll_state_t *state = (tp_descriptor_poll_state_t *)clientd;
@@ -200,6 +268,7 @@ int main(int argc, char **argv)
     tp_control_subscription_t control_sub;
     tp_control_adapter_t control_adapter;
     aeron_fragment_assembler_t *assembler = NULL;
+    aeron_fragment_assembler_t *progress_assembler = NULL;
     tp_descriptor_poll_state_t poll_state;
     uint32_t stream_id;
     uint32_t client_id;
@@ -333,6 +402,8 @@ int main(int argc, char **argv)
     poll_state.shared_control_stream_id = context.control_stream_id;
     strncpy(poll_state.active_descriptor_channel, context.descriptor_channel, sizeof(poll_state.active_descriptor_channel) - 1);
     poll_state.active_descriptor_stream_id = (uint32_t)context.descriptor_stream_id;
+    poll_state.active_progress_channel[0] = '\0';
+    poll_state.active_progress_stream_id = 0;
     poll_state.limit = max_frames;
 
     memset(&control_adapter, 0, sizeof(control_adapter));
@@ -367,6 +438,18 @@ int main(int argc, char **argv)
     if (aeron_fragment_assembler_create(&assembler, tp_on_frame_descriptor, &poll_state) < 0)
     {
         fprintf(stderr, "Failed to create fragment assembler: %s\n", tp_errmsg());
+        tp_control_subscription_close(&control_sub);
+        tp_consumer_close(&consumer);
+        free(pool_cfg);
+        tp_driver_attach_info_close(&info);
+        tp_driver_client_close(&driver);
+        return 1;
+    }
+
+    if (aeron_fragment_assembler_create(&progress_assembler, tp_on_frame_progress, &poll_state) < 0)
+    {
+        fprintf(stderr, "Failed to create progress assembler: %s\n", tp_errmsg());
+        aeron_fragment_assembler_delete(assembler);
         tp_control_subscription_close(&control_sub);
         tp_consumer_close(&consumer);
         free(pool_cfg);
@@ -448,9 +531,35 @@ int main(int argc, char **argv)
 
             if (poll_state.pending_control_channel[0] != '\0' && poll_state.pending_control_stream_id != 0)
             {
-                printf("Per-consumer progress stream available on %s:%u (not consumed in example)\n",
-                    poll_state.pending_control_channel,
-                    poll_state.pending_control_stream_id);
+                if (poll_state.active_progress_stream_id != poll_state.pending_control_stream_id ||
+                    strcmp(poll_state.active_progress_channel, poll_state.pending_control_channel) != 0)
+                {
+                    if (poll_state.progress_subscription)
+                    {
+                        aeron_subscription_close(poll_state.progress_subscription, NULL, NULL);
+                        poll_state.progress_subscription = NULL;
+                    }
+
+                    if (tp_aeron_add_subscription(
+                        &poll_state.progress_subscription,
+                        &consumer.aeron,
+                        poll_state.pending_control_channel,
+                        (int32_t)poll_state.pending_control_stream_id,
+                        NULL,
+                        NULL,
+                        NULL,
+                        NULL) < 0)
+                    {
+                        fprintf(stderr, "Failed to subscribe to progress stream: %s\n", tp_errmsg());
+                        break;
+                    }
+
+                    strncpy(poll_state.active_progress_channel, poll_state.pending_control_channel, sizeof(poll_state.active_progress_channel) - 1);
+                    poll_state.active_progress_stream_id = poll_state.pending_control_stream_id;
+                    printf("Subscribed to per-consumer progress stream %s:%u\n",
+                        poll_state.active_progress_channel,
+                        poll_state.active_progress_stream_id);
+                }
             }
 
             poll_state.pending_update = 0;
@@ -466,6 +575,20 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, "Descriptor poll failed: %d\n", result);
             break;
+        }
+
+        if (poll_state.progress_subscription)
+        {
+            int progress_result = aeron_subscription_poll(
+                poll_state.progress_subscription,
+                aeron_fragment_assembler_handler,
+                progress_assembler,
+                10);
+            if (progress_result < 0)
+            {
+                fprintf(stderr, "Progress poll failed: %d\n", progress_result);
+                break;
+            }
         }
 
         if (tp_now_ns() > deadline_ns)
@@ -486,6 +609,15 @@ int main(int argc, char **argv)
     if (assembler)
     {
         aeron_fragment_assembler_delete(assembler);
+    }
+    if (progress_assembler)
+    {
+        aeron_fragment_assembler_delete(progress_assembler);
+    }
+    if (poll_state.progress_subscription)
+    {
+        aeron_subscription_close(poll_state.progress_subscription, NULL, NULL);
+        poll_state.progress_subscription = NULL;
     }
 
     tp_control_subscription_close(&control_sub);
