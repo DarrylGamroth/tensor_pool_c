@@ -715,3 +715,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Proxy + poller**: request senders are separated from response pollers; responses are correlated by request IDs.
 - **Async connect**: preferred for driver attach/discovery workflows (state machine + poll) rather than blocking calls.
 - **Delegating invoker**: `tp_client_context_set_delegating_invoker` enables agent-invoker integration, mirroring `aeron_archive_context_invoke_aeron_client`.
+
+## 19. Implementation Notes
+
+- Use goto-style error unwinding for functions with complex multi-resource lifecycles; avoid it for simple cases.
