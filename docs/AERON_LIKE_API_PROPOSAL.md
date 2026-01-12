@@ -315,6 +315,11 @@ if (response.result_count > 0)
 {
     result = &response.results[0];
 }
+else
+{
+    // handle no results
+    return;
+}
 
 // Consumer
 tp_consumer_context_init(&consumer_ctx);
@@ -532,34 +537,7 @@ tp_producer_send_data_source_meta(&producer, &meta);
 tp_metadata_poll(&meta_poller, 10);
 ```
 
-### 12.4.1 Event Types and Error Codes
-
-```c
-typedef enum tp_qos_event_type_enum
-{
-    TP_QOS_EVENT_PRODUCER,
-    TP_QOS_EVENT_CONSUMER
-} tp_qos_event_type_t;
-
-typedef enum tp_metadata_event_type_enum
-{
-    TP_METADATA_EVENT_ANNOUNCE,
-    TP_METADATA_EVENT_META_BEGIN,
-    TP_METADATA_EVENT_META_ATTR,
-    TP_METADATA_EVENT_META_END
-} tp_metadata_event_type_t;
-
-typedef enum tp_error_code_enum
-{
-    TP_ERROR_GENERIC = -1,
-    TP_BACK_PRESSURED = -2,
-    TP_NOT_CONNECTED = -3,
-    TP_ADMIN_ACTION = -4,
-    TP_CLOSED = -5
-} tp_error_code_t;
-```
-
-### 12.4.2 Discovery (Poller Style)
+### 12.4.1 Discovery (Poller Style)
 
 ```c
 static void on_discovery_response(void *clientd, const tp_discovery_response_t *response)
@@ -726,3 +704,29 @@ These align with Aeron C client patterns so the API feels familiar.
 
 - Error codes follow Aeron-style negative values (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`) for offer/claim/queue operations.
 - All modules emit logs through `tp_client_context_set_log_handler`.
+- Naming conventions: `tp_*_init` returns 0/-1, `tp_*_poll` returns fragment count or -1, and offer/claim/queue return positions or negative codes.
+
+```c
+typedef enum tp_qos_event_type_enum
+{
+    TP_QOS_EVENT_PRODUCER,
+    TP_QOS_EVENT_CONSUMER
+} tp_qos_event_type_t;
+
+typedef enum tp_metadata_event_type_enum
+{
+    TP_METADATA_EVENT_ANNOUNCE,
+    TP_METADATA_EVENT_META_BEGIN,
+    TP_METADATA_EVENT_META_ATTR,
+    TP_METADATA_EVENT_META_END
+} tp_metadata_event_type_t;
+
+typedef enum tp_error_code_enum
+{
+    TP_ERROR_GENERIC = -1,
+    TP_BACK_PRESSURED = -2,
+    TP_NOT_CONNECTED = -3,
+    TP_ADMIN_ACTION = -4,
+    TP_CLOSED = -5
+} tp_error_code_t;
+```
