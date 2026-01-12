@@ -401,7 +401,8 @@ static void on_bgapi_buffer_cancelled(tp_producer_t *producer, tp_bgapi_slot_t *
 Notes:
 - The claim is the TensorPool slot reservation; it remains valid until `commit` or `abort`.
 - BGAPI announced buffer pools are fixed while acquisition is active: do not add/remove buffers while acquiring.
-- If the camera SDK reuses the same buffers, keep the claim alive and re-queue it after commit by immediately re-claiming a new slot only when acquisition is stopped.
+- If the camera SDK reuses the same buffers, keep the claim alive and re-queue the same buffer after each `commit`; this requires recycling the slot to advance sequence numbers without re-announcing or re-claiming.
+- Important: the API needs an explicit recycle path (e.g., `tp_producer_recycle_claim`) or a documented “commit + requeue same claim” pattern to support fixed buffer pools.
 - If the camera SDK requires a revoke/unannounce step, do it only after acquisition stops, then `abort`/`commit` and mark the slot free.
 - Slot accounting is owned by the producer: the app must keep track of which claimed slots are “in flight” vs free.
 
