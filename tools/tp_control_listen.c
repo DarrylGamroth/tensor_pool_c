@@ -2,9 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_aeron.h"
+#include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_control_adapter.h"
-#include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_error.h"
 
 #include "aeron_fragment_assembler.h"
@@ -462,8 +461,8 @@ int main(int argc, char **argv)
     int32_t metadata_stream_id = 1300;
     int32_t qos_stream_id = 1200;
     tp_listen_state_t state;
-    tp_context_t context;
-    tp_aeron_client_t aeron;
+    tp_client_context_t context;
+    tp_client_t client;
     aeron_subscription_t *control_subscription = NULL;
     aeron_subscription_t *metadata_subscription = NULL;
     aeron_subscription_t *qos_subscription = NULL;
@@ -503,7 +502,7 @@ int main(int argc, char **argv)
         control_stream_id = (int32_t)strtol(argv[arg_index++], NULL, 10);
     }
 
-    if (tp_context_init(&context) < 0)
+    if (tp_client_context_init(&context) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
@@ -511,36 +510,27 @@ int main(int argc, char **argv)
 
     if (aeron_dir)
     {
-        tp_context_set_aeron_dir(&context, aeron_dir);
+        tp_client_context_set_aeron_dir(&context, aeron_dir);
     }
 
-    if (tp_aeron_client_init(&aeron, &context) < 0)
+    tp_client_context_set_control_channel(&context, control_channel, control_stream_id);
+    tp_client_context_set_metadata_channel(&context, metadata_channel, metadata_stream_id);
+    tp_client_context_set_qos_channel(&context, qos_channel, qos_stream_id);
+
+    if (tp_client_init(&client, &context) < 0 || tp_client_start(&client) < 0)
     {
         fprintf(stderr, "Aeron init failed: %s\n", tp_errmsg());
         return 1;
     }
 
-    if (tp_aeron_add_subscription(&control_subscription, &aeron, control_channel, control_stream_id, NULL, NULL, NULL, NULL) < 0)
-    {
-        fprintf(stderr, "Control subscription failed: %s\n", tp_errmsg());
-        tp_aeron_client_close(&aeron);
-        return 1;
-    }
+    control_subscription = client.control_subscription;
+    metadata_subscription = client.metadata_subscription;
+    qos_subscription = client.qos_subscription;
 
-    if (tp_aeron_add_subscription(&metadata_subscription, &aeron, metadata_channel, metadata_stream_id, NULL, NULL, NULL, NULL) < 0)
+    if (NULL == control_subscription || NULL == metadata_subscription || NULL == qos_subscription)
     {
-        fprintf(stderr, "Metadata subscription failed: %s\n", tp_errmsg());
-        aeron_subscription_close(control_subscription, NULL, NULL);
-        tp_aeron_client_close(&aeron);
-        return 1;
-    }
-
-    if (tp_aeron_add_subscription(&qos_subscription, &aeron, qos_channel, qos_stream_id, NULL, NULL, NULL, NULL) < 0)
-    {
-        fprintf(stderr, "QoS subscription failed: %s\n", tp_errmsg());
-        aeron_subscription_close(metadata_subscription, NULL, NULL);
-        aeron_subscription_close(control_subscription, NULL, NULL);
-        tp_aeron_client_close(&aeron);
+        fprintf(stderr, "Subscription setup failed: %s\n", tp_errmsg());
+        tp_client_close(&client);
         return 1;
     }
 
@@ -550,7 +540,7 @@ int main(int argc, char **argv)
         aeron_subscription_close(qos_subscription, NULL, NULL);
         aeron_subscription_close(metadata_subscription, NULL, NULL);
         aeron_subscription_close(control_subscription, NULL, NULL);
-        tp_aeron_client_close(&aeron);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -561,7 +551,7 @@ int main(int argc, char **argv)
         aeron_subscription_close(qos_subscription, NULL, NULL);
         aeron_subscription_close(metadata_subscription, NULL, NULL);
         aeron_subscription_close(control_subscription, NULL, NULL);
-        tp_aeron_client_close(&aeron);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -573,7 +563,7 @@ int main(int argc, char **argv)
         aeron_subscription_close(qos_subscription, NULL, NULL);
         aeron_subscription_close(metadata_subscription, NULL, NULL);
         aeron_subscription_close(control_subscription, NULL, NULL);
-        tp_aeron_client_close(&aeron);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -621,10 +611,7 @@ int main(int argc, char **argv)
     aeron_fragment_assembler_delete(qos_assembler);
     aeron_fragment_assembler_delete(metadata_assembler);
     aeron_fragment_assembler_delete(control_assembler);
-    aeron_subscription_close(qos_subscription, NULL, NULL);
-    aeron_subscription_close(metadata_subscription, NULL, NULL);
-    aeron_subscription_close(control_subscription, NULL, NULL);
-    tp_aeron_client_close(&aeron);
+    tp_client_close(&client);
 
     return 0;
 }

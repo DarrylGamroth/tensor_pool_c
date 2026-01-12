@@ -1,4 +1,5 @@
 #include "tensor_pool/tp_control.h"
+#include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_producer.h"
@@ -24,13 +25,17 @@ static void usage(const char *name)
 
 int main(int argc, char **argv)
 {
-    tp_context_t context;
+    tp_client_context_t client_context;
+    tp_client_t client;
     tp_driver_client_t driver;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_payload_pool_config_t *pool_cfg = NULL;
     tp_producer_t producer;
+    tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
+    tp_frame_t frame;
+    tp_frame_metadata_t meta;
     tp_tensor_header_t header;
     float payload[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
     uint32_t stream_id;
@@ -46,19 +51,25 @@ int main(int argc, char **argv)
     stream_id = (uint32_t)strtoul(argv[3], NULL, 10);
     client_id = (uint32_t)strtoul(argv[4], NULL, 10);
 
-    if (tp_context_init(&context) < 0)
+    if (tp_client_context_init(&client_context) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
     }
 
-    tp_context_set_aeron_dir(&context, argv[1]);
-    tp_context_set_control_channel(&context, argv[2], 1000);
-    tp_context_set_descriptor_channel(&context, "aeron:ipc", 1100);
-    tp_context_set_qos_channel(&context, "aeron:ipc", 1200);
-    tp_context_set_metadata_channel(&context, "aeron:ipc", 1300);
+    tp_client_context_set_aeron_dir(&client_context, argv[1]);
+    tp_client_context_set_control_channel(&client_context, argv[2], 1000);
+    tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
+    tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
+    tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);
 
-    if (tp_driver_client_init(&driver, &context) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    {
+        fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
+        return 1;
+    }
+
+    if (tp_driver_client_init(&driver, &client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
         return 1;
@@ -105,7 +116,19 @@ int main(int argc, char **argv)
         pool_cfg[i].uri = info.pools[i].region_uri;
     }
 
-    if (tp_producer_init(&producer, &context) < 0)
+    if (tp_producer_context_init(&producer_context) < 0)
+    {
+        fprintf(stderr, "Producer context init failed: %s\n", tp_errmsg());
+        free(pool_cfg);
+        tp_driver_attach_info_close(&info);
+        tp_driver_client_close(&driver);
+        return 1;
+    }
+
+    producer_context.stream_id = info.stream_id;
+    producer_context.producer_id = client_id;
+
+    if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
         free(pool_cfg);
@@ -124,7 +147,7 @@ int main(int argc, char **argv)
     producer_cfg.pools = pool_cfg;
     producer_cfg.pool_count = info.pool_count;
 
-    if (tp_producer_attach_direct(&producer, &producer_cfg) < 0)
+    if (tp_producer_attach(&producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
         tp_producer_close(&producer);
@@ -146,28 +169,27 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Tensor header invalid: %s\n", tp_errmsg());
     }
-    else if (tp_producer_publish_frame(
-        &producer,
-        1,
-        0,
-        &header,
-        payload,
-        sizeof(payload),
-        pool_cfg[0].pool_id,
-        0,
-        0) < 0)
+    frame.tensor = &header;
+    frame.payload = payload;
+    frame.payload_len = sizeof(payload);
+    frame.pool_id = pool_cfg[0].pool_id;
+    meta.timestamp_ns = 0;
+    meta.meta_version = 0;
+
+    if (tp_producer_offer_frame(&producer, &frame, &meta) < 0)
     {
         fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
     }
     else
     {
-        printf("Published frame seq=1 header_index=0 pool_id=%u\n", pool_cfg[0].pool_id);
+        printf("Published frame pool_id=%u\n", pool_cfg[0].pool_id);
     }
 
     tp_producer_close(&producer);
     free(pool_cfg);
     tp_driver_attach_info_close(&info);
     tp_driver_client_close(&driver);
+    tp_client_close(&client);
 
     return 0;
 }
