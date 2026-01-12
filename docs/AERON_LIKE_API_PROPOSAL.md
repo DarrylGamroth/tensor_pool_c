@@ -37,6 +37,8 @@ typedef struct tp_client_context_stct
 
 int tp_client_context_init(tp_client_context_t *ctx);
 void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir);
+void tp_client_context_set_aeron(tp_client_context_t *ctx, aeron_t *aeron);
+void tp_client_context_set_owns_aeron_client(tp_client_context_t *ctx, bool owns);
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
@@ -660,6 +662,7 @@ These align with Aeron C client patterns so the API feels familiar.
 ## 17. Ownership and Resource Management
 
 - **Client ownership**: `tp_client_t` owns shared subscriptions (control/QoS/metadata) and the Aeron instance; close it last.
+- **External Aeron client**: like Aeron Archive, allow `tp_client_context_set_aeron(...)` and `tp_client_context_set_owns_aeron_client(false)` to reuse a pre-existing Aeron instance without closing it.
 - **Producer/consumer ownership**: producers/consumers own their publications/subscriptions and must be closed before the client.
 - **Poller ownership**: pollers are lightweight wrappers around shared subscriptions; close them before `tp_client_close`.
 - **Callback lifetimes**: descriptor/QoS/metadata/discovery callbacks receive views valid only during the callback.
