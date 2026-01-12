@@ -20,10 +20,39 @@ set(AERON_INSTALL_TARGETS OFF CACHE BOOL "Disable Aeron install targets" FORCE)
 add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY_DIR}/aeron-client")
 
 set(TP_PUBLIC_HEADERS
+    include/tensor_pool/tp_aeron.h
+    include/tensor_pool/tp_consumer.h
+    include/tensor_pool/tp_context.h
+    include/tensor_pool/tp_control.h
+    include/tensor_pool/tp_discovery_client.h
+    include/tensor_pool/tp_driver_client.h
+    include/tensor_pool/tp_error.h
+    include/tensor_pool/tp_log.h
+    include/tensor_pool/tp_producer.h
+    include/tensor_pool/tp_qos.h
+    include/tensor_pool/tp_seqlock.h
+    include/tensor_pool/tp_shm.h
+    include/tensor_pool/tp_slot.h
+    include/tensor_pool/tp_tensor.h
+    include/tensor_pool/tp_types.h
+    include/tensor_pool/tp_uri.h
     include/tensor_pool/tp_version.h
 )
 
 set(TP_SOURCES
+    src/tp_aeron.c
+    src/tp_consumer.c
+    src/tp_context.c
+    src/tp_control.c
+    src/tp_discovery_client.c
+    src/tp_driver_client.c
+    src/tp_log.c
+    src/tp_producer.c
+    src/tp_qos.c
+    src/tp_shm.c
+    src/tp_slot.c
+    src/tp_tensor.c
+    src/tp_uri.c
     src/tp_version.c
 )
 
@@ -46,36 +75,43 @@ if (TP_ENABLE_SBE_CODEGEN)
     endif ()
 
     set(SBE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    set(SBE_OUTPUT_WIRE "${SBE_OUTPUT_DIR}/wire")
+    set(SBE_OUTPUT_DRIVER "${SBE_OUTPUT_DIR}/driver")
+    set(SBE_OUTPUT_DISCOVERY "${SBE_OUTPUT_DIR}/discovery")
+    set(SBE_OUTPUT_BRIDGE "${SBE_OUTPUT_DIR}/bridge")
     set(SBE_SCHEMA_DIR "${CMAKE_CURRENT_LIST_DIR}/schemas")
     set(SBE_JAVA_OPTS "--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED")
 
     add_custom_command(
         OUTPUT "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_WIRE}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DRIVER}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DISCOVERY}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_BRIDGE}"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DIR}"
+            -Dsbe.output.dir="${SBE_OUTPUT_WIRE}"
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
             "${SBE_SCHEMA_DIR}/wire-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DIR}"
+            -Dsbe.output.dir="${SBE_OUTPUT_DRIVER}"
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
             "${SBE_SCHEMA_DIR}/driver-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DIR}"
+            -Dsbe.output.dir="${SBE_OUTPUT_DISCOVERY}"
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
             "${SBE_SCHEMA_DIR}/discovery-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DIR}"
+            -Dsbe.output.dir="${SBE_OUTPUT_BRIDGE}"
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
@@ -112,3 +148,6 @@ enable_testing()
 add_executable(tensor_pool_tests tests/test_tp_smoke.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
+
+add_executable(tp_shm_inspect tools/tp_shm_inspect.c)
+target_link_libraries(tp_shm_inspect PRIVATE tensor_pool)
