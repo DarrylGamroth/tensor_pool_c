@@ -349,6 +349,61 @@ else if (result == TP_BACK_PRESSURED || result == TP_NOT_CONNECTED)
 }
 ```
 
+### 12.2.2 Producer (BGAPI-Style Buffer Queue)
+
+This models pre-claiming a fixed ring of buffers, announcing them to a camera SDK, and committing on “filled” callbacks.
+
+```c
+typedef struct tp_bgapi_slot_stct
+{
+    tp_buffer_claim_t claim;
+    bool in_use;
+} tp_bgapi_slot_t;
+
+tp_bgapi_slot_t slots[8];
+
+static int tp_bgapi_refill(tp_producer_t *producer)
+{
+    for (size_t i = 0; i < 8; ++i)
+    {
+        if (!slots[i].in_use)
+        {
+            int64_t pos = tp_producer_try_claim(producer, payload_len, &slots[i].claim);
+            if (pos >= 0)
+            {
+                slots[i].in_use = true;
+                // Announce/queue the buffer pointer to BGAPI:
+                // BGAPI_AnnounceBuffer(slots[i].claim.data, payload_len, &handle)
+                // BGAPI_QueueBuffer(handle)
+            }
+        }
+    }
+    return 0;
+}
+
+// BGAPI "buffer filled" callback
+static void on_bgapi_buffer_filled(tp_producer_t *producer, tp_bgapi_slot_t *slot, const tp_frame_metadata_t *meta)
+{
+    tp_producer_commit_claim(producer, &slot->claim, meta);
+    slot->in_use = false;
+    tp_bgapi_refill(producer); // keep the ring full
+}
+
+// BGAPI "buffer cancelled" callback
+static void on_bgapi_buffer_cancelled(tp_producer_t *producer, tp_bgapi_slot_t *slot)
+{
+    tp_producer_abort_claim(producer, &slot->claim);
+    slot->in_use = false;
+    tp_bgapi_refill(producer);
+}
+```
+
+Notes:
+- The claim is the TensorPool slot reservation; it remains valid until `commit` or `abort`.
+- If the camera SDK reuses the same buffers, keep the claim alive and re-queue it after commit by immediately re-claiming a new slot.
+- If the camera SDK requires a revoke/unannounce step, do it before `abort`/`commit` and mark the slot free.
+- Slot accounting is owned by the producer: the app must keep track of which claimed slots are “in flight” vs free.
+
 ### 12.3 QoS (Producer + Consumer)
 
 ```c
