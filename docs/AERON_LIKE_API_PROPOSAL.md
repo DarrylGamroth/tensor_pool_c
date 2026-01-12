@@ -230,6 +230,19 @@ tp_client_context_t ctx;
 tp_client_t client;
 tp_consumer_context_t consumer_ctx;
 tp_consumer_t consumer;
+tp_frame_descriptor_handler_t on_descriptor;
+
+// Descriptor callback
+static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
+{
+    tp_consumer_t *consumer = (tp_consumer_t *)clientd;
+    tp_frame_view_t view;
+
+    if (tp_consumer_read_frame(consumer, desc->seq, desc->header_index, &view) == 0)
+    {
+        // process view.data/view.data_length here
+    }
+}
 
 // Init
 tp_client_context_init(&ctx);
@@ -250,6 +263,7 @@ consumer_ctx.hello.descriptor_channel = "aeron:ipc";
 consumer_ctx.hello.descriptor_stream_id = 31001; // optional per-consumer
 
 tp_consumer_init(&consumer, &client, &consumer_ctx);
+tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &consumer);
 
 // Poll loop
 while (running)
