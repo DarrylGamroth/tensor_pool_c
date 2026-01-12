@@ -44,7 +44,7 @@ void tp_client_context_set_message_timeout_ns(tp_client_context_t *ctx, int64_t 
 void tp_client_context_set_message_retry_attempts(tp_client_context_t *ctx, int32_t attempts);
 void tp_client_context_set_error_handler(tp_client_context_t *ctx, tp_error_handler_t handler, void *clientd);
 void tp_client_context_set_delegating_invoker(tp_client_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
-void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_handler_t handler, void *clientd);
+void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_func_t handler, void *clientd);
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
@@ -67,16 +67,50 @@ int tp_client_close(tp_client_t *client);
 
 ```c
 // Async add wrappers for consistency with Aeron C.
-typedef struct tp_async_add_publication_stct tp_async_add_publication_t;
-int tp_client_async_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, tp_async_add_publication_t **out);
-int tp_client_async_add_publication_poll(tp_async_add_publication_t *async, aeron_publication_t **out_pub);
+int tp_client_async_add_publication(
+    tp_client_t *client,
+    const char *channel,
+    int32_t stream_id,
+    aeron_async_add_publication_t **out);
+int tp_client_async_add_publication_poll(
+    aeron_publication_t **publication,
+    aeron_async_add_publication_t *async_add);
 
-typedef struct tp_async_add_subscription_stct tp_async_add_subscription_t;
-int tp_client_async_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, tp_async_add_subscription_t **out);
-int tp_client_async_add_subscription_poll(tp_async_add_subscription_t *async, aeron_subscription_t **out_sub);
+int tp_client_async_add_subscription(
+    tp_client_t *client,
+    const char *channel,
+    int32_t stream_id,
+    aeron_on_available_image_t on_available,
+    void *available_clientd,
+    aeron_on_unavailable_image_t on_unavailable,
+    void *unavailable_clientd,
+    aeron_async_add_subscription_t **out);
+int tp_client_async_add_subscription_poll(
+    aeron_subscription_t **subscription,
+    aeron_async_add_subscription_t *async_add);
 ```
 
 Apps should not call Aeron APIs directly; they use TensorPool wrappers.
+
+### 3.3 Common enums (no SBE leakage)
+
+```c
+typedef enum tp_mode_enum
+{
+    TP_MODE_STREAM = 1,
+    TP_MODE_RATE_LIMITED = 2,
+    TP_MODE_NULL = 255
+} tp_mode_t;
+
+typedef enum tp_progress_state_enum
+{
+    TP_PROGRESS_UNKNOWN = 0,
+    TP_PROGRESS_STARTED = 1,
+    TP_PROGRESS_PROGRESS = 2,
+    TP_PROGRESS_COMPLETE = 3,
+    TP_PROGRESS_NULL = 255
+} tp_progress_state_t;
+```
 
 ## 4. Driver-Model Client (Attach/Keepalive/Detach)
 
@@ -121,7 +155,7 @@ int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_prod
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *direct_cfg); // direct SHM path
 int tp_producer_close(tp_producer_t *producer);
 
-int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
+int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
@@ -136,6 +170,7 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit);
 Behavior:
 - Producer owns descriptor/control/qos/metadata publications; app never touches Aeron pubs.
 - `tp_producer_poll_control` uses a control adapter and a consumer manager to handle ConsumerHello, per-consumer streams, and progress throttling.
+- When `use_driver` is enabled, `tp_producer_init` performs driver attach, maps SHM regions, and registers keepalive work inside `tp_client_do_work` (defaults used if `driver_request` fields are unset).
 - `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
 - `tp_producer_queue_claim` re-queues a previously claimed slot without re-claiming; use this for fixed announced buffer pools.
 - When `fixed_pool_mode` is enabled, claims remain valid across `commit` and `queue_claim` until explicitly aborted after acquisition stops.
@@ -179,6 +214,8 @@ Behavior:
 - Consumer owns descriptor subscription(s) and switches to per-consumer streams after ConsumerConfig.
 - `tp_consumer_poll_control` updates per-consumer channels and swaps subscriptions.
 - FrameDescriptor handler inside consumer translates to `tp_consumer_read_frame` callback.
+- When `use_driver` is enabled, `tp_consumer_init` performs driver attach and `tp_consumer_attach` sends ConsumerHello on success.
+- For per-consumer control streams, use `tp_progress_poller_init_with_subscription` with the consumer's assigned control subscription.
 
 ## 7. Control Plane API (Handlers / Pollers)
 
@@ -192,6 +229,9 @@ typedef struct tp_control_handlers_stct
     tp_on_data_source_meta_begin_t on_data_source_meta_begin;
     tp_on_data_source_meta_attr_t on_data_source_meta_attr;
     tp_on_data_source_meta_end_t on_data_source_meta_end;
+    tp_on_driver_detach_response_t on_detach_response;
+    tp_on_driver_lease_revoked_t on_lease_revoked;
+    tp_on_driver_shutdown_t on_shutdown;
     void *clientd;
 } tp_control_handlers_t;
 
@@ -210,7 +250,7 @@ int tp_qos_poll(tp_qos_poller_t *poller, int fragment_limit);
 
 // QoS publish helpers (producer/consumer)
 int tp_qos_publish_producer(tp_producer_t *producer, uint64_t current_seq, uint32_t watermark);
-int tp_qos_publish_consumer(tp_consumer_t *consumer, uint32_t consumer_id, uint64_t last_seq_seen, uint64_t drops_gap, uint64_t drops_late, uint8_t mode);
+int tp_qos_publish_consumer(tp_consumer_t *consumer, uint32_t consumer_id, uint64_t last_seq_seen, uint64_t drops_gap, uint64_t drops_late, tp_mode_t mode);
 ```
 
 ## 9. Metadata API
@@ -254,7 +294,8 @@ typedef struct tp_discovery_handlers_stct
 Progress is a control-plane message. The API should expose:
 
 - Publish helpers for producers (`tp_producer_offer_progress`).
-- Consumer progress poller (`tp_progress_poller_init` + `tp_progress_poll`) for per-consumer control streams.
+- Consumer progress poller (`tp_progress_poller_init` + `tp_progress_poll`) for shared control streams.
+- Optional `tp_progress_poller_init_with_subscription` for per-consumer control subscriptions.
 - Throttling policy aggregation in producer manager (already present) but accessed via `tp_producer_get_progress_policy()`.
 
 ## 12. Ergonomic Usage Examples
@@ -369,7 +410,11 @@ tp_producer_enable_consumer_manager(&producer, 128);
 while (running)
 {
     tp_producer_poll_control(&producer, 10); // handles ConsumerHello + per-consumer streams
-    tp_producer_offer_frame(&producer, &frame, &meta);
+    int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
+    if (position < 0)
+    {
+        fprintf(stderr, "offer failed: %s\n", tp_errmsg());
+    }
 }
 ```
 
