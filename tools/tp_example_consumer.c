@@ -5,7 +5,10 @@
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_control.h"
+#include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_tensor.h"
+#include "tensor_pool/tp_types.h"
 
 #include "aeron_fragment_assembler.h"
 
@@ -26,12 +29,24 @@
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <max_frames>\n", name);
+    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <max_frames> [descriptor_channel descriptor_stream_id [progress_channel progress_stream_id]]\n", name);
 }
 
 typedef struct tp_descriptor_poll_state_stct
 {
     tp_consumer_t *consumer;
+    uint32_t consumer_id;
+    const char *shared_descriptor_channel;
+    int32_t shared_descriptor_stream_id;
+    const char *shared_control_channel;
+    int32_t shared_control_stream_id;
+    char active_descriptor_channel[TP_URI_MAX_LENGTH];
+    uint32_t active_descriptor_stream_id;
+    char pending_descriptor_channel[TP_URI_MAX_LENGTH];
+    uint32_t pending_descriptor_stream_id;
+    char pending_control_channel[TP_URI_MAX_LENGTH];
+    uint32_t pending_control_stream_id;
+    int pending_update;
     int received;
     int limit;
 }
@@ -127,6 +142,52 @@ static void tp_on_frame_descriptor(
     state->received++;
 }
 
+static void tp_on_consumer_config(const tp_consumer_config_view_t *view, void *clientd)
+{
+    tp_descriptor_poll_state_t *state = (tp_descriptor_poll_state_t *)clientd;
+
+    if (NULL == state || NULL == view || view->consumer_id != state->consumer_id)
+    {
+        return;
+    }
+
+    if (view->descriptor_channel.length > 0 && view->descriptor_stream_id != 0)
+    {
+        size_t len = view->descriptor_channel.length;
+        if (len >= sizeof(state->pending_descriptor_channel))
+        {
+            len = sizeof(state->pending_descriptor_channel) - 1;
+        }
+        memcpy(state->pending_descriptor_channel, view->descriptor_channel.data, len);
+        state->pending_descriptor_channel[len] = '\0';
+        state->pending_descriptor_stream_id = view->descriptor_stream_id;
+    }
+    else
+    {
+        state->pending_descriptor_channel[0] = '\0';
+        state->pending_descriptor_stream_id = 0;
+    }
+
+    if (view->control_channel.length > 0 && view->control_stream_id != 0)
+    {
+        size_t len = view->control_channel.length;
+        if (len >= sizeof(state->pending_control_channel))
+        {
+            len = sizeof(state->pending_control_channel) - 1;
+        }
+        memcpy(state->pending_control_channel, view->control_channel.data, len);
+        state->pending_control_channel[len] = '\0';
+        state->pending_control_stream_id = view->control_stream_id;
+    }
+    else
+    {
+        state->pending_control_channel[0] = '\0';
+        state->pending_control_stream_id = 0;
+    }
+
+    state->pending_update = 1;
+}
+
 int main(int argc, char **argv)
 {
     tp_context_t context;
@@ -136,16 +197,22 @@ int main(int argc, char **argv)
     tp_consumer_pool_config_t *pool_cfg = NULL;
     tp_consumer_t consumer;
     tp_consumer_config_t consumer_cfg;
+    tp_control_subscription_t control_sub;
+    tp_control_adapter_t control_adapter;
     aeron_fragment_assembler_t *assembler = NULL;
     tp_descriptor_poll_state_t poll_state;
     uint32_t stream_id;
     uint32_t client_id;
     int max_frames;
+    const char *requested_descriptor_channel = NULL;
+    uint32_t requested_descriptor_stream_id = 0;
+    const char *requested_control_channel = NULL;
+    uint32_t requested_control_stream_id = 0;
     size_t i;
     int result;
     int64_t deadline_ns;
 
-    if (argc != 6)
+    if (argc != 6 && argc != 8 && argc != 10)
     {
         usage(argv[0]);
         return 1;
@@ -158,6 +225,16 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "max_frames must be > 0\n");
         return 1;
+    }
+    if (argc >= 8)
+    {
+        requested_descriptor_channel = argv[6];
+        requested_descriptor_stream_id = (uint32_t)strtoul(argv[7], NULL, 10);
+    }
+    if (argc >= 10)
+    {
+        requested_control_channel = argv[8];
+        requested_control_stream_id = (uint32_t)strtoul(argv[9], NULL, 10);
     }
 
     if (tp_context_init(&context) < 0)
@@ -247,9 +324,28 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (NULL == consumer.descriptor_subscription)
+    memset(&poll_state, 0, sizeof(poll_state));
+    poll_state.consumer = &consumer;
+    poll_state.consumer_id = client_id;
+    poll_state.shared_descriptor_channel = context.descriptor_channel;
+    poll_state.shared_descriptor_stream_id = context.descriptor_stream_id;
+    poll_state.shared_control_channel = context.control_channel;
+    poll_state.shared_control_stream_id = context.control_stream_id;
+    strncpy(poll_state.active_descriptor_channel, context.descriptor_channel, sizeof(poll_state.active_descriptor_channel) - 1);
+    poll_state.active_descriptor_stream_id = (uint32_t)context.descriptor_stream_id;
+    poll_state.limit = max_frames;
+
+    memset(&control_adapter, 0, sizeof(control_adapter));
+    control_adapter.on_consumer_config = tp_on_consumer_config;
+    control_adapter.clientd = &poll_state;
+    if (tp_control_subscription_init(
+        &control_sub,
+        consumer.aeron.aeron,
+        context.control_channel,
+        context.control_stream_id,
+        &control_adapter) < 0)
     {
-        fprintf(stderr, "Descriptor subscription not configured\n");
+        fprintf(stderr, "Control subscription init failed: %s\n", tp_errmsg());
         tp_consumer_close(&consumer);
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
@@ -257,23 +353,109 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    memset(&poll_state, 0, sizeof(poll_state));
-    poll_state.consumer = &consumer;
-    poll_state.limit = max_frames;
+    if (NULL == consumer.descriptor_subscription)
+    {
+        fprintf(stderr, "Descriptor subscription not configured\n");
+        tp_control_subscription_close(&control_sub);
+        tp_consumer_close(&consumer);
+        free(pool_cfg);
+        tp_driver_attach_info_close(&info);
+        tp_driver_client_close(&driver);
+        return 1;
+    }
 
     if (aeron_fragment_assembler_create(&assembler, tp_on_frame_descriptor, &poll_state) < 0)
     {
         fprintf(stderr, "Failed to create fragment assembler: %s\n", tp_errmsg());
+        tp_control_subscription_close(&control_sub);
         tp_consumer_close(&consumer);
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
         return 1;
     }
+
+    {
+        tp_consumer_hello_t hello;
+        memset(&hello, 0, sizeof(hello));
+        hello.stream_id = info.stream_id;
+        hello.consumer_id = client_id;
+        hello.supports_shm = 1;
+        hello.supports_progress = 0;
+        hello.mode = 1;
+        hello.max_rate_hz = 0;
+        hello.expected_layout_version = info.layout_version;
+        hello.progress_interval_us = TP_NULL_U32;
+        hello.progress_bytes_delta = TP_NULL_U32;
+        hello.progress_major_delta_units = TP_NULL_U32;
+        hello.descriptor_stream_id = requested_descriptor_stream_id;
+        hello.control_stream_id = requested_control_stream_id;
+        hello.descriptor_channel = requested_descriptor_channel ? requested_descriptor_channel : "";
+        hello.control_channel = requested_control_channel ? requested_control_channel : "";
+        if (tp_consumer_send_hello(&consumer, &hello) < 0)
+        {
+            fprintf(stderr, "Failed to send ConsumerHello: %s\n", tp_errmsg());
+        }
+    }
+
     deadline_ns = tp_now_ns() + (int64_t)10 * 1000 * 1000 * 1000LL;
 
     while (poll_state.received < poll_state.limit)
     {
+        result = tp_control_poll(&control_sub, 10);
+        if (result < 0)
+        {
+            fprintf(stderr, "Control poll failed: %s\n", tp_errmsg());
+            break;
+        }
+
+        if (poll_state.pending_update)
+        {
+            const char *next_channel = poll_state.pending_descriptor_channel[0] != '\0'
+                ? poll_state.pending_descriptor_channel
+                : poll_state.shared_descriptor_channel;
+            uint32_t next_stream_id = poll_state.pending_descriptor_stream_id != 0
+                ? poll_state.pending_descriptor_stream_id
+                : (uint32_t)poll_state.shared_descriptor_stream_id;
+
+            if (next_stream_id != poll_state.active_descriptor_stream_id ||
+                strcmp(next_channel, poll_state.active_descriptor_channel) != 0)
+            {
+                if (consumer.descriptor_subscription)
+                {
+                    aeron_subscription_close(consumer.descriptor_subscription, NULL, NULL);
+                    consumer.descriptor_subscription = NULL;
+                }
+
+                if (tp_aeron_add_subscription(
+                    &consumer.descriptor_subscription,
+                    &consumer.aeron,
+                    next_channel,
+                    (int32_t)next_stream_id,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL) < 0)
+                {
+                    fprintf(stderr, "Failed to switch descriptor subscription: %s\n", tp_errmsg());
+                    break;
+                }
+
+                strncpy(poll_state.active_descriptor_channel, next_channel, sizeof(poll_state.active_descriptor_channel) - 1);
+                poll_state.active_descriptor_stream_id = next_stream_id;
+                printf("Switched descriptor stream to %s:%u\n", next_channel, next_stream_id);
+            }
+
+            if (poll_state.pending_control_channel[0] != '\0' && poll_state.pending_control_stream_id != 0)
+            {
+                printf("Per-consumer progress stream available on %s:%u (not consumed in example)\n",
+                    poll_state.pending_control_channel,
+                    poll_state.pending_control_stream_id);
+            }
+
+            poll_state.pending_update = 0;
+        }
+
         result = aeron_subscription_poll(
             consumer.descriptor_subscription,
             aeron_fragment_assembler_handler,
@@ -306,6 +488,7 @@ int main(int argc, char **argv)
         aeron_fragment_assembler_delete(assembler);
     }
 
+    tp_control_subscription_close(&control_sub);
     tp_consumer_close(&consumer);
     free(pool_cfg);
     tp_driver_attach_info_close(&info);
