@@ -12,12 +12,12 @@
 extern "C" {
 #endif
 
-typedef struct tp_progress_state_stct
+typedef struct tp_progress_tracker_stct
 {
     uint64_t last_timestamp_ns;
     uint64_t last_bytes;
 }
-tp_progress_state_t;
+tp_progress_tracker_t;
 
 typedef struct tp_consumer_manager_stct
 {
@@ -42,7 +42,7 @@ int tp_consumer_manager_get_progress_policy(const tp_consumer_manager_t *manager
 
 int tp_consumer_manager_should_publish_progress(
     const tp_consumer_manager_t *manager,
-    tp_progress_state_t *state,
+    tp_progress_tracker_t *state,
     uint64_t now_ns,
     uint64_t payload_bytes_filled,
     int *out_should_publish);
@@ -61,7 +61,7 @@ int tp_consumer_manager_publish_progress(
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
-    uint8_t state);
+    tp_progress_state_t state);
 
 #ifdef __cplusplus
 }

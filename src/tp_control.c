@@ -1,5 +1,9 @@
 #include "tensor_pool/tp_control.h"
 
+#include "aeronc.h"
+#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_producer.h"
+
 #include <errno.h>
 #include <string.h>
 
@@ -51,7 +55,7 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
     tensor_pool_consumerHello_set_consumerId(&hello_msg, hello->consumer_id);
     tensor_pool_consumerHello_set_supportsShm(&hello_msg, hello->supports_shm);
     tensor_pool_consumerHello_set_supportsProgress(&hello_msg, hello->supports_progress);
-    tensor_pool_consumerHello_set_mode(&hello_msg, hello->mode);
+    tensor_pool_consumerHello_set_mode(&hello_msg, (enum tensor_pool_mode)hello->mode);
     tensor_pool_consumerHello_set_maxRateHz(&hello_msg, hello->max_rate_hz);
     tensor_pool_consumerHello_set_expectedLayoutVersion(&hello_msg, hello->expected_layout_version);
 
@@ -147,7 +151,7 @@ int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_
     tensor_pool_consumerConfig_set_streamId(&cfg, config->stream_id);
     tensor_pool_consumerConfig_set_consumerId(&cfg, config->consumer_id);
     tensor_pool_consumerConfig_set_useShm(&cfg, config->use_shm);
-    tensor_pool_consumerConfig_set_mode(&cfg, config->mode);
+    tensor_pool_consumerConfig_set_mode(&cfg, (enum tensor_pool_mode)config->mode);
     tensor_pool_consumerConfig_set_descriptorStreamId(&cfg, config->descriptor_stream_id);
     tensor_pool_consumerConfig_set_controlStreamId(&cfg, config->control_stream_id);
 

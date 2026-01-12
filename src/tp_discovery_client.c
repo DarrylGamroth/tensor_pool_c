@@ -6,11 +6,10 @@
 
 #include <errno.h>
 #include <string.h>
-#include <time.h>
-
 #include "aeron_alloc.h"
 #include "aeron_fragment_assembler.h"
 
+#include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
 
@@ -62,18 +61,6 @@ void tp_discovery_context_set_response_channel(tp_discovery_context_t *ctx, cons
 
     strncpy(ctx->response_channel, channel, sizeof(ctx->response_channel) - 1);
     ctx->response_stream_id = stream_id;
-}
-
-static int64_t tp_discovery_now_ns(void)
-{
-    struct timespec ts;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
-    {
-        return 0;
-    }
-
-    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
 static void tp_discovery_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t src_len)
@@ -671,7 +658,8 @@ int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_dis
 {
     tp_discovery_response_ctx_t ctx;
     aeron_fragment_assembler_t *assembler = NULL;
-    int64_t deadline = tp_discovery_now_ns() + timeout_ns;
+    int64_t deadline = 0;
+    int use_deadline = (timeout_ns > 0);
 
     if (NULL == client || NULL == out)
     {
@@ -704,11 +692,18 @@ int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_dis
             return -1;
         }
 
-        if (tp_discovery_now_ns() > deadline)
+        if (use_deadline)
         {
-            TP_SET_ERR(ETIMEDOUT, "%s", "tp_discovery_poll: timeout");
-            aeron_fragment_assembler_delete(assembler);
-            return -1;
+            if (deadline == 0)
+            {
+                deadline = tp_clock_now_ns() + timeout_ns;
+            }
+            if (tp_clock_now_ns() > deadline)
+            {
+                TP_SET_ERR(ETIMEDOUT, "%s", "tp_discovery_poll: timeout");
+                aeron_fragment_assembler_delete(assembler);
+                return -1;
+            }
         }
     }
 

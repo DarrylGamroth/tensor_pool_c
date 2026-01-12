@@ -33,6 +33,24 @@ typedef enum tp_result_enum
 }
 tp_result_t;
 
+typedef enum tp_mode_enum
+{
+    TP_MODE_STREAM = 1,
+    TP_MODE_RATE_LIMITED = 2,
+    TP_MODE_NULL = 255
+}
+tp_mode_t;
+
+typedef enum tp_progress_state_enum
+{
+    TP_PROGRESS_UNKNOWN = 0,
+    TP_PROGRESS_STARTED = 1,
+    TP_PROGRESS_PROGRESS = 2,
+    TP_PROGRESS_COMPLETE = 3,
+    TP_PROGRESS_NULL = 255
+}
+tp_progress_state_t;
+
 enum
 {
     TP_BACK_PRESSURED = -2,

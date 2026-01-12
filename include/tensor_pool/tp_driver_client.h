@@ -113,6 +113,8 @@ typedef struct tp_driver_client_stct
     uint32_t active_stream_id;
     uint32_t client_id;
     uint8_t role;
+    bool registered;
+    struct tp_driver_client_stct *next;
 }
 tp_driver_client_t;
 
@@ -170,7 +172,7 @@ int tp_driver_client_lease_expired(const tp_driver_client_t *client, uint64_t no
 
 int tp_driver_event_poller_init(
     tp_driver_event_poller_t *poller,
-    aeron_subscription_t *subscription,
+    tp_driver_client_t *client,
     const tp_driver_event_handlers_t *handlers);
 int tp_driver_event_poller_close(tp_driver_event_poller_t *poller);
 int tp_driver_event_poll(tp_driver_event_poller_t *poller, int fragment_limit);

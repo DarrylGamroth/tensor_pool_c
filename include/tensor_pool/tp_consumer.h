@@ -85,6 +85,7 @@ typedef struct tp_consumer_stct
     tp_client_t *client;
     tp_consumer_context_t context;
     aeron_subscription_t *descriptor_subscription;
+    aeron_subscription_t *control_subscription;
     aeron_publication_t *control_publication;
     aeron_publication_t *qos_publication;
     aeron_fragment_assembler_t *descriptor_assembler;
@@ -98,6 +99,11 @@ typedef struct tp_consumer_stct
     uint64_t epoch;
     uint32_t layout_version;
     uint32_t header_nslots;
+    uint64_t next_seq;
+    tp_driver_client_t driver;
+    tp_driver_attach_info_t driver_attach;
+    bool driver_initialized;
+    bool driver_attached;
 }
 tp_consumer_t;
 

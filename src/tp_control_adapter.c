@@ -67,8 +67,7 @@ int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_co
     if (schema_id != tensor_pool_consumerHello_sbe_schema_id() ||
         template_id != tensor_pool_consumerHello_sbe_template_id())
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: header mismatch");
-        return -1;
+        return 1;
     }
 
     tensor_pool_consumerHello_wrap_for_decode(
@@ -107,7 +106,7 @@ int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_co
             TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid mode");
             return -1;
         }
-        out->mode = (uint8_t)mode_val;
+        out->mode = (tp_mode_t)mode_val;
     }
     out->max_rate_hz = tensor_pool_consumerHello_maxRateHz(&hello);
     out->expected_layout_version = tensor_pool_consumerHello_expectedLayoutVersion(&hello);
@@ -175,8 +174,7 @@ int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_c
     if (schema_id != tensor_pool_consumerConfig_sbe_schema_id() ||
         template_id != tensor_pool_consumerConfig_sbe_template_id())
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: header mismatch");
-        return -1;
+        return 1;
     }
 
     tensor_pool_consumerConfig_wrap_for_decode(
@@ -206,7 +204,7 @@ int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_c
             TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid mode");
             return -1;
         }
-        out->mode = (uint8_t)mode_val;
+        out->mode = (tp_mode_t)mode_val;
     }
     out->descriptor_stream_id = tensor_pool_consumerConfig_descriptorStreamId(&cfg);
     out->control_stream_id = tensor_pool_consumerConfig_controlStreamId(&cfg);
@@ -266,8 +264,7 @@ int tp_control_decode_data_source_announce(const uint8_t *buffer, size_t length,
     if (schema_id != tensor_pool_dataSourceAnnounce_sbe_schema_id() ||
         template_id != tensor_pool_dataSourceAnnounce_sbe_template_id())
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: header mismatch");
-        return -1;
+        return 1;
     }
 
     tensor_pool_dataSourceAnnounce_wrap_for_decode(
@@ -340,8 +337,7 @@ int tp_control_decode_data_source_meta(
     if (schema_id != tensor_pool_dataSourceMeta_sbe_schema_id() ||
         template_id != tensor_pool_dataSourceMeta_sbe_template_id())
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: header mismatch");
-        return -1;
+        return 1;
     }
 
     tensor_pool_dataSourceMeta_wrap_for_decode(
@@ -554,11 +550,11 @@ int tp_control_subscription_close(tp_control_subscription_t *control)
     return 0;
 }
 
-int tp_control_poll(tp_control_subscription_t *control, int fragment_limit)
+int tp_control_subscription_poll(tp_control_subscription_t *control, int fragment_limit)
 {
     if (NULL == control || NULL == control->subscription || NULL == control->assembler)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_control_poll: subscription not initialized");
+        TP_SET_ERR(EINVAL, "%s", "tp_control_subscription_poll: subscription not initialized");
         return -1;
     }
 

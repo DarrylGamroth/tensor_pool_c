@@ -5,6 +5,7 @@
 #include "tensor_pool/tp_error.h"
 
 #include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/mode.h"
 #include "wire/tensor_pool/qosConsumer.h"
 #include "wire/tensor_pool/qosProducer.h"
 
@@ -56,7 +57,7 @@ int tp_qos_publish_consumer(
     uint64_t last_seq_seen,
     uint64_t drops_gap,
     uint64_t drops_late,
-    uint8_t mode)
+    tp_mode_t mode)
 {
     uint8_t buffer[128];
     struct tensor_pool_messageHeader msg_header;
@@ -89,7 +90,7 @@ int tp_qos_publish_consumer(
     tensor_pool_qosConsumer_set_lastSeqSeen(&qos, last_seq_seen);
     tensor_pool_qosConsumer_set_dropsGap(&qos, drops_gap);
     tensor_pool_qosConsumer_set_dropsLate(&qos, drops_late);
-    tensor_pool_qosConsumer_set_mode(&qos, mode);
+    tensor_pool_qosConsumer_set_mode(&qos, (enum tensor_pool_mode)mode);
 
     result = aeron_publication_offer(consumer->qos_publication, buffer, header_len + body_len, NULL, NULL);
     if (result < 0)
@@ -151,6 +152,7 @@ static void tp_qos_poller_handler(void *clientd, const uint8_t *buffer, size_t l
     else if (template_id == tensor_pool_qosConsumer_sbe_template_id())
     {
         struct tensor_pool_qosConsumer qos;
+        enum tensor_pool_mode mode = tensor_pool_mode_NULL_VALUE;
         tensor_pool_qosConsumer_wrap_for_decode(
             &qos,
             (char *)buffer,
@@ -165,7 +167,14 @@ static void tp_qos_poller_handler(void *clientd, const uint8_t *buffer, size_t l
         event.last_seq_seen = tensor_pool_qosConsumer_lastSeqSeen(&qos);
         event.drops_gap = tensor_pool_qosConsumer_dropsGap(&qos);
         event.drops_late = tensor_pool_qosConsumer_dropsLate(&qos);
-        event.mode = tensor_pool_qosConsumer_mode(&qos);
+        if (tensor_pool_qosConsumer_mode(&qos, &mode))
+        {
+            event.mode = (tp_mode_t)mode;
+        }
+        else
+        {
+            event.mode = TP_MODE_NULL;
+        }
     }
     else
     {

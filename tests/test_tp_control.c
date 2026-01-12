@@ -52,7 +52,7 @@ static void test_decode_consumer_hello(void)
     assert(view.consumer_id == 7);
     assert(view.supports_shm == 1);
     assert(view.supports_progress == 0);
-    assert(view.mode == 1);
+    assert(view.mode == TP_MODE_STREAM);
     assert(view.max_rate_hz == 60);
     assert(view.expected_layout_version == 5);
     assert(view.progress_interval_us == TP_NULL_U32);

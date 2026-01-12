@@ -20,7 +20,39 @@ int tp_producer_publish_progress_to(
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
-    uint8_t state);
+    tp_progress_state_t state);
+
+static int tp_consumer_manager_add_publication(
+    tp_producer_t *producer,
+    const char *channel,
+    int32_t stream_id,
+    aeron_publication_t **out_pub)
+{
+    aeron_async_add_publication_t *async_add = NULL;
+
+    if (NULL == producer || NULL == producer->client || NULL == out_pub || NULL == channel || stream_id < 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_manager_add_publication: invalid input");
+        return -1;
+    }
+
+    if (tp_client_async_add_publication(producer->client, channel, stream_id, &async_add) < 0)
+    {
+        return -1;
+    }
+
+    *out_pub = NULL;
+    while (NULL == *out_pub)
+    {
+        if (tp_client_async_add_publication_poll(out_pub, async_add) < 0)
+        {
+            return -1;
+        }
+        tp_client_do_work(producer->client);
+    }
+
+    return 0;
+}
 
 static tp_consumer_entry_t *tp_consumer_manager_find_entry(tp_consumer_manager_t *manager, uint32_t consumer_id)
 {
@@ -110,11 +142,11 @@ int tp_consumer_manager_handle_hello(
     {
         if (NULL == entry->descriptor_publication)
         {
-            if (tp_aeron_add_publication(
-                &entry->descriptor_publication,
-                &manager->producer->aeron,
+            if (tp_consumer_manager_add_publication(
+                manager->producer,
                 entry->descriptor_channel,
-                (int32_t)entry->descriptor_stream_id) < 0)
+                (int32_t)entry->descriptor_stream_id,
+                &entry->descriptor_publication) < 0)
             {
                 entry->descriptor_publication = NULL;
             }
@@ -136,11 +168,11 @@ int tp_consumer_manager_handle_hello(
     {
         if (NULL == entry->control_publication)
         {
-            if (tp_aeron_add_publication(
-                &entry->control_publication,
-                &manager->producer->aeron,
+            if (tp_consumer_manager_add_publication(
+                manager->producer,
                 entry->control_channel,
-                (int32_t)entry->control_stream_id) < 0)
+                (int32_t)entry->control_stream_id,
+                &entry->control_publication) < 0)
             {
                 entry->control_publication = NULL;
             }
@@ -240,7 +272,7 @@ int tp_consumer_manager_get_progress_policy(const tp_consumer_manager_t *manager
 
 int tp_consumer_manager_should_publish_progress(
     const tp_consumer_manager_t *manager,
-    tp_progress_state_t *state,
+    tp_progress_tracker_t *state,
     uint64_t now_ns,
     uint64_t payload_bytes_filled,
     int *out_should_publish)
@@ -327,7 +359,7 @@ int tp_consumer_manager_publish_progress(
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
-    uint8_t state)
+    tp_progress_state_t state)
 {
     tp_consumer_entry_t *entry;
     aeron_publication_t *publication = NULL;

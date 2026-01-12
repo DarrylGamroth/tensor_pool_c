@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
 
 static void tp_control_poller_handle_meta(
@@ -36,6 +37,9 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     tp_consumer_hello_view_t hello;
     tp_consumer_config_view_t config;
     tp_data_source_announce_view_t announce;
+    tp_driver_lease_revoked_t revoked;
+    tp_driver_shutdown_t shutdown_event;
+    tp_driver_detach_info_t detach_info;
 
     (void)header;
 
@@ -65,6 +69,24 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     if (poller->handlers.on_data_source_meta_begin || poller->handlers.on_data_source_meta_attr || poller->handlers.on_data_source_meta_end)
     {
         tp_control_poller_handle_meta(poller, buffer, length);
+    }
+
+    if (poller->handlers.on_detach_response && tp_driver_decode_detach_response(buffer, length, &detach_info) == 0)
+    {
+        poller->handlers.on_detach_response(&detach_info, poller->handlers.clientd);
+        return;
+    }
+
+    if (poller->handlers.on_lease_revoked && tp_driver_decode_lease_revoked(buffer, length, &revoked) == 0)
+    {
+        poller->handlers.on_lease_revoked(&revoked, poller->handlers.clientd);
+        return;
+    }
+
+    if (poller->handlers.on_shutdown && tp_driver_decode_shutdown(buffer, length, &shutdown_event) == 0)
+    {
+        poller->handlers.on_shutdown(&shutdown_event, poller->handlers.clientd);
+        return;
     }
 }
 

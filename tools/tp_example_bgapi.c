@@ -1,7 +1,6 @@
-#include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_tensor.h"
 
@@ -18,9 +17,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct tp_bgapi_slot_stct
+{
+    tp_buffer_claim_t claim;
+}
+tp_bgapi_slot_t;
+
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id>\n", name);
+    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> [slots]\n", name);
 }
 
 int main(int argc, char **argv)
@@ -34,15 +39,15 @@ int main(int argc, char **argv)
     tp_producer_t producer;
     tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
-    tp_frame_t frame;
-    tp_frame_metadata_t meta;
     tp_tensor_header_t header;
-    float payload[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    tp_frame_metadata_t meta;
+    tp_bgapi_slot_t *slots = NULL;
+    size_t slot_count = 8;
     uint32_t stream_id;
     uint32_t client_id;
     size_t i;
 
-    if (argc != 5)
+    if (argc < 5 || argc > 6)
     {
         usage(argv[0]);
         return 1;
@@ -50,6 +55,10 @@ int main(int argc, char **argv)
 
     stream_id = (uint32_t)strtoul(argv[3], NULL, 10);
     client_id = (uint32_t)strtoul(argv[4], NULL, 10);
+    if (argc == 6)
+    {
+        slot_count = (size_t)strtoul(argv[5], NULL, 10);
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -72,6 +81,7 @@ int main(int argc, char **argv)
     if (tp_driver_client_init(&driver, &client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
+        tp_client_close(&client);
         return 1;
     }
 
@@ -88,6 +98,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -96,6 +107,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -105,6 +117,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Allocation failed\n");
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -122,11 +135,13 @@ int main(int argc, char **argv)
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
     producer_context.stream_id = info.stream_id;
     producer_context.producer_id = client_id;
+    producer_context.fixed_pool_mode = true;
 
     if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
@@ -134,6 +149,7 @@ int main(int argc, char **argv)
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
@@ -154,45 +170,65 @@ int main(int argc, char **argv)
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
+        tp_client_close(&client);
+        return 1;
+    }
+
+    slots = calloc(slot_count, sizeof(*slots));
+    if (NULL == slots)
+    {
+        fprintf(stderr, "Slot allocation failed\n");
+        tp_producer_close(&producer);
+        free(pool_cfg);
+        tp_driver_attach_info_close(&info);
+        tp_driver_client_close(&driver);
+        tp_client_close(&client);
         return 1;
     }
 
     memset(&header, 0, sizeof(header));
-    header.dtype = tensor_pool_dtype_FLOAT32;
+    header.dtype = tensor_pool_dtype_UINT8;
     header.major_order = tensor_pool_majorOrder_ROW;
-    header.ndims = 2;
+    header.ndims = 1;
     header.progress_unit = tensor_pool_progressUnit_NONE;
-    header.dims[0] = 2;
-    header.dims[1] = 2;
+    header.dims[0] = pool_cfg[0].stride_bytes;
 
-    if (tp_tensor_header_validate(&header, NULL) < 0)
-    {
-        fprintf(stderr, "Tensor header invalid: %s\n", tp_errmsg());
-    }
-    frame.tensor = &header;
-    frame.payload = payload;
-    frame.payload_len = sizeof(payload);
-    frame.pool_id = pool_cfg[0].pool_id;
     meta.timestamp_ns = 0;
     meta.meta_version = 0;
 
+    for (i = 0; i < slot_count; i++)
     {
-        int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
-        if (position < 0)
+        if (tp_producer_try_claim(&producer, pool_cfg[0].stride_bytes, &slots[i].claim) < 0)
         {
-            fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
+            fprintf(stderr, "try_claim failed: %s\n", tp_errmsg());
+            break;
         }
-        else
+        slots[i].claim.tensor = header;
+    }
+
+    for (i = 0; i < slot_count; i++)
+    {
+        tp_buffer_claim_t *claim = &slots[i].claim;
+        if (NULL == claim->payload)
         {
-            printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
+            continue;
+        }
+        memset(claim->payload, 0, claim->payload_len);
+        if (tp_producer_commit_claim(&producer, claim, &meta) < 0)
+        {
+            fprintf(stderr, "commit failed: %s\n", tp_errmsg());
+        }
+        if (tp_producer_queue_claim(&producer, claim) < 0)
+        {
+            fprintf(stderr, "queue failed: %s\n", tp_errmsg());
         }
     }
 
+    free(slots);
     tp_producer_close(&producer);
     free(pool_cfg);
     tp_driver_attach_info_close(&info);
     tp_driver_client_close(&driver);
     tp_client_close(&client);
-
     return 0;
 }

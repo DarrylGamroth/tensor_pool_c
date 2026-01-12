@@ -1,14 +1,23 @@
 #include "tensor_pool/tp_producer.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_consumer_manager.h"
+#include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_types.h"
 
 #include "aeron_alloc.h"
+
+#include "driver/tensor_pool/hugepagesPolicy.h"
+#include "driver/tensor_pool/publishMode.h"
+#include "driver/tensor_pool/responseCode.h"
+#include "driver/tensor_pool/role.h"
 
 #include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/frameProgress.h"
@@ -35,6 +44,46 @@ static tp_payload_pool_t *tp_find_pool(tp_producer_t *producer, uint16_t pool_id
 static int tp_is_power_of_two(uint32_t value)
 {
     return value != 0 && (value & (value - 1)) == 0;
+}
+
+static void tp_producer_fill_driver_request(const tp_producer_t *producer, tp_driver_attach_request_t *out)
+{
+    if (NULL == producer || NULL == out)
+    {
+        return;
+    }
+
+    *out = producer->context.driver_request;
+
+    if (out->correlation_id == 0)
+    {
+        out->correlation_id = tp_clock_now_ns();
+    }
+
+    if (out->stream_id == 0)
+    {
+        out->stream_id = producer->context.stream_id;
+    }
+
+    if (out->client_id == 0)
+    {
+        out->client_id = producer->context.producer_id;
+    }
+
+    if (out->role == 0)
+    {
+        out->role = tensor_pool_role_PRODUCER;
+    }
+
+    if (out->publish_mode == 0)
+    {
+        out->publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
+    }
+
+    if (out->require_hugepages == 0)
+    {
+        out->require_hugepages = tensor_pool_hugepagesPolicy_UNSPECIFIED;
+    }
 }
 
 int tp_producer_publish_descriptor_to(
@@ -104,13 +153,56 @@ static int tp_producer_publish_descriptor(
     uint64_t timestamp_ns,
     uint32_t meta_version)
 {
-    return tp_producer_publish_descriptor_to(
-        producer,
-        producer->descriptor_publication,
-        seq,
-        header_index,
-        timestamp_ns,
-        meta_version);
+    int result = 0;
+    int published = 0;
+
+    if (producer->consumer_manager)
+    {
+        tp_consumer_registry_t *registry = &producer->consumer_manager->registry;
+        size_t i;
+        for (i = 0; i < registry->capacity; i++)
+        {
+            tp_consumer_entry_t *entry = &registry->entries[i];
+            if (!entry->in_use || NULL == entry->descriptor_publication)
+            {
+                continue;
+            }
+            if (tp_producer_publish_descriptor_to(
+                producer,
+                entry->descriptor_publication,
+                seq,
+                header_index,
+                timestamp_ns,
+                meta_version) < 0)
+            {
+                result = -1;
+            }
+            published = 1;
+        }
+    }
+
+    if (producer->descriptor_publication)
+    {
+        if (tp_producer_publish_descriptor_to(
+            producer,
+            producer->descriptor_publication,
+            seq,
+            header_index,
+            timestamp_ns,
+            meta_version) < 0)
+        {
+            result = -1;
+        }
+        published = 1;
+    }
+
+    if (!published)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_descriptor: descriptor publication unavailable");
+        return -1;
+    }
+
+    return result;
 }
 
 static int tp_producer_add_publication(
@@ -165,6 +257,68 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
     }
 
     ctx->fixed_pool_mode = enabled;
+}
+
+static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_producer_t *producer = (tp_producer_t *)clientd;
+    tp_consumer_hello_view_t hello;
+    tp_driver_lease_revoked_t revoked;
+    tp_driver_shutdown_t shutdown_event;
+
+    (void)header;
+
+    if (NULL == producer || NULL == buffer)
+    {
+        return;
+    }
+
+    if (producer->consumer_manager && tp_control_decode_consumer_hello(buffer, length, &hello) == 0)
+    {
+        tp_consumer_manager_handle_hello(producer->consumer_manager, &hello, (uint64_t)tp_clock_now_ns());
+        return;
+    }
+
+    if (tp_driver_decode_lease_revoked(buffer, length, &revoked) == 0)
+    {
+        if (revoked.client_id == producer->context.producer_id &&
+            revoked.role == tensor_pool_role_PRODUCER)
+        {
+            TP_SET_ERR(
+                ECANCELED,
+                "producer lease revoked stream=%u reason=%u: %s",
+                revoked.stream_id,
+                revoked.reason,
+                revoked.error_message);
+            if (producer->client && producer->client->context.error_handler)
+            {
+                producer->client->context.error_handler(
+                    producer->client->context.error_handler_clientd,
+                    tp_errcode(),
+                    tp_errmsg());
+            }
+            producer->driver.active_lease_id = 0;
+            producer->driver_attached = false;
+        }
+        return;
+    }
+
+    if (tp_driver_decode_shutdown(buffer, length, &shutdown_event) == 0)
+    {
+        TP_SET_ERR(
+            ECANCELED,
+            "driver shutdown reason=%u: %s",
+            shutdown_event.reason,
+            shutdown_event.error_message);
+        if (producer->client && producer->client->context.error_handler)
+        {
+            producer->client->context.error_handler(
+                producer->client->context.error_handler_clientd,
+                tp_errcode(),
+                tp_errmsg());
+        }
+        return;
+    }
 }
 
 int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *context)
@@ -227,10 +381,18 @@ int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_prod
         }
     }
 
+    if (producer->context.use_driver)
+    {
+        if (tp_producer_attach(producer, NULL) < 0)
+        {
+            return -1;
+        }
+    }
+
     return 0;
 }
 
-int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config)
+static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_config_t *config)
 {
     tp_shm_expected_t expected;
     size_t i;
@@ -238,7 +400,7 @@ int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *conf
 
     if (NULL == producer || NULL == config)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: null input");
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_config: null input");
         return -1;
     }
 
@@ -251,7 +413,7 @@ int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *conf
 
     if (!tp_is_power_of_two(config->header_nslots))
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: header_nslots must be power of two");
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_config: header_nslots must be power of two");
         return -1;
     }
 
@@ -296,7 +458,7 @@ int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *conf
         memset(pool, 0, sizeof(*pool));
         if (pool_cfg->nslots != config->header_nslots)
         {
-            TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: pool nslots mismatch");
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_config: pool nslots mismatch");
             goto cleanup;
         }
         pool->pool_id = pool_cfg->pool_id;
@@ -346,6 +508,111 @@ cleanup:
     }
 
     return result;
+}
+
+static int tp_producer_attach_driver(tp_producer_t *producer)
+{
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    tp_producer_config_t config;
+    tp_payload_pool_config_t *pool_cfg = NULL;
+    size_t i;
+    int result = -1;
+
+    if (NULL == producer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_driver: null input");
+        return -1;
+    }
+
+    if (!producer->driver_initialized)
+    {
+        if (tp_driver_client_init(&producer->driver, producer->client) < 0)
+        {
+            return -1;
+        }
+        producer->driver_initialized = true;
+    }
+
+    tp_producer_fill_driver_request(producer, &request);
+
+    if (tp_driver_attach(&producer->driver, &request, &info, (int64_t)producer->client->context.driver_timeout_ns) < 0)
+    {
+        return -1;
+    }
+
+    if (info.code != tensor_pool_responseCode_OK)
+    {
+        TP_SET_ERR(EINVAL, "tp_producer_attach_driver: driver attach failed (%d): %s", info.code, info.error_message);
+        tp_driver_attach_info_close(&info);
+        return -1;
+    }
+
+    if (producer->driver_attached)
+    {
+        tp_driver_attach_info_close(&producer->driver_attach);
+    }
+
+    producer->driver_attach = info;
+    producer->driver_attached = true;
+
+    pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
+    if (NULL == pool_cfg)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_attach_driver: pool allocation failed");
+        goto cleanup;
+    }
+
+    for (i = 0; i < info.pool_count; i++)
+    {
+        pool_cfg[i].pool_id = info.pools[i].pool_id;
+        pool_cfg[i].nslots = info.pools[i].nslots;
+        pool_cfg[i].stride_bytes = info.pools[i].stride_bytes;
+        pool_cfg[i].uri = info.pools[i].region_uri;
+    }
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = info.stream_id;
+    config.producer_id = producer->context.producer_id;
+    config.epoch = info.epoch;
+    config.layout_version = info.layout_version;
+    config.header_nslots = info.header_nslots;
+    config.header_uri = info.header_region_uri;
+    config.pools = pool_cfg;
+    config.pool_count = info.pool_count;
+
+    result = tp_producer_attach_config(producer, &config);
+
+cleanup:
+    free(pool_cfg);
+    if (result < 0)
+    {
+        tp_driver_attach_info_close(&producer->driver_attach);
+        producer->driver_attached = false;
+    }
+    return result;
+}
+
+int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config)
+{
+    if (NULL == producer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: null input");
+        return -1;
+    }
+
+    if (producer->context.use_driver && NULL == config)
+    {
+        return tp_producer_attach_driver(producer);
+    }
+
+    if (NULL == config)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: null config");
+        return -1;
+    }
+
+    return tp_producer_attach_config(producer, config);
 }
 
 static int tp_encode_tensor_header(uint8_t *buffer, size_t buffer_len, const tp_tensor_header_t *tensor)
@@ -488,7 +755,7 @@ int tp_producer_publish_progress_to(
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
-    uint8_t state)
+    tp_progress_state_t state)
 {
     uint8_t buffer[128];
     struct tensor_pool_messageHeader msg_header;
@@ -520,7 +787,7 @@ int tp_producer_publish_progress_to(
     tensor_pool_frameProgress_set_frameId(&progress, seq);
     tensor_pool_frameProgress_set_headerIndex(&progress, header_index);
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, payload_bytes_filled);
-    tensor_pool_frameProgress_set_state(&progress, state);
+    tensor_pool_frameProgress_set_state(&progress, (enum tensor_pool_frameProgressState)state);
 
     result = aeron_publication_offer(publication, buffer, header_len + body_len, NULL, NULL);
     if (result < 0)
@@ -536,23 +803,67 @@ int tp_producer_publish_progress(
     uint64_t seq,
     uint32_t header_index,
     uint64_t payload_bytes_filled,
-    uint8_t state)
+    tp_progress_state_t state)
 {
-    return tp_producer_publish_progress_to(
-        producer,
-        producer->control_publication,
-        seq,
-        header_index,
-        payload_bytes_filled,
-        state);
+    int result = 0;
+    int published = 0;
+
+    if (producer && producer->consumer_manager)
+    {
+        tp_consumer_registry_t *registry = &producer->consumer_manager->registry;
+        size_t i;
+        for (i = 0; i < registry->capacity; i++)
+        {
+            tp_consumer_entry_t *entry = &registry->entries[i];
+            if (!entry->in_use || NULL == entry->control_publication)
+            {
+                continue;
+            }
+            if (tp_producer_publish_progress_to(
+                producer,
+                entry->control_publication,
+                seq,
+                header_index,
+                payload_bytes_filled,
+                state) < 0)
+            {
+                result = -1;
+            }
+            published = 1;
+        }
+    }
+
+    if (producer && producer->control_publication)
+    {
+        if (tp_producer_publish_progress_to(
+            producer,
+            producer->control_publication,
+            seq,
+            header_index,
+            payload_bytes_filled,
+            state) < 0)
+        {
+            result = -1;
+        }
+        published = 1;
+    }
+
+    if (!published)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_progress: control publication unavailable");
+        return -1;
+    }
+
+    return result;
 }
 
-int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
+int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
 {
     uint64_t seq;
     uint32_t header_index;
     uint64_t timestamp_ns = 0;
     uint32_t meta_version = 0;
+    int result;
 
     if (NULL == producer || NULL == frame || NULL == frame->tensor)
     {
@@ -569,7 +880,7 @@ int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp
     seq = producer->next_seq++;
     header_index = (uint32_t)(seq % producer->header_nslots);
 
-    return tp_producer_publish_frame(
+    result = tp_producer_publish_frame(
         producer,
         seq,
         header_index,
@@ -579,6 +890,12 @@ int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp
         frame->pool_id,
         timestamp_ns,
         meta_version);
+    if (result < 0)
+    {
+        return -1;
+    }
+
+    return (int64_t)seq;
 }
 
 static tp_payload_pool_t *tp_find_pool_for_length(tp_producer_t *producer, size_t length)
@@ -715,6 +1032,88 @@ int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_
         progress->state);
 }
 
+int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity)
+{
+    tp_consumer_manager_t *manager = NULL;
+
+    if (NULL == producer || capacity == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_enable_consumer_manager: invalid input");
+        return -1;
+    }
+
+    if (producer->consumer_manager)
+    {
+        return 0;
+    }
+
+    if (aeron_alloc((void **)&manager, sizeof(*manager)) < 0)
+    {
+        return -1;
+    }
+
+    memset(manager, 0, sizeof(*manager));
+    if (tp_consumer_manager_init(manager, producer, capacity) < 0)
+    {
+        aeron_free(manager);
+        return -1;
+    }
+
+    producer->consumer_manager = manager;
+    producer->last_consumer_sweep_ns = (uint64_t)tp_clock_now_ns();
+    return 0;
+}
+
+int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
+{
+    uint64_t now_ns;
+    uint64_t stale_ns = 5ULL * 1000 * 1000 * 1000ULL;
+    int fragments;
+
+    if (NULL == producer || NULL == producer->client || NULL == producer->client->control_subscription)
+    {
+        return 0;
+    }
+
+    if (NULL == producer->control_assembler)
+    {
+        if (aeron_fragment_assembler_create(
+            &producer->control_assembler,
+            tp_producer_control_handler,
+            producer) < 0)
+        {
+            return -1;
+        }
+    }
+
+    fragments = aeron_subscription_poll(
+        producer->client->control_subscription,
+        aeron_fragment_assembler_handler,
+        producer->control_assembler,
+        fragment_limit);
+    if (fragments < 0)
+    {
+        return -1;
+    }
+
+    if (producer->consumer_manager)
+    {
+        tp_progress_policy_t policy;
+        if (tp_consumer_manager_get_progress_policy(producer->consumer_manager, &policy) == 0 &&
+            policy.interval_us != TP_NULL_U32 &&
+            policy.interval_us > 0)
+        {
+            stale_ns = (uint64_t)policy.interval_us * 1000ULL * 5ULL;
+        }
+
+        now_ns = (uint64_t)tp_clock_now_ns();
+        tp_consumer_manager_sweep(producer->consumer_manager, now_ns, stale_ns);
+    }
+
+    tp_client_do_work(producer->client);
+    return fragments;
+}
+
 int tp_producer_close(tp_producer_t *producer)
 {
     size_t i;
@@ -748,6 +1147,12 @@ int tp_producer_close(tp_producer_t *producer)
         producer->metadata_publication = NULL;
     }
 
+    if (producer->control_assembler)
+    {
+        aeron_fragment_assembler_delete(producer->control_assembler);
+        producer->control_assembler = NULL;
+    }
+
     tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
 
     for (i = 0; i < producer->pool_count; i++)
@@ -759,6 +1164,32 @@ int tp_producer_close(tp_producer_t *producer)
     {
         aeron_free(producer->pools);
         producer->pools = NULL;
+    }
+
+    if (producer->consumer_manager)
+    {
+        tp_consumer_manager_close(producer->consumer_manager);
+        aeron_free(producer->consumer_manager);
+        producer->consumer_manager = NULL;
+    }
+
+    if (producer->driver_attached)
+    {
+        tp_driver_detach(
+            &producer->driver,
+            tp_clock_now_ns(),
+            producer->driver.active_lease_id,
+            producer->driver.active_stream_id,
+            producer->driver.client_id,
+            producer->driver.role);
+        tp_driver_attach_info_close(&producer->driver_attach);
+        producer->driver_attached = false;
+    }
+
+    if (producer->driver_initialized)
+    {
+        tp_driver_client_close(&producer->driver);
+        producer->driver_initialized = false;
     }
 
     return 0;

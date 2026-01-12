@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "tensor_pool/tp_clock.h"
+#include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
 
 static int tp_client_copy_context(tp_client_context_t *dst, const tp_client_context_t *src)
@@ -30,6 +32,8 @@ int tp_client_context_init(tp_client_context_t *ctx)
     ctx->owns_aeron_client = true;
     ctx->message_timeout_ns = 0;
     ctx->message_retry_attempts = 0;
+    ctx->driver_timeout_ns = 5 * 1000 * 1000 * 1000ULL;
+    ctx->keepalive_interval_ns = 1000 * 1000 * 1000ULL;
     return 0;
 }
 
@@ -331,6 +335,9 @@ int tp_client_start(tp_client_t *client)
 
 int tp_client_do_work(tp_client_t *client)
 {
+    tp_driver_client_t *driver;
+    uint64_t now_ns = 0;
+
     if (NULL == client)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_client_do_work: null input");
@@ -342,7 +349,50 @@ int tp_client_do_work(tp_client_t *client)
         client->context.delegating_invoker(client->context.delegating_invoker_clientd);
     }
 
-    return tp_client_conductor_do_work(&client->conductor);
+    int work = tp_client_conductor_do_work(&client->conductor);
+    if (work < 0)
+    {
+        return -1;
+    }
+
+    if (client->driver_clients)
+    {
+        now_ns = (uint64_t)tp_clock_now_ns();
+    }
+
+    for (driver = client->driver_clients; NULL != driver; driver = driver->next)
+    {
+        if (tp_driver_client_lease_expired(driver, now_ns) > 0)
+        {
+            TP_SET_ERR(
+                ETIMEDOUT,
+                "tp_client_do_work: driver lease expired stream=%u client=%u",
+                driver->active_stream_id,
+                driver->client_id);
+            tp_log_emit(&client->context.base.log, TP_LOG_ERROR, "%s", tp_errmsg());
+            if (client->context.error_handler)
+            {
+                client->context.error_handler(client->context.error_handler_clientd, tp_errcode(), tp_errmsg());
+            }
+            driver->active_lease_id = 0;
+            return -1;
+        }
+
+        if (tp_driver_client_keepalive_due(driver, now_ns, client->context.keepalive_interval_ns) > 0)
+        {
+            if (tp_driver_keepalive(driver, now_ns) < 0)
+            {
+                tp_log_emit(&client->context.base.log, TP_LOG_ERROR, "%s", tp_errmsg());
+                if (client->context.error_handler)
+                {
+                    client->context.error_handler(client->context.error_handler_clientd, tp_errcode(), tp_errmsg());
+                }
+                return -1;
+            }
+        }
+    }
+
+    return work;
 }
 
 int tp_client_close(tp_client_t *client)
@@ -371,7 +421,68 @@ int tp_client_close(tp_client_t *client)
         client->metadata_subscription = NULL;
     }
 
+    client->driver_clients = NULL;
+
     return tp_client_conductor_close(&client->conductor);
+}
+
+int tp_client_register_driver_client(tp_client_t *client, tp_driver_client_t *driver)
+{
+    tp_driver_client_t *cursor;
+
+    if (NULL == client || NULL == driver)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_register_driver_client: null input");
+        return -1;
+    }
+
+    for (cursor = client->driver_clients; NULL != cursor; cursor = cursor->next)
+    {
+        if (cursor == driver)
+        {
+            driver->registered = true;
+            return 0;
+        }
+    }
+
+    driver->next = client->driver_clients;
+    client->driver_clients = driver;
+    driver->registered = true;
+    return 0;
+}
+
+int tp_client_unregister_driver_client(tp_client_t *client, tp_driver_client_t *driver)
+{
+    tp_driver_client_t *cursor;
+    tp_driver_client_t *prev = NULL;
+
+    if (NULL == client || NULL == driver)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_unregister_driver_client: null input");
+        return -1;
+    }
+
+    for (cursor = client->driver_clients; NULL != cursor; cursor = cursor->next)
+    {
+        if (cursor == driver)
+        {
+            if (NULL == prev)
+            {
+                client->driver_clients = cursor->next;
+            }
+            else
+            {
+                prev->next = cursor->next;
+            }
+            driver->next = NULL;
+            driver->registered = false;
+            return 0;
+        }
+        prev = cursor;
+    }
+
+    TP_SET_ERR(EINVAL, "%s", "tp_client_unregister_driver_client: driver not registered");
+    return -1;
 }
 
 int tp_client_async_add_publication(

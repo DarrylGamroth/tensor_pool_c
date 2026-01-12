@@ -14,7 +14,9 @@
 extern "C" {
 #endif
 
-typedef void (*tp_error_handler_t)(int errcode, const char *message, void *clientd);
+typedef struct tp_driver_client_stct tp_driver_client_t;
+
+typedef void (*tp_error_handler_t)(void *clientd, int errcode, const char *message);
 typedef void (*tp_delegating_invoker_t)(void *clientd);
 
 typedef struct tp_client_context_stct
@@ -43,6 +45,7 @@ typedef struct tp_client_stct
     aeron_subscription_t *control_subscription;
     aeron_subscription_t *qos_subscription;
     aeron_subscription_t *metadata_subscription;
+    tp_driver_client_t *driver_clients;
 }
 tp_client_t;
 
@@ -69,6 +72,9 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx);
 int tp_client_start(tp_client_t *client);
 int tp_client_do_work(tp_client_t *client);
 int tp_client_close(tp_client_t *client);
+
+int tp_client_register_driver_client(tp_client_t *client, tp_driver_client_t *driver);
+int tp_client_unregister_driver_client(tp_client_t *client, tp_driver_client_t *driver);
 
 int tp_client_async_add_publication(
     tp_client_t *client,

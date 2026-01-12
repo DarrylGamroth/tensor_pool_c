@@ -2,6 +2,7 @@
 #define TENSOR_POOL_TP_CONTROL_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include "tensor_pool/tp_types.h"
 
@@ -18,7 +19,7 @@ typedef struct tp_consumer_hello_stct
     uint32_t consumer_id;
     uint8_t supports_shm;
     uint8_t supports_progress;
-    uint8_t mode;
+    tp_mode_t mode;
     uint32_t max_rate_hz;
     uint32_t expected_layout_version;
     uint32_t progress_interval_us;
@@ -36,7 +37,7 @@ typedef struct tp_consumer_config_msg_stct
     uint32_t stream_id;
     uint32_t consumer_id;
     uint8_t use_shm;
-    uint8_t mode;
+    tp_mode_t mode;
     uint32_t descriptor_stream_id;
     uint32_t control_stream_id;
     const char *payload_fallback_uri;

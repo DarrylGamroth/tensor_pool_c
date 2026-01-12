@@ -20,7 +20,7 @@ int tp_qos_publish_consumer(
     uint64_t last_seq_seen,
     uint64_t drops_gap,
     uint64_t drops_late,
-    uint8_t mode);
+    tp_mode_t mode);
 
 typedef enum tp_qos_event_type_enum
 {
@@ -41,7 +41,7 @@ typedef struct tp_qos_event_stct
     uint64_t last_seq_seen;
     uint64_t drops_gap;
     uint64_t drops_late;
-    uint8_t mode;
+    tp_mode_t mode;
 }
 tp_qos_event_t;
 

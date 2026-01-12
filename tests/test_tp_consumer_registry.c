@@ -134,7 +134,7 @@ static void test_progress_throttle_should_publish(void)
 {
     tp_consumer_manager_t manager;
     tp_producer_t producer;
-    tp_progress_state_t state;
+    tp_progress_tracker_t state;
     int should_publish = 0;
     int result = -1;
 

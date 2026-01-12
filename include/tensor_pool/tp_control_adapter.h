@@ -7,6 +7,8 @@
 
 #include "aeron_fragment_assembler.h"
 
+#include "tensor_pool/tp_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,7 +26,7 @@ typedef struct tp_consumer_hello_view_stct
     uint32_t consumer_id;
     uint8_t supports_shm;
     uint8_t supports_progress;
-    uint8_t mode;
+    tp_mode_t mode;
     uint32_t max_rate_hz;
     uint32_t expected_layout_version;
     uint32_t progress_interval_us;
@@ -42,7 +44,7 @@ typedef struct tp_consumer_config_view_stct
     uint32_t stream_id;
     uint32_t consumer_id;
     uint8_t use_shm;
-    uint8_t mode;
+    tp_mode_t mode;
     uint32_t descriptor_stream_id;
     uint32_t control_stream_id;
     tp_string_view_t payload_fallback_uri;
@@ -113,7 +115,7 @@ int tp_control_subscription_init(
     int32_t stream_id,
     const tp_control_adapter_t *adapter);
 int tp_control_subscription_close(tp_control_subscription_t *control);
-int tp_control_poll(tp_control_subscription_t *control, int fragment_limit);
+int tp_control_subscription_poll(tp_control_subscription_t *control, int fragment_limit);
 
 int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_consumer_hello_view_t *out);
 int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_consumer_config_view_t *out);

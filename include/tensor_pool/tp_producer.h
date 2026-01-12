@@ -15,6 +15,8 @@
 extern "C" {
 #endif
 
+typedef struct tp_consumer_manager_stct tp_consumer_manager_t;
+
 typedef struct tp_payload_pool_config_stct
 {
     uint16_t pool_id;
@@ -88,7 +90,7 @@ typedef struct tp_frame_progress_stct
     uint64_t seq;
     uint32_t header_index;
     uint64_t payload_bytes_filled;
-    uint8_t state;
+    tp_progress_state_t state;
 }
 tp_frame_progress_t;
 
@@ -100,6 +102,7 @@ typedef struct tp_producer_stct
     aeron_publication_t *control_publication;
     aeron_publication_t *qos_publication;
     aeron_publication_t *metadata_publication;
+    aeron_fragment_assembler_t *control_assembler;
     tp_shm_region_t header_region;
     tp_payload_pool_t *pools;
     size_t pool_count;
@@ -109,6 +112,12 @@ typedef struct tp_producer_stct
     uint32_t layout_version;
     uint32_t header_nslots;
     uint64_t next_seq;
+    tp_driver_client_t driver;
+    tp_driver_attach_info_t driver_attach;
+    bool driver_initialized;
+    bool driver_attached;
+    tp_consumer_manager_t *consumer_manager;
+    uint64_t last_consumer_sweep_ns;
 }
 tp_producer_t;
 
@@ -117,12 +126,14 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
 
 int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *ctx);
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config);
-int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
+int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
+int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity);
+int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit);
 int tp_producer_close(tp_producer_t *producer);
 
 #ifdef __cplusplus

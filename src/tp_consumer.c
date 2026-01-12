@@ -1,16 +1,23 @@
 #include "tensor_pool/tp_consumer.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "aeron_alloc.h"
 #include "aeron_fragment_assembler.h"
 
+#include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_types.h"
+
+#include "driver/tensor_pool/hugepagesPolicy.h"
+#include "driver/tensor_pool/publishMode.h"
+#include "driver/tensor_pool/responseCode.h"
+#include "driver/tensor_pool/role.h"
 
 #include "wire/tensor_pool/regionType.h"
 #include "wire/tensor_pool/messageHeader.h"
@@ -36,6 +43,70 @@ static int tp_is_power_of_two(uint32_t value)
 {
     return value != 0 && (value & (value - 1)) == 0;
 }
+
+static void tp_consumer_fill_driver_request(const tp_consumer_t *consumer, tp_driver_attach_request_t *out)
+{
+    if (NULL == consumer || NULL == out)
+    {
+        return;
+    }
+
+    *out = consumer->context.driver_request;
+
+    if (out->correlation_id == 0)
+    {
+        out->correlation_id = tp_clock_now_ns();
+    }
+
+    if (out->stream_id == 0)
+    {
+        out->stream_id = consumer->context.stream_id;
+    }
+
+    if (out->client_id == 0)
+    {
+        out->client_id = consumer->context.consumer_id;
+    }
+
+    if (out->role == 0)
+    {
+        out->role = tensor_pool_role_CONSUMER;
+    }
+
+    if (out->publish_mode == 0)
+    {
+        out->publish_mode = tensor_pool_publishMode_REQUIRE_EXISTING;
+    }
+
+    if (out->require_hugepages == 0)
+    {
+        out->require_hugepages = tensor_pool_hugepagesPolicy_UNSPECIFIED;
+    }
+}
+
+static void tp_consumer_prepare_hello(const tp_consumer_t *consumer, tp_consumer_hello_t *hello)
+{
+    if (NULL == consumer || NULL == hello)
+    {
+        return;
+    }
+
+    *hello = consumer->context.hello;
+    if (hello->stream_id == 0)
+    {
+        hello->stream_id = consumer->stream_id ? consumer->stream_id : consumer->context.stream_id;
+    }
+    if (hello->consumer_id == 0)
+    {
+        hello->consumer_id = consumer->context.consumer_id;
+    }
+}
+
+static int tp_consumer_add_subscription(
+    tp_consumer_t *consumer,
+    const char *channel,
+    int32_t stream_id,
+    aeron_subscription_t **out_sub);
 
 static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
@@ -96,6 +167,8 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 {
     tp_consumer_t *consumer = (tp_consumer_t *)clientd;
     tp_consumer_config_view_t view;
+    tp_driver_lease_revoked_t revoked;
+    tp_driver_shutdown_t shutdown_event;
 
     (void)header;
 
@@ -104,38 +177,113 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         return;
     }
 
-    if (tp_control_decode_consumer_config(buffer, length, &view) < 0)
+    if (tp_control_decode_consumer_config(buffer, length, &view) == 0)
     {
-        return;
-    }
-
-    if (view.consumer_id != consumer->context.consumer_id)
-    {
-        return;
-    }
-
-    if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)
-    {
-        char channel[4096];
-        size_t copy_len = view.descriptor_channel.length;
-        if (copy_len >= sizeof(channel))
+        if (view.consumer_id != consumer->context.consumer_id)
         {
-            copy_len = sizeof(channel) - 1;
+            return;
         }
-        memcpy(channel, view.descriptor_channel.data, copy_len);
-        channel[copy_len] = '\0';
 
-        if (consumer->descriptor_subscription)
+        if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)
+        {
+            char channel[4096];
+            size_t copy_len = view.descriptor_channel.length;
+            if (copy_len >= sizeof(channel))
+            {
+                copy_len = sizeof(channel) - 1;
+            }
+            memcpy(channel, view.descriptor_channel.data, copy_len);
+            channel[copy_len] = '\0';
+
+            if (consumer->descriptor_subscription)
+            {
+                aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
+                consumer->descriptor_subscription = NULL;
+            }
+
+            tp_consumer_add_subscription(
+                consumer,
+                channel,
+                (int32_t)view.descriptor_stream_id,
+                &consumer->descriptor_subscription);
+        }
+        else if (consumer->descriptor_subscription)
         {
             aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
             consumer->descriptor_subscription = NULL;
         }
 
-        tp_consumer_add_subscription(
-            consumer,
-            channel,
-            (int32_t)view.descriptor_stream_id,
-            &consumer->descriptor_subscription);
+        if (view.control_channel.length > 0 && view.control_stream_id > 0)
+        {
+            char channel[4096];
+            size_t copy_len = view.control_channel.length;
+            if (copy_len >= sizeof(channel))
+            {
+                copy_len = sizeof(channel) - 1;
+            }
+            memcpy(channel, view.control_channel.data, copy_len);
+            channel[copy_len] = '\0';
+
+            if (consumer->control_subscription)
+            {
+                aeron_subscription_close(consumer->control_subscription, NULL, NULL);
+                consumer->control_subscription = NULL;
+            }
+
+            tp_consumer_add_subscription(
+                consumer,
+                channel,
+                (int32_t)view.control_stream_id,
+                &consumer->control_subscription);
+        }
+        else if (consumer->control_subscription)
+        {
+            aeron_subscription_close(consumer->control_subscription, NULL, NULL);
+            consumer->control_subscription = NULL;
+        }
+
+        return;
+    }
+
+    if (tp_driver_decode_lease_revoked(buffer, length, &revoked) == 0)
+    {
+        if (revoked.client_id == consumer->context.consumer_id &&
+            revoked.role == tensor_pool_role_CONSUMER)
+        {
+            TP_SET_ERR(
+                ECANCELED,
+                "consumer lease revoked stream=%u reason=%u: %s",
+                revoked.stream_id,
+                revoked.reason,
+                revoked.error_message);
+            if (consumer->client && consumer->client->context.error_handler)
+            {
+                consumer->client->context.error_handler(
+                    consumer->client->context.error_handler_clientd,
+                    tp_errcode(),
+                    tp_errmsg());
+            }
+            consumer->driver.active_lease_id = 0;
+            consumer->driver_attached = false;
+        }
+        return;
+    }
+
+    if (tp_driver_decode_shutdown(buffer, length, &shutdown_event) == 0)
+    {
+        TP_SET_ERR(
+            ECANCELED,
+            "driver shutdown reason=%u: %s",
+            shutdown_event.reason,
+            shutdown_event.error_message);
+        if (consumer->client && consumer->client->context.error_handler)
+        {
+            consumer->client->context.error_handler(
+                consumer->client->context.error_handler_clientd,
+                tp_errcode(),
+                tp_errmsg());
+        }
+        return;
     }
 }
 
@@ -220,6 +368,12 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx)
     }
 
     memset(ctx, 0, sizeof(*ctx));
+    ctx->hello.supports_shm = 1;
+    ctx->hello.supports_progress = 1;
+    ctx->hello.mode = TP_MODE_STREAM;
+    ctx->hello.progress_interval_us = TP_NULL_U32;
+    ctx->hello.progress_bytes_delta = TP_NULL_U32;
+    ctx->hello.progress_major_delta_units = TP_NULL_U32;
     return 0;
 }
 
@@ -271,6 +425,14 @@ int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_cons
         }
     }
 
+    if (consumer->context.use_driver)
+    {
+        if (tp_consumer_attach(consumer, NULL) < 0)
+        {
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -285,7 +447,7 @@ void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descri
     consumer->descriptor_clientd = clientd;
 }
 
-int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config)
+static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_config_t *config)
 {
     tp_shm_expected_t expected;
     size_t i;
@@ -383,6 +545,13 @@ int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *conf
         }
     }
 
+    if (consumer->control_publication)
+    {
+        tp_consumer_hello_t hello;
+        tp_consumer_prepare_hello(consumer, &hello);
+        tp_consumer_send_hello(consumer, &hello);
+    }
+
     return 0;
 
 cleanup:
@@ -400,6 +569,110 @@ cleanup:
     }
 
     return result;
+}
+
+static int tp_consumer_attach_driver(tp_consumer_t *consumer)
+{
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t *pool_cfg = NULL;
+    size_t i;
+    int result = -1;
+
+    if (NULL == consumer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach_driver: null input");
+        return -1;
+    }
+
+    if (!consumer->driver_initialized)
+    {
+        if (tp_driver_client_init(&consumer->driver, consumer->client) < 0)
+        {
+            return -1;
+        }
+        consumer->driver_initialized = true;
+    }
+
+    tp_consumer_fill_driver_request(consumer, &request);
+
+    if (tp_driver_attach(&consumer->driver, &request, &info, (int64_t)consumer->client->context.driver_timeout_ns) < 0)
+    {
+        return -1;
+    }
+
+    if (info.code != tensor_pool_responseCode_OK)
+    {
+        TP_SET_ERR(EINVAL, "tp_consumer_attach_driver: driver attach failed (%d): %s", info.code, info.error_message);
+        tp_driver_attach_info_close(&info);
+        return -1;
+    }
+
+    if (consumer->driver_attached)
+    {
+        tp_driver_attach_info_close(&consumer->driver_attach);
+    }
+
+    consumer->driver_attach = info;
+    consumer->driver_attached = true;
+
+    pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
+    if (NULL == pool_cfg)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_consumer_attach_driver: pool allocation failed");
+        goto cleanup;
+    }
+
+    for (i = 0; i < info.pool_count; i++)
+    {
+        pool_cfg[i].pool_id = info.pools[i].pool_id;
+        pool_cfg[i].nslots = info.pools[i].nslots;
+        pool_cfg[i].stride_bytes = info.pools[i].stride_bytes;
+        pool_cfg[i].uri = info.pools[i].region_uri;
+    }
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = info.stream_id;
+    config.epoch = info.epoch;
+    config.layout_version = info.layout_version;
+    config.header_nslots = info.header_nslots;
+    config.header_uri = info.header_region_uri;
+    config.pools = pool_cfg;
+    config.pool_count = info.pool_count;
+
+    result = tp_consumer_attach_config(consumer, &config);
+
+cleanup:
+    free(pool_cfg);
+    if (result < 0)
+    {
+        tp_driver_attach_info_close(&consumer->driver_attach);
+        consumer->driver_attached = false;
+    }
+    return result;
+}
+
+int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config)
+{
+    if (NULL == consumer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach: null input");
+        return -1;
+    }
+
+    if (consumer->context.use_driver && NULL == config)
+    {
+        return tp_consumer_attach_driver(consumer);
+    }
+
+    if (NULL == config)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach: null config");
+        return -1;
+    }
+
+    return tp_consumer_attach_config(consumer, config);
 }
 
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t header_index, tp_frame_view_t *out)
@@ -510,11 +783,18 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
         }
     }
 
-    return aeron_subscription_poll(
+    int fragments = aeron_subscription_poll(
         consumer->descriptor_subscription,
         aeron_fragment_assembler_handler,
         consumer->descriptor_assembler,
         fragment_limit);
+    if (fragments < 0)
+    {
+        return -1;
+    }
+
+    tp_client_do_work(consumer->client);
+    return fragments;
 }
 
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
@@ -535,11 +815,18 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
         }
     }
 
-    return aeron_subscription_poll(
+    int fragments = aeron_subscription_poll(
         consumer->client->control_subscription,
         aeron_fragment_assembler_handler,
         consumer->control_assembler,
         fragment_limit);
+    if (fragments < 0)
+    {
+        return -1;
+    }
+
+    tp_client_do_work(consumer->client);
+    return fragments;
 }
 
 int tp_consumer_close(tp_consumer_t *consumer)
@@ -555,6 +842,12 @@ int tp_consumer_close(tp_consumer_t *consumer)
     {
         aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
         consumer->descriptor_subscription = NULL;
+    }
+
+    if (consumer->control_subscription)
+    {
+        aeron_subscription_close(consumer->control_subscription, NULL, NULL);
+        consumer->control_subscription = NULL;
     }
 
     if (consumer->control_publication)
@@ -592,6 +885,25 @@ int tp_consumer_close(tp_consumer_t *consumer)
     {
         aeron_free(consumer->pools);
         consumer->pools = NULL;
+    }
+
+    if (consumer->driver_attached)
+    {
+        tp_driver_detach(
+            &consumer->driver,
+            tp_clock_now_ns(),
+            consumer->driver.active_lease_id,
+            consumer->driver.active_stream_id,
+            consumer->driver.client_id,
+            consumer->driver.role);
+        tp_driver_attach_info_close(&consumer->driver_attach);
+        consumer->driver_attached = false;
+    }
+
+    if (consumer->driver_initialized)
+    {
+        tp_driver_client_close(&consumer->driver);
+        consumer->driver_initialized = false;
     }
 
     return 0;

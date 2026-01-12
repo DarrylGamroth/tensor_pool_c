@@ -16,6 +16,7 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
     uint16_t template_id;
     uint16_t schema_id;
     tp_frame_progress_t view;
+    enum tensor_pool_frameProgressState state = tensor_pool_frameProgressState_UNKNOWN;
 
     (void)header;
 
@@ -51,7 +52,14 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
     view.seq = tensor_pool_frameProgress_frameId(&progress);
     view.header_index = tensor_pool_frameProgress_headerIndex(&progress);
     view.payload_bytes_filled = tensor_pool_frameProgress_payloadBytesFilled(&progress);
-    view.state = tensor_pool_frameProgress_state(&progress);
+    if (tensor_pool_frameProgress_state(&progress, &state))
+    {
+        view.state = (tp_progress_state_t)state;
+    }
+    else
+    {
+        view.state = TP_PROGRESS_UNKNOWN;
+    }
 
     if (poller->handlers.on_progress)
     {
@@ -69,6 +77,34 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
 
     memset(poller, 0, sizeof(*poller));
     poller->client = client;
+    poller->subscription = client->control_subscription;
+
+    if (handlers)
+    {
+        poller->handlers = *handlers;
+    }
+
+    if (aeron_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_progress_poller_init_with_subscription(
+    tp_progress_poller_t *poller,
+    aeron_subscription_t *subscription,
+    const tp_progress_handlers_t *handlers)
+{
+    if (NULL == poller || NULL == subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_init_with_subscription: invalid input");
+        return -1;
+    }
+
+    memset(poller, 0, sizeof(*poller));
+    poller->subscription = subscription;
     if (handlers)
     {
         poller->handlers = *handlers;
@@ -84,14 +120,31 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
 
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)
 {
-    if (NULL == poller || NULL == poller->assembler || NULL == poller->client || NULL == poller->client->control_subscription)
+    aeron_subscription_t *subscription = NULL;
+
+    if (NULL == poller || NULL == poller->assembler)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_progress_poll: poller not initialized");
         return -1;
     }
 
+    if (poller->subscription)
+    {
+        subscription = poller->subscription;
+    }
+    else if (poller->client)
+    {
+        subscription = poller->client->control_subscription;
+    }
+
+    if (NULL == subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poll: subscription not available");
+        return -1;
+    }
+
     return aeron_subscription_poll(
-        poller->client->control_subscription,
+        subscription,
         aeron_fragment_assembler_handler,
         poller->assembler,
         fragment_limit);
