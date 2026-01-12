@@ -4,7 +4,7 @@ This document proposes an Aeron-style API for TensorPool C clients. The goal is 
 
 ## 1. Motivation (Current Pain Points)
 
-Observed in `tools/tp_example_consumer.c` / `tools/tp_example_producer.c` / `tools/tp_control_listen.c`:
+Observed in `tools/tp_example_consumer_driver.c` / `tools/tp_example_producer_driver.c` / `tools/tp_control_listen.c`:
 
 - Direct Aeron calls (`aeron_subscription_poll`, `aeron_fragment_assembler_create`, `aeron_subscription_close`) leak into app code.
 - Control-plane handling (ConsumerHello/ConsumerConfig) is manual and duplicated.

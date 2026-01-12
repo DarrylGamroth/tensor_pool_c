@@ -77,7 +77,7 @@ Status: completed
 
 Status: completed
 
-- [x] Update `tp_example_producer.c` and `tp_example_consumer.c` to use only the new API.
+- [x] Update `tp_example_producer_driver.c`, `tp_example_producer_nodriver.c`, `tp_example_consumer_driver.c`, and `tp_example_consumer_nodriver.c` to use only the new API.
 - [x] Update `tp_control_listen.c` and `tp_shm_inspect.c` as needed.
 - [x] Add a BGAPI-style example (queue-claim fixed pool).
 

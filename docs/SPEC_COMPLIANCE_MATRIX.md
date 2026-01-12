@@ -27,5 +27,5 @@ Status key:
 | Discovery client | Discovery Spec 5 | Implemented | Request/response decode + tags + validation + cleanup. `src/tp_discovery_client.c` |
 | Aeron-style error handling | General | Implemented | Uses Aeron error stack via `tp_error.h`. |
 | Logging API | General | Implemented | `tp_log_t` with levels + callback. `src/tp_log.c` |
-| Examples (driver model) | Docs Phase 10 | Implemented | `tools/tp_example_producer.c`, `tools/tp_example_consumer.c` |
+| Examples (driver model) | Docs Phase 10 | Implemented | `tools/tp_example_producer_driver.c`, `tools/tp_example_consumer_driver.c` |
 | Tests (core validation) | Docs Phase 9 | Implemented | URI, seqlock, superblock, tensor header. `tests/test_tp_smoke.c` |
