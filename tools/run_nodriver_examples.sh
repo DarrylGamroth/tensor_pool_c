@@ -14,10 +14,10 @@ STREAM_ID=10000
 CLIENT_ID=42
 POOL_ID=1
 POOL_STRIDE=64
-HEADER_NSLOTS=8
+HEADER_NSLOTS=32
 EPOCH=1
 LAYOUT_VERSION=1
-MAX_FRAMES=1
+MAX_FRAMES=16
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
@@ -53,7 +53,7 @@ consumer_pid=$!
 sleep 0.2
 
 "${PRODUCER_BIN}" "${AERON_DIR}" "${CONTROL_CHANNEL}" "${STREAM_ID}" "${CLIENT_ID}" \
-  "${header_uri}" "${pool_uri}" "${POOL_ID}" "${POOL_STRIDE}" "${HEADER_NSLOTS}" "${EPOCH}" "${LAYOUT_VERSION}"
+  "${header_uri}" "${pool_uri}" "${POOL_ID}" "${POOL_STRIDE}" "${HEADER_NSLOTS}" "${EPOCH}" "${LAYOUT_VERSION}" "${MAX_FRAMES}"
 producer_status=$?
 
 wait "${consumer_pid}"

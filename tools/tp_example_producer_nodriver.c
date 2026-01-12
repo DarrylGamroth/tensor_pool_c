@@ -13,7 +13,7 @@
 static void usage(const char *name)
 {
     fprintf(stderr,
-        "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <header_uri> <pool_uri> <pool_id> <pool_stride> <header_nslots> <epoch> <layout_version>\n",
+        "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <header_uri> <pool_uri> <pool_id> <pool_stride> <header_nslots> <epoch> <layout_version> <frame_count>\n",
         name);
 }
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     const char *pool_uri;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
 
-    if (argc != 12)
+    if (argc != 13)
     {
         usage(argv[0]);
         return 1;
@@ -75,6 +75,12 @@ int main(int argc, char **argv)
     header_nslots = (uint32_t)strtoul(argv[9], NULL, 10);
     epoch = (uint64_t)strtoull(argv[10], NULL, 10);
     layout_version = (uint32_t)strtoul(argv[11], NULL, 10);
+    int frame_count = (int)strtol(argv[12], NULL, 10);
+    if (frame_count <= 0)
+    {
+        fprintf(stderr, "frame_count must be > 0\n");
+        return 1;
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -163,16 +169,15 @@ int main(int argc, char **argv)
     meta.timestamp_ns = 0;
     meta.meta_version = 0;
 
+    for (int i = 0; i < frame_count; i++)
     {
         int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
         if (position < 0)
         {
             fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
+            break;
         }
-        else
-        {
-            printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
-        }
+        printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
     }
 
 
