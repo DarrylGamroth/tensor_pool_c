@@ -325,6 +325,79 @@ while (running)
 }
 ```
 
+### 12.3 QoS (Producer + Consumer)
+
+```c
+// QoS handler (called from tp_qos_poll)
+static void on_qos_event(void *clientd, const tp_qos_event_t *event)
+{
+    (void)clientd;
+    // event->type distinguishes producer vs consumer QoS
+    // event->producer/current_seq/watermark or event->consumer/last_seq/drops/mode
+}
+
+tp_qos_handlers_t qos_handlers =
+{
+    .on_qos_event = on_qos_event,
+    .clientd = NULL
+};
+
+tp_qos_poller_t qos_poller;
+tp_qos_poller_init(&qos_poller, &client, &qos_handlers);
+
+while (running)
+{
+    // Producer publishes QoS
+    tp_qos_publish_producer(&producer, current_seq, watermark);
+
+    // Consumer publishes QoS (per-consumer stream if configured)
+    tp_qos_publish_consumer(&consumer, consumer_id, last_seq_seen, drops_gap, drops_late, mode);
+
+    // Any side that wants to observe QoS polls
+    tp_qos_poll(&qos_poller, 10);
+}
+```
+
+### 12.4 Metadata (Announce + Meta)
+
+```c
+static void on_metadata_event(void *clientd, const tp_metadata_event_t *event)
+{
+    (void)clientd;
+    // event->type: announce/meta_begin/meta_attr/meta_end
+}
+
+tp_metadata_handlers_t meta_handlers =
+{
+    .on_metadata_event = on_metadata_event,
+    .clientd = NULL
+};
+
+tp_metadata_poller_t meta_poller;
+tp_metadata_poller_init(&meta_poller, &client, &meta_handlers);
+
+// Producer announces and sends metadata
+tp_data_source_announce_t announce =
+{
+    .data_source_id = 9,
+    .producer_id = 7,
+    .stream_id = 10000,
+    .name = "camera-front"
+};
+tp_producer_send_data_source_announce(&producer, &announce);
+
+tp_data_source_meta_t meta =
+{
+    .data_source_id = 9,
+    .key = "format",
+    .value = "rgb8"
+};
+tp_producer_send_data_source_meta(&producer, &meta);
+
+// Consumers or tools observe metadata
+tp_metadata_poll(&meta_poller, 10);
+```
+
 ## 13. Migration Notes (Current -> Proposed)
 
 - Replace direct Aeron usage in tools with pollers: `tp_control_poller`, `tp_qos_poller`, `tp_metadata_poller`.
