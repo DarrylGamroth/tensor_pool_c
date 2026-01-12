@@ -42,7 +42,6 @@ int tp_tensor_header_decode(tp_tensor_header_t *out, const uint8_t *buffer, size
     struct tensor_pool_tensorHeader header;
     struct tensor_pool_messageHeader msg_header;
     size_t required = tensor_pool_tensorHeader_sbe_block_length() + tensor_pool_messageHeader_encoded_length();
-    const char *cursor;
     size_t i;
     uint16_t schema_id;
     uint16_t version;
@@ -65,6 +64,7 @@ int tp_tensor_header_decode(tp_tensor_header_t *out, const uint8_t *buffer, size
         &msg_header,
         (char *)buffer,
         0,
+        tensor_pool_messageHeader_sbe_schema_version(),
         length);
 
     schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
@@ -92,25 +92,58 @@ int tp_tensor_header_decode(tp_tensor_header_t *out, const uint8_t *buffer, size
         version,
         length);
 
-    out->dtype = tensor_pool_tensorHeader_dtype(&header);
-    out->major_order = tensor_pool_tensorHeader_majorOrder(&header);
+    {
+        enum tensor_pool_dtype dtype;
+        if (!tensor_pool_tensorHeader_dtype(&header, &dtype))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: invalid dtype");
+            return -1;
+        }
+        out->dtype = (int16_t)dtype;
+    }
+
+    {
+        enum tensor_pool_majorOrder order;
+        if (!tensor_pool_tensorHeader_majorOrder(&header, &order))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: invalid major order");
+            return -1;
+        }
+        out->major_order = (int16_t)order;
+    }
+
     out->ndims = tensor_pool_tensorHeader_ndims(&header);
-    out->progress_unit = tensor_pool_tensorHeader_progressUnit(&header);
+
+    {
+        enum tensor_pool_progressUnit progress;
+        if (!tensor_pool_tensorHeader_progressUnit(&header, &progress))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: invalid progress unit");
+            return -1;
+        }
+        out->progress_unit = (uint8_t)progress;
+    }
     out->progress_stride_bytes = tensor_pool_tensorHeader_progressStrideBytes(&header);
 
-    cursor = tensor_pool_tensorHeader_dims(&header);
     for (i = 0; i < TP_MAX_DIMS; i++)
     {
         int32_t value;
-        memcpy(&value, cursor + i * sizeof(int32_t), sizeof(int32_t));
+        if (!tensor_pool_tensorHeader_dims(&header, i, &value))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: invalid dims array");
+            return -1;
+        }
         out->dims[i] = value;
     }
 
-    cursor = tensor_pool_tensorHeader_strides(&header);
     for (i = 0; i < TP_MAX_DIMS; i++)
     {
         int32_t value;
-        memcpy(&value, cursor + i * sizeof(int32_t), sizeof(int32_t));
+        if (!tensor_pool_tensorHeader_strides(&header, i, &value))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: invalid strides array");
+            return -1;
+        }
         out->strides[i] = value;
     }
 

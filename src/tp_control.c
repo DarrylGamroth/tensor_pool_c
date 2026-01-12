@@ -35,7 +35,12 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_consumerHello_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_consumerHello_sbe_schema_id());
@@ -113,7 +118,7 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
     return tp_offer_message(consumer->control_publication, buffer, tensor_pool_consumerHello_sbe_position(&hello_msg));
 }
 
-int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_config_t *config)
+int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_config_msg_t *config)
 {
     uint8_t buffer[512];
     struct tensor_pool_messageHeader msg_header;
@@ -127,7 +132,12 @@ int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_consumerConfig_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_consumerConfig_sbe_schema_id());
@@ -194,7 +204,12 @@ int tp_producer_send_data_source_announce(tp_producer_t *producer, const tp_data
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_dataSourceAnnounce_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_dataSourceAnnounce_sbe_schema_id());
@@ -249,7 +264,12 @@ int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_sou
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_dataSourceMeta_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_dataSourceMeta_sbe_schema_id());
@@ -260,12 +280,16 @@ int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_sou
     tensor_pool_dataSourceMeta_set_metaVersion(&msg, meta->meta_version);
     tensor_pool_dataSourceMeta_set_timestampNs(&msg, meta->timestamp_ns);
 
-    tensor_pool_dataSourceMeta_attributes_wrap_for_encode(
+    if (NULL == tensor_pool_dataSourceMeta_attributes_wrap_for_encode(
         &attrs,
         (char *)buffer,
-        tensor_pool_dataSourceMeta_sbe_position(&msg),
         (uint16_t)meta->attribute_count,
-        sizeof(buffer));
+        tensor_pool_dataSourceMeta_sbe_position_ptr(&msg),
+        tensor_pool_dataSourceMeta_sbe_schema_version(),
+        sizeof(buffer)))
+    {
+        return -1;
+    }
 
     for (i = 0; i < meta->attribute_count; i++)
     {

@@ -23,7 +23,12 @@ int tp_qos_publish_producer(tp_producer_t *producer, uint64_t current_seq, uint3
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_qosProducer_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_qosProducer_sbe_schema_id());
@@ -66,7 +71,12 @@ int tp_qos_publish_consumer(
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_qosConsumer_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_qosConsumer_sbe_schema_id());

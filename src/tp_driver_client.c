@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "tensor_pool/tp_driver_client.h"
 
 #include <errno.h>
@@ -59,7 +63,12 @@ static void tp_driver_response_handler(
         return;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, length);
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
     template_id = tensor_pool_messageHeader_templateId(&msg_header);
     schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
@@ -88,7 +97,17 @@ static void tp_driver_response_handler(
         return;
     }
 
-    ctx->out->code = tensor_pool_shmAttachResponse_code(&response);
+    {
+        enum tensor_pool_responseCode code;
+        if (!tensor_pool_shmAttachResponse_code(&response, &code))
+        {
+            ctx->out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+        }
+        else
+        {
+            ctx->out->code = code;
+        }
+    }
 
     if (ctx->out->code == tensor_pool_responseCode_OK)
     {
@@ -150,7 +169,7 @@ static void tp_driver_response_handler(
         tensor_pool_shmAttachResponse_payloadPools_wrap_for_decode(
             &pools,
             (char *)buffer,
-            tensor_pool_shmAttachResponse_sbe_position(&response),
+            tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
             version,
             length);
 
@@ -315,7 +334,12 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
     const size_t body_len = tensor_pool_shmAttachRequest_sbe_block_length();
     int64_t result;
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_shmAttachRequest_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_shmAttachRequest_sbe_schema_id());
@@ -418,7 +442,12 @@ int tp_driver_keepalive(tp_driver_client_t *client, uint64_t lease_id, uint32_t 
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_shmLeaseKeepalive_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_shmLeaseKeepalive_sbe_schema_id());
@@ -455,7 +484,12 @@ int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_shmDetachRequest_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_shmDetachRequest_sbe_schema_id());

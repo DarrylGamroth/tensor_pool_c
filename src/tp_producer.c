@@ -51,7 +51,12 @@ static int tp_producer_publish_descriptor(
     const size_t body_len = tensor_pool_frameDescriptor_sbe_block_length();
     int64_t result;
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_frameDescriptor_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_frameDescriptor_sbe_schema_id());
@@ -287,7 +292,12 @@ static int tp_encode_tensor_header(uint8_t *buffer, size_t buffer_len, const tp_
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, buffer_len);
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        buffer_len);
     tensor_pool_messageHeader_set_blockLength(&msg_header, tensor_pool_tensorHeader_sbe_block_length());
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_tensorHeader_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_tensorHeader_sbe_schema_id());
@@ -423,7 +433,12 @@ int tp_producer_publish_progress(
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_frameProgress_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_frameProgress_sbe_schema_id());

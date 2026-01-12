@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aeron_error.h"
+#include "util/aeron_error.h"
 
 static void usage(const char *name)
 {
@@ -42,7 +42,17 @@ int main(int argc, char **argv)
     printf("layout_version=%" PRIu32 "\n", tensor_pool_shmRegionSuperblock_layoutVersion(&block));
     printf("epoch=%" PRIu64 "\n", tensor_pool_shmRegionSuperblock_epoch(&block));
     printf("stream_id=%" PRIu32 "\n", tensor_pool_shmRegionSuperblock_streamId(&block));
-    printf("region_type=%d\n", tensor_pool_shmRegionSuperblock_regionType(&block));
+    {
+        enum tensor_pool_regionType region_type;
+        if (tensor_pool_shmRegionSuperblock_regionType(&block, &region_type))
+        {
+            printf("region_type=%d\n", (int)region_type);
+        }
+        else
+        {
+            printf("region_type=INVALID\n");
+        }
+    }
     printf("pool_id=%" PRIu16 "\n", tensor_pool_shmRegionSuperblock_poolId(&block));
     printf("nslots=%" PRIu32 "\n", tensor_pool_shmRegionSuperblock_nslots(&block));
     printf("slot_bytes=%" PRIu32 "\n", tensor_pool_shmRegionSuperblock_slotBytes(&block));

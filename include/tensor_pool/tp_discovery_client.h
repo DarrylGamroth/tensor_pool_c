@@ -70,7 +70,13 @@ typedef struct tp_discovery_client_stct
 }
 tp_discovery_client_t;
 
-int tp_discovery_client_init(\n    tp_discovery_client_t *client,\n    const tp_context_t *context,\n    const char *request_channel,\n    int32_t request_stream_id,\n    const char *response_channel,\n    int32_t response_stream_id);
+int tp_discovery_client_init(
+    tp_discovery_client_t *client,
+    const tp_context_t *context,
+    const char *request_channel,
+    int32_t request_stream_id,
+    const char *response_channel,
+    int32_t response_stream_id);
 int tp_discovery_client_close(tp_discovery_client_t *client);
 
 int tp_discovery_request(

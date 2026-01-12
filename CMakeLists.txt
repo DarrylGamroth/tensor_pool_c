@@ -19,6 +19,21 @@ if (NOT EXISTS "${AERON_ROOT}/aeron-client/src/main/c/CMakeLists.txt")
     message(FATAL_ERROR "Aeron C client not found at ${AERON_ROOT}/aeron-client/src/main/c")
 endif ()
 
+file(STRINGS "${AERON_ROOT}/version.txt" AERON_VERSION_TXT LIMIT_COUNT 1 REGEX "^[0-9]+(\\.[0-9]+)+")
+if (AERON_VERSION_TXT STREQUAL "")
+    set(AERON_VERSION_TXT "0.0.0")
+endif ()
+string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\1;\\2;\\3" AERON_VERSION_PARTS "${AERON_VERSION_TXT}")
+list(GET AERON_VERSION_PARTS 0 AERON_VERSION_MAJOR)
+list(GET AERON_VERSION_PARTS 1 AERON_VERSION_MINOR)
+list(GET AERON_VERSION_PARTS 2 AERON_VERSION_PATCH)
+
+add_definitions(-DAERON_VERSION_TXT="${AERON_VERSION_TXT}")
+add_definitions(-DAERON_VERSION_MAJOR=${AERON_VERSION_MAJOR})
+add_definitions(-DAERON_VERSION_MINOR=${AERON_VERSION_MINOR})
+add_definitions(-DAERON_VERSION_PATCH=${AERON_VERSION_PATCH})
+add_definitions(-DAERON_VERSION_GITSHA="unknown")
+
 set(AERON_INSTALL_TARGETS OFF CACHE BOOL "Disable Aeron install targets" FORCE)
 add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY_DIR}/aeron-client")
 

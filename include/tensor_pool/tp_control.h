@@ -30,7 +30,7 @@ typedef struct tp_consumer_hello_stct
 }
 tp_consumer_hello_t;
 
-typedef struct tp_consumer_config_stct
+typedef struct tp_consumer_config_msg_stct
 {
     uint32_t stream_id;
     uint32_t consumer_id;
@@ -42,7 +42,7 @@ typedef struct tp_consumer_config_stct
     const char *descriptor_channel;
     const char *control_channel;
 }
-tp_consumer_config_t;
+tp_consumer_config_msg_t;
 
 typedef struct tp_data_source_announce_stct
 {
@@ -75,7 +75,7 @@ typedef struct tp_data_source_meta_stct
 tp_data_source_meta_t;
 
 int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *hello);
-int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_config_t *config);
+int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_config_msg_t *config);
 int tp_producer_send_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
 int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);
 

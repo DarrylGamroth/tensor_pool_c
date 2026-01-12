@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "tensor_pool/tp_discovery_client.h"
 
 #include <errno.h>
@@ -56,7 +60,12 @@ static void tp_discovery_response_handler(
         return;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, length);
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
     template_id = tensor_pool_messageHeader_templateId(&msg_header);
     schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
@@ -86,7 +95,17 @@ static void tp_discovery_response_handler(
     }
 
     ctx->out->request_id = ctx->request_id;
-    ctx->out->status = tensor_pool_discoveryResponse_status(&response);
+    {
+        enum tensor_pool_discoveryStatus status;
+        if (!tensor_pool_discoveryResponse_status(&response, &status))
+        {
+            ctx->out->status = tensor_pool_discoveryStatus_ERROR;
+        }
+        else
+        {
+            ctx->out->status = (uint8_t)status;
+        }
+    }
 
     if (ctx->out->status != tensor_pool_discoveryStatus_OK)
     {
@@ -110,7 +129,7 @@ static void tp_discovery_response_handler(
         tensor_pool_discoveryResponse_results_wrap_for_decode(
             &results,
             (char *)buffer,
-            tensor_pool_discoveryResponse_sbe_position(&response),
+            tensor_pool_discoveryResponse_sbe_position_ptr(&response),
             version,
             length);
 
@@ -197,7 +216,7 @@ static void tp_discovery_response_handler(
             tensor_pool_discoveryResponse_results_payloadPools_wrap_for_decode(
                 &pools,
                 (char *)buffer,
-                tensor_pool_discoveryResponse_results_sbe_position(&results),
+                tensor_pool_discoveryResponse_results_sbe_position_ptr(&results),
                 version,
                 length);
 
@@ -243,7 +262,13 @@ static void tp_discovery_response_handler(
     ctx->done = 1;
 }
 
-int tp_discovery_client_init(\n    tp_discovery_client_t *client,\n    const tp_context_t *context,\n    const char *request_channel,\n    int32_t request_stream_id,\n    const char *response_channel,\n    int32_t response_stream_id)
+int tp_discovery_client_init(
+    tp_discovery_client_t *client,
+    const tp_context_t *context,
+    const char *request_channel,
+    int32_t request_stream_id,
+    const char *response_channel,
+    int32_t response_stream_id)
 {
     if (NULL == client || NULL == context || NULL == request_channel || NULL == response_channel)
     {
@@ -318,7 +343,12 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
         return -1;
     }
 
-    tensor_pool_messageHeader_wrap(&msg_header, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
     tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
     tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_discoveryRequest_sbe_template_id());
     tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_discoveryRequest_sbe_schema_id());

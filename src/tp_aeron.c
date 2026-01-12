@@ -1,5 +1,6 @@
 #include "tensor_pool/tp_aeron.h"
 
+#include <errno.h>
 #include <string.h>
 
 #include "tensor_pool/tp_error.h"

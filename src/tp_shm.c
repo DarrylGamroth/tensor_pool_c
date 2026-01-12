@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "tensor_pool/tp_shm.h"
 
 #include <errno.h>
@@ -5,6 +9,10 @@
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
+
+#ifndef _WIN32
+extern char *realpath(const char *path, char *resolved_path);
+#endif
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -273,7 +281,15 @@ int tp_shm_validate_superblock(const tp_shm_region_t *region, const tp_shm_expec
     layout_version = tensor_pool_shmRegionSuperblock_layoutVersion(&superblock);
     epoch = tensor_pool_shmRegionSuperblock_epoch(&superblock);
     stream_id = tensor_pool_shmRegionSuperblock_streamId(&superblock);
-    region_type = tensor_pool_shmRegionSuperblock_regionType(&superblock);
+    {
+        enum tensor_pool_regionType decoded_region_type;
+        if (!tensor_pool_shmRegionSuperblock_regionType(&superblock, &decoded_region_type))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_superblock: invalid region type");
+            return -1;
+        }
+        region_type = (int16_t)decoded_region_type;
+    }
     pool_id = tensor_pool_shmRegionSuperblock_poolId(&superblock);
     nslots = tensor_pool_shmRegionSuperblock_nslots(&superblock);
     slot_bytes = tensor_pool_shmRegionSuperblock_slotBytes(&superblock);

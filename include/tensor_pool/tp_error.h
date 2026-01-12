@@ -1,7 +1,7 @@
 #ifndef TENSOR_POOL_TP_ERROR_H
 #define TENSOR_POOL_TP_ERROR_H
 
-#include "aeron_error.h"
+#include "util/aeron_error.h"
 
 #ifdef __cplusplus
 extern "C" {
