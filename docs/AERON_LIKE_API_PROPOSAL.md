@@ -305,8 +305,10 @@ while (running)
 - `include/tensor_pool/tp_driver_client.h` updates for async attach/detach
 - `include/tensor_pool/tp_discovery_client.h` remains, but init uses `tp_client_t`
 
-## 15. Open Questions
+## 15. Decisions and Refinements
 
-- Should `tp_client_t` be the owner of shared subscriptions (control/qos/metadata) to reduce duplicates?
-- Should producer/consumer automatically start keepalive timers when using driver model?
-- Should the API expose per-consumer stream assignment events, or just handle internally?
+- `tp_client_t` owns shared subscriptions (control/QoS/metadata) to avoid duplicates and centralize lifecycle.
+- Producer/consumer start keepalive timers automatically when using the driver model.
+- Per-consumer stream assignment is handled internally and not exposed as a public event.
+- Client API hides SBE types; user-facing callbacks and structs are TensorPool abstractions.
+- Consumer descriptor poller invokes registered callbacks on `FrameDescriptor` arrival; no local buffering required.
