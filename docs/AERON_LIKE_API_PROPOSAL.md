@@ -159,6 +159,10 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx);
 int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *ctx);
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *direct_cfg); // direct SHM
 int tp_consumer_close(tp_consumer_t *consumer);
+void tp_consumer_set_descriptor_handler(
+    tp_consumer_t *consumer,
+    tp_frame_descriptor_handler_t handler,
+    void *clientd);
 
 // Descriptor polling (FrameDescriptor) -> frame read
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
@@ -436,7 +440,7 @@ static void on_bgapi_buffer_cancelled(tp_producer_t *producer, tp_bgapi_slot_t *
 ```
 
 Notes:
-- The claim is the TensorPool slot reservation; it remains valid until `commit` or `abort`.
+- The claim is the TensorPool slot reservation; see claim lifecycle rules below.
 - BGAPI announced buffer pools are fixed while acquisition is active: do not add/remove buffers while acquiring.
 - If the camera SDK reuses the same buffers, keep the claim alive and re-queue the same buffer after each `commit`.
 - For non-fixed-pool producers, treat `commit` as the end of the claim and discard the handle.
@@ -674,7 +678,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
-- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame (claims persist if `fixed_pool_mode`); `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
+- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame and ends the claim unless `fixed_pool_mode` is enabled, in which case the claim remains valid for `queue_claim`; `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next call to `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
@@ -692,7 +696,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Poller ownership**: pollers are lightweight wrappers around shared subscriptions; close them before `tp_client_close`.
 - **Callback lifetimes**: descriptor/QoS/metadata/discovery callbacks receive views valid only during the callback.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
-- **Claim lifetime**: claims remain valid until `commit`, `abort`, or `recycle`; applications must not hold claims after closing the producer.
+- **Claim lifetime**: see claim lifecycle rules; applications must not hold claims after closing the producer.
 - **Discovery responses**: responses delivered via callback are transient; copy data if needed beyond the callback.
 
 ## 18. Aeron Archive Patterns Adopted
