@@ -656,3 +656,13 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Poll return semantics**: `tp_*_poll` returns fragment count (`>= 0`) or `-1` on error with `tp_errcode()/tp_errmsg()` set.
 - **Logging coverage**: `tp_client_context_set_log_handler` is the single hook used across client/driver/discovery/control/QoS/metadata modules.
 - **Poller close order**: close discovery/QoS/metadata/control pollers before `tp_client_close` if they hold references to shared subscriptions.
+
+## 17. Ownership and Resource Management
+
+- **Client ownership**: `tp_client_t` owns shared subscriptions (control/QoS/metadata) and the Aeron instance; close it last.
+- **Producer/consumer ownership**: producers/consumers own their publications/subscriptions and must be closed before the client.
+- **Poller ownership**: pollers are lightweight wrappers around shared subscriptions; close them before `tp_client_close`.
+- **Callback lifetimes**: descriptor/QoS/metadata/discovery callbacks receive views valid only during the callback.
+- **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
+- **Claim lifetime**: claims remain valid until `commit`, `abort`, or `recycle`; applications must not hold claims after closing the producer.
+- **Discovery responses**: responses delivered via callback are transient; copy data if needed beyond the callback.
