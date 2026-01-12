@@ -705,6 +705,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - Error codes follow Aeron-style negative values (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`) for offer/claim/queue operations.
 - All modules emit logs through `tp_client_context_set_log_handler`.
 - Naming conventions: `tp_*_init` returns 0/-1, `tp_*_poll` returns fragment count or -1, and offer/claim/queue return positions or negative codes.
+- Note: This document is the authoritative API proposal and should be referenced when implementing or reviewing client-facing behavior.
 
 ```c
 typedef enum tp_qos_event_type_enum
