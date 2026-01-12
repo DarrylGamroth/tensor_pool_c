@@ -219,6 +219,14 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
 int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_discovery_response_t *out, int64_t timeout_ns);
 int tp_discovery_poller_init(tp_discovery_poller_t *poller, tp_discovery_client_t *client, const tp_discovery_handlers_t *handlers);
 int tp_discovery_poller_poll(tp_discovery_poller_t *poller, int fragment_limit);
+
+typedef void (*tp_discovery_handler_t)(void *clientd, const tp_discovery_response_t *response);
+
+typedef struct tp_discovery_handlers_stct
+{
+    tp_discovery_handler_t on_response;
+    void *clientd;
+} tp_discovery_handlers_t;
 ```
 
 ## 11. Progress API
@@ -483,6 +491,57 @@ tp_producer_send_data_source_meta(&producer, &meta);
 tp_metadata_poll(&meta_poller, 10);
 ```
 
+### 12.4.2 Discovery (Poller Style)
+
+```c
+static void on_discovery_response(void *clientd, const tp_discovery_response_t *response)
+{
+    (void)clientd;
+    // inspect response->results and select stream_id
+}
+
+tp_discovery_handlers_t discovery_handlers =
+{
+    .on_response = on_discovery_response,
+    .clientd = NULL
+};
+
+tp_discovery_poller_t discovery_poller;
+tp_discovery_poller_init(&discovery_poller, &discovery, &discovery_handlers);
+
+while (running)
+{
+    tp_discovery_poller_poll(&discovery_poller, 10);
+}
+```
+
+### 12.4.1 Event Types and Error Codes
+
+```c
+typedef enum tp_qos_event_type_enum
+{
+    TP_QOS_EVENT_PRODUCER,
+    TP_QOS_EVENT_CONSUMER
+} tp_qos_event_type_t;
+
+typedef enum tp_metadata_event_type_enum
+{
+    TP_METADATA_EVENT_ANNOUNCE,
+    TP_METADATA_EVENT_META_BEGIN,
+    TP_METADATA_EVENT_META_ATTR,
+    TP_METADATA_EVENT_META_END
+} tp_metadata_event_type_t;
+
+typedef enum tp_error_code_enum
+{
+    TP_ERROR_GENERIC = -1,
+    TP_BACK_PRESSURED = -2,
+    TP_NOT_CONNECTED = -3,
+    TP_ADMIN_ACTION = -4,
+    TP_CLOSED = -5
+} tp_error_code_t;
+```
+
 ### 12.5 Progress (Per-Consumer Stream)
 
 ```c
@@ -554,6 +613,7 @@ tp_client_context_set_log_handler(&ctx, on_log, NULL);
 - Replace `tp_driver_client_init` + attach with `tp_client_init` + `tp_driver_attach_async/poll`.
 - Keep wire-level structs unchanged; only add ergonomic wrappers.
 - Close order: close producers/consumers/pollers before `tp_client_close`.
+- Prefer poller-based discovery for event-driven apps; use blocking `tp_discovery_poll` for tools or simple scripts.
 
 ## 14. Suggested Files / Modules
 
@@ -572,6 +632,7 @@ tp_client_context_set_log_handler(&ctx, on_log, NULL);
 - Per-consumer stream assignment is handled internally and not exposed as a public event.
 - Client API hides SBE types; user-facing callbacks and structs are TensorPool abstractions.
 - Consumer descriptor poller invokes registered callbacks on `FrameDescriptor` arrival; no local buffering required.
+- Discovery responses can be delivered via poller callbacks; blocking `tp_discovery_poll` remains for simple tooling.
 
 ## 16. Aeron-Style API Decisions
 
@@ -582,6 +643,7 @@ These align with Aeron C client patterns so the API feels familiar.
   - `typedef void (*tp_control_handler_t)(void *clientd, const tp_control_event_t *event);`
   - `typedef void (*tp_qos_handler_t)(void *clientd, const tp_qos_event_t *event);`
   - `typedef void (*tp_metadata_handler_t)(void *clientd, const tp_metadata_event_t *event);`
+  - `typedef void (*tp_discovery_handler_t)(void *clientd, const tp_discovery_response_t *response);`
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
@@ -593,3 +655,4 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Fragment limits and polling**: `tp_*_poll` functions take `fragment_limit` like Aeron, and return number of fragments/events processed.
 - **Poll return semantics**: `tp_*_poll` returns fragment count (`>= 0`) or `-1` on error with `tp_errcode()/tp_errmsg()` set.
 - **Logging coverage**: `tp_client_context_set_log_handler` is the single hook used across client/driver/discovery/control/QoS/metadata modules.
+- **Poller close order**: close discovery/QoS/metadata/control pollers before `tp_client_close` if they hold references to shared subscriptions.
