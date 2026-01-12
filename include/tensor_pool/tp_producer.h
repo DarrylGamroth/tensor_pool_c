@@ -3,11 +3,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
-#include "tensor_pool/tp_aeron.h"
-#include "tensor_pool/tp_context.h"
+#include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
+#include "tensor_pool/tp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,10 +46,56 @@ typedef struct tp_producer_config_stct
 }
 tp_producer_config_t;
 
+typedef struct tp_producer_context_stct
+{
+    uint32_t stream_id;
+    uint32_t producer_id;
+    bool use_driver;
+    bool fixed_pool_mode;
+    tp_driver_attach_request_t driver_request;
+}
+tp_producer_context_t;
+
+typedef struct tp_frame_metadata_stct
+{
+    uint64_t timestamp_ns;
+    uint32_t meta_version;
+}
+tp_frame_metadata_t;
+
+typedef struct tp_frame_stct
+{
+    const tp_tensor_header_t *tensor;
+    const void *payload;
+    uint32_t payload_len;
+    uint16_t pool_id;
+}
+tp_frame_t;
+
+typedef struct tp_buffer_claim_stct
+{
+    uint64_t seq;
+    uint32_t header_index;
+    uint16_t pool_id;
+    uint32_t payload_len;
+    uint8_t *payload;
+    tp_tensor_header_t tensor;
+}
+tp_buffer_claim_t;
+
+typedef struct tp_frame_progress_stct
+{
+    uint64_t seq;
+    uint32_t header_index;
+    uint64_t payload_bytes_filled;
+    uint8_t state;
+}
+tp_frame_progress_t;
+
 typedef struct tp_producer_stct
 {
-    tp_context_t context;
-    tp_aeron_client_t aeron;
+    tp_client_t *client;
+    tp_producer_context_t context;
     aeron_publication_t *descriptor_publication;
     aeron_publication_t *control_publication;
     aeron_publication_t *qos_publication;
@@ -60,41 +108,21 @@ typedef struct tp_producer_stct
     uint64_t epoch;
     uint32_t layout_version;
     uint32_t header_nslots;
+    uint64_t next_seq;
 }
 tp_producer_t;
 
-int tp_producer_init(tp_producer_t *producer, const tp_context_t *context);
-int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_t *config);
-int tp_producer_publish_frame(
-    tp_producer_t *producer,
-    uint64_t seq,
-    uint32_t header_index,
-    const tp_tensor_header_t *tensor,
-    const void *payload,
-    uint32_t payload_len,
-    uint16_t pool_id,
-    uint64_t timestamp_ns,
-    uint32_t meta_version);
-int tp_producer_publish_descriptor_to(
-    tp_producer_t *producer,
-    aeron_publication_t *publication,
-    uint64_t seq,
-    uint32_t header_index,
-    uint64_t timestamp_ns,
-    uint32_t meta_version);
-int tp_producer_publish_progress(
-    tp_producer_t *producer,
-    uint64_t seq,
-    uint32_t header_index,
-    uint64_t payload_bytes_filled,
-    uint8_t state);
-int tp_producer_publish_progress_to(
-    tp_producer_t *producer,
-    aeron_publication_t *publication,
-    uint64_t seq,
-    uint32_t header_index,
-    uint64_t payload_bytes_filled,
-    uint8_t state);
+int tp_producer_context_init(tp_producer_context_t *ctx);
+void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
+
+int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *ctx);
+int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config);
+int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
+int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
+int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
+int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
+int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
+int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 int tp_producer_close(tp_producer_t *producer);
 
 #ifdef __cplusplus

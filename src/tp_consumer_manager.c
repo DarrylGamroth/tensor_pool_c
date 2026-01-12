@@ -7,6 +7,21 @@
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
 
+int tp_producer_publish_descriptor_to(
+    tp_producer_t *producer,
+    aeron_publication_t *publication,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t timestamp_ns,
+    uint32_t meta_version);
+int tp_producer_publish_progress_to(
+    tp_producer_t *producer,
+    aeron_publication_t *publication,
+    uint64_t seq,
+    uint32_t header_index,
+    uint64_t payload_bytes_filled,
+    uint8_t state);
+
 static tp_consumer_entry_t *tp_consumer_manager_find_entry(tp_consumer_manager_t *manager, uint32_t consumer_id)
 {
     size_t i;

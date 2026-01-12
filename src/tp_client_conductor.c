@@ -1,18 +1,105 @@
 #include "tensor_pool/tp_client_conductor.h"
 
+#include "tensor_pool/tp_client.h"
+
 #include <errno.h>
 #include <string.h>
 
 #include "tensor_pool/tp_error.h"
+
+static int tp_client_conductor_apply_context(
+    aeron_context_t *aeron_ctx,
+    const tp_client_context_t *context)
+{
+    if (NULL == aeron_ctx || NULL == context)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_conductor_apply_context: null input");
+        return -1;
+    }
+
+    if (context->base.aeron_dir[0] != '\0')
+    {
+        if (aeron_context_set_dir(aeron_ctx, context->base.aeron_dir) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (context->client_name[0] != '\0')
+    {
+        if (aeron_context_set_client_name(aeron_ctx, context->client_name) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (context->error_handler != NULL)
+    {
+        if (aeron_context_set_error_handler(aeron_ctx, context->error_handler, context->error_handler_clientd) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (context->driver_timeout_ns > 0)
+    {
+        if (aeron_context_set_driver_timeout_ms(aeron_ctx, context->driver_timeout_ns / 1000000u) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (context->keepalive_interval_ns > 0)
+    {
+        if (aeron_context_set_keepalive_interval_ns(aeron_ctx, context->keepalive_interval_ns) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (context->idle_sleep_duration_ns > 0)
+    {
+        if (aeron_context_set_idle_sleep_duration_ns(aeron_ctx, context->idle_sleep_duration_ns) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (aeron_context_set_use_conductor_agent_invoker(aeron_ctx, context->use_agent_invoker) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
 
 int tp_client_conductor_init(
     tp_client_conductor_t *conductor,
     const tp_context_t *context,
     bool use_agent_invoker)
 {
+    tp_client_context_t shim;
+
     if (NULL == conductor || NULL == context)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_client_conductor_init: null input");
+        return -1;
+    }
+
+    memset(&shim, 0, sizeof(shim));
+    shim.base = *context;
+    shim.use_agent_invoker = use_agent_invoker;
+
+    return tp_client_conductor_init_with_client_context(conductor, &shim);
+}
+
+int tp_client_conductor_init_with_client_context(
+    tp_client_conductor_t *conductor,
+    const tp_client_context_t *context)
+{
+    if (NULL == conductor || NULL == context)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_conductor_init_with_client_context: null input");
         return -1;
     }
 
@@ -23,17 +110,7 @@ int tp_client_conductor_init(
         return -1;
     }
 
-    if (context->aeron_dir[0] != '\0')
-    {
-        if (aeron_context_set_dir(conductor->aeron.context, context->aeron_dir) < 0)
-        {
-            aeron_context_close(conductor->aeron.context);
-            conductor->aeron.context = NULL;
-            return -1;
-        }
-    }
-
-    if (aeron_context_set_use_conductor_agent_invoker(conductor->aeron.context, use_agent_invoker) < 0)
+    if (tp_client_conductor_apply_context(conductor->aeron.context, context) < 0)
     {
         aeron_context_close(conductor->aeron.context);
         conductor->aeron.context = NULL;
@@ -47,8 +124,31 @@ int tp_client_conductor_init(
         return -1;
     }
 
-    conductor->use_agent_invoker = use_agent_invoker;
+    conductor->use_agent_invoker = context->use_agent_invoker;
     conductor->started = false;
+    conductor->owns_aeron = true;
+
+    return 0;
+}
+
+int tp_client_conductor_init_with_aeron(
+    tp_client_conductor_t *conductor,
+    aeron_t *aeron,
+    bool use_agent_invoker,
+    bool owns_aeron)
+{
+    if (NULL == conductor || NULL == aeron)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_conductor_init_with_aeron: null input");
+        return -1;
+    }
+
+    memset(conductor, 0, sizeof(*conductor));
+    conductor->aeron.aeron = aeron;
+    conductor->aeron.context = aeron_context(aeron);
+    conductor->use_agent_invoker = use_agent_invoker;
+    conductor->started = true;
+    conductor->owns_aeron = owns_aeron;
 
     return 0;
 }
@@ -82,17 +182,17 @@ int tp_client_conductor_close(tp_client_conductor_t *conductor)
         return -1;
     }
 
-    if (NULL != conductor->aeron.aeron)
+    if (NULL != conductor->aeron.aeron && conductor->owns_aeron)
     {
         aeron_close(conductor->aeron.aeron);
-        conductor->aeron.aeron = NULL;
     }
+    conductor->aeron.aeron = NULL;
 
-    if (NULL != conductor->aeron.context)
+    if (NULL != conductor->aeron.context && conductor->owns_aeron)
     {
         aeron_context_close(conductor->aeron.context);
-        conductor->aeron.context = NULL;
     }
+    conductor->aeron.context = NULL;
 
     conductor->started = false;
     return 0;

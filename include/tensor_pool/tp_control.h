@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
-#include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_types.h"
+
+typedef struct tp_consumer_stct tp_consumer_t;
+typedef struct tp_producer_stct tp_producer_t;
 
 #ifdef __cplusplus
 extern "C" {

@@ -33,4 +33,12 @@ typedef enum tp_result_enum
 }
 tp_result_t;
 
+enum
+{
+    TP_BACK_PRESSURED = -2,
+    TP_NOT_CONNECTED = -3,
+    TP_ADMIN_ACTION = -4,
+    TP_CLOSED = -5
+};
+
 #endif

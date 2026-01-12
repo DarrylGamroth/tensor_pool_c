@@ -28,6 +28,42 @@ typedef struct tp_discovery_response_ctx_stct
 }
 tp_discovery_response_ctx_t;
 
+int tp_discovery_context_init(tp_discovery_context_t *ctx)
+{
+    if (NULL == ctx)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_context_init: null input");
+        return -1;
+    }
+
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->request_stream_id = -1;
+    ctx->response_stream_id = -1;
+    return 0;
+}
+
+void tp_discovery_context_set_channel(tp_discovery_context_t *ctx, const char *channel, int32_t stream_id)
+{
+    if (NULL == ctx || NULL == channel)
+    {
+        return;
+    }
+
+    strncpy(ctx->request_channel, channel, sizeof(ctx->request_channel) - 1);
+    ctx->request_stream_id = stream_id;
+}
+
+void tp_discovery_context_set_response_channel(tp_discovery_context_t *ctx, const char *channel, int32_t stream_id)
+{
+    if (NULL == ctx || NULL == channel)
+    {
+        return;
+    }
+
+    strncpy(ctx->response_channel, channel, sizeof(ctx->response_channel) - 1);
+    ctx->response_stream_id = stream_id;
+}
+
 static int64_t tp_discovery_now_ns(void)
 {
     struct timespec ts;
@@ -111,12 +147,12 @@ int tp_discovery_decode_response(
         version,
         length);
 
-    if (tensor_pool_discoveryResponse_requestId(&response) != request_id)
+    if (request_id != 0 && tensor_pool_discoveryResponse_requestId(&response) != request_id)
     {
         return 1;
     }
 
-    out->request_id = request_id;
+    out->request_id = tensor_pool_discoveryResponse_requestId(&response);
     {
         enum tensor_pool_discoveryStatus status;
         if (!tensor_pool_discoveryResponse_status(&response, &status))
@@ -387,35 +423,69 @@ static void tp_discovery_response_handler(
 
 int tp_discovery_client_init(
     tp_discovery_client_t *client,
-    const tp_context_t *context,
-    const char *request_channel,
-    int32_t request_stream_id,
-    const char *response_channel,
-    int32_t response_stream_id)
+    tp_client_t *base,
+    const tp_discovery_context_t *context)
 {
-    if (NULL == client || NULL == context || NULL == request_channel || NULL == response_channel)
+    aeron_async_add_publication_t *async_pub = NULL;
+    aeron_async_add_subscription_t *async_sub = NULL;
+
+    if (NULL == client || NULL == base || NULL == context)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_discovery_client_init: null input");
         return -1;
     }
 
     memset(client, 0, sizeof(*client));
+    client->client = base;
+    client->context = *context;
 
-    if (tp_aeron_client_init(&client->aeron, context) < 0)
+    if (context->request_channel[0] == '\0' || context->request_stream_id < 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_client_init: request channel not configured");
+        return -1;
+    }
+
+    if (tp_client_async_add_publication(
+        base,
+        context->request_channel,
+        context->request_stream_id,
+        &async_pub) < 0)
     {
         return -1;
     }
 
-    if (tp_aeron_add_publication(&client->publication, &client->aeron, request_channel, request_stream_id) < 0)
+    while (NULL == client->publication)
     {
-        tp_aeron_client_close(&client->aeron);
-        return -1;
+        if (tp_client_async_add_publication_poll(&client->publication, async_pub) < 0)
+        {
+            return -1;
+        }
+        tp_client_do_work(base);
     }
 
-    if (tp_aeron_add_subscription(&client->subscription, &client->aeron, response_channel, response_stream_id, NULL, NULL, NULL, NULL) < 0)
+    if (context->response_channel[0] != '\0' && context->response_stream_id >= 0)
     {
-        tp_aeron_client_close(&client->aeron);
-        return -1;
+        if (tp_client_async_add_subscription(
+            base,
+            context->response_channel,
+            context->response_stream_id,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            &async_sub) < 0)
+        {
+            return -1;
+        }
+
+        while (NULL == client->subscription)
+        {
+            if (tp_client_async_add_subscription_poll(&client->subscription, async_sub) < 0)
+            {
+                return -1;
+            }
+            tp_client_do_work(base);
+        }
     }
 
     return 0;
@@ -440,8 +510,6 @@ int tp_discovery_client_close(tp_discovery_client_t *client)
         client->subscription = NULL;
     }
 
-    tp_aeron_client_close(&client->aeron);
-
     return 0;
 }
 
@@ -464,6 +532,13 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
     if (NULL == request->response_channel || request->response_stream_id == 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_discovery_request: response channel required");
+        return -1;
+    }
+
+    if (client->context.response_channel[0] != '\0' &&
+        0 != strcmp(client->context.response_channel, request->response_channel))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_request: response channel mismatch");
         return -1;
     }
 
@@ -639,6 +714,70 @@ int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_dis
 
     aeron_fragment_assembler_delete(assembler);
     return 0;
+}
+
+static void tp_discovery_poller_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_discovery_poller_t *poller = (tp_discovery_poller_t *)clientd;
+    tp_discovery_response_t response;
+
+    (void)header;
+
+    if (NULL == poller || NULL == buffer)
+    {
+        return;
+    }
+
+    memset(&response, 0, sizeof(response));
+    if (tp_discovery_decode_response(buffer, length, 0, &response) == 0)
+    {
+        if (poller->handlers.on_response)
+        {
+            poller->handlers.on_response(poller->handlers.clientd, &response);
+        }
+        tp_discovery_response_close(&response);
+    }
+}
+
+int tp_discovery_poller_init(
+    tp_discovery_poller_t *poller,
+    tp_discovery_client_t *client,
+    const tp_discovery_handlers_t *handlers)
+{
+    if (NULL == poller || NULL == client || NULL == client->subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_poller_init: invalid input");
+        return -1;
+    }
+
+    memset(poller, 0, sizeof(*poller));
+    poller->client = client;
+    if (handlers)
+    {
+        poller->handlers = *handlers;
+    }
+
+    if (aeron_fragment_assembler_create(&poller->assembler, tp_discovery_poller_handler, poller) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_discovery_poller_poll(tp_discovery_poller_t *poller, int fragment_limit)
+{
+    if (NULL == poller || NULL == poller->assembler || NULL == poller->client || NULL == poller->client->subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_poller_poll: poller not initialized");
+        return -1;
+    }
+
+    return aeron_subscription_poll(
+        poller->client->subscription,
+        aeron_fragment_assembler_handler,
+        poller->assembler,
+        fragment_limit);
 }
 
 void tp_discovery_request_init(tp_discovery_request_t *request)

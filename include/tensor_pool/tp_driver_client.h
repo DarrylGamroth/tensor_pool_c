@@ -3,11 +3,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "aeron_fragment_assembler.h"
 
-#include "tensor_pool/tp_aeron.h"
-#include "tensor_pool/tp_context.h"
+#include "tensor_pool/tp_client.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,12 +98,13 @@ typedef struct tp_driver_event_poller_stct
     aeron_subscription_t *subscription;
     aeron_fragment_assembler_t *assembler;
     tp_driver_event_handlers_t handlers;
+    bool owns_subscription;
 }
 tp_driver_event_poller_t;
 
 typedef struct tp_driver_client_stct
 {
-    tp_aeron_client_t aeron;
+    tp_client_t *client;
     aeron_publication_t *publication;
     aeron_subscription_t *subscription;
     uint64_t active_lease_id;
@@ -115,8 +116,38 @@ typedef struct tp_driver_client_stct
 }
 tp_driver_client_t;
 
-int tp_driver_client_init(tp_driver_client_t *client, const tp_context_t *context);
+typedef struct tp_async_attach_stct
+{
+    tp_driver_client_t *client;
+    tp_driver_attach_request_t request;
+    int sent;
+    int done;
+    aeron_fragment_assembler_t *assembler;
+    tp_driver_attach_info_t response;
+}
+tp_async_attach_t;
+
+typedef struct tp_async_detach_stct
+{
+    tp_driver_client_t *client;
+    tp_driver_detach_info_t response;
+    int sent;
+    int done;
+    aeron_fragment_assembler_t *assembler;
+}
+tp_async_detach_t;
+
+int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base);
 int tp_driver_client_close(tp_driver_client_t *client);
+
+int tp_driver_attach_async(
+    tp_driver_client_t *client,
+    const tp_driver_attach_request_t *request,
+    tp_async_attach_t **out);
+int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out);
+
+int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out);
+int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out);
 
 int tp_driver_attach(
     tp_driver_client_t *client,
@@ -124,7 +155,7 @@ int tp_driver_attach(
     tp_driver_attach_info_t *out,
     int64_t timeout_ns);
 
-int tp_driver_keepalive(tp_driver_client_t *client, uint64_t lease_id, uint32_t stream_id, uint32_t client_id, uint8_t role, uint64_t timestamp_ns);
+int tp_driver_keepalive(tp_driver_client_t *client, uint64_t timestamp_ns);
 int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_t lease_id, uint32_t stream_id, uint32_t client_id, uint8_t role);
 
 void tp_driver_attach_info_close(tp_driver_attach_info_t *info);

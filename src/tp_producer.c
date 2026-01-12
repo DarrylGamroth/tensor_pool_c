@@ -113,70 +113,116 @@ static int tp_producer_publish_descriptor(
         meta_version);
 }
 
-int tp_producer_init(tp_producer_t *producer, const tp_context_t *context)
+static int tp_producer_add_publication(
+    tp_producer_t *producer,
+    const char *channel,
+    int32_t stream_id,
+    aeron_publication_t **out_pub)
 {
-    if (NULL == producer || NULL == context)
+    aeron_async_add_publication_t *async_add = NULL;
+
+    if (NULL == producer || NULL == producer->client || NULL == out_pub || NULL == channel || stream_id < 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_add_publication: invalid input");
+        return -1;
+    }
+
+    if (tp_client_async_add_publication(producer->client, channel, stream_id, &async_add) < 0)
+    {
+        return -1;
+    }
+
+    *out_pub = NULL;
+    while (NULL == *out_pub)
+    {
+        if (tp_client_async_add_publication_poll(out_pub, async_add) < 0)
+        {
+            return -1;
+        }
+        tp_client_do_work(producer->client);
+    }
+
+    return 0;
+}
+
+int tp_producer_context_init(tp_producer_context_t *ctx)
+{
+    if (NULL == ctx)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_context_init: null input");
+        return -1;
+    }
+
+    memset(ctx, 0, sizeof(*ctx));
+    return 0;
+}
+
+void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->fixed_pool_mode = enabled;
+}
+
+int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *context)
+{
+    if (NULL == producer || NULL == client || NULL == context)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_init: null input");
         return -1;
     }
 
     memset(producer, 0, sizeof(*producer));
+    producer->client = client;
     producer->context = *context;
 
-    if (tp_aeron_client_init(&producer->aeron, context) < 0)
+    if (client->context.base.descriptor_channel[0] != '\0' && client->context.base.descriptor_stream_id >= 0)
     {
-        return -1;
-    }
-
-    if (context->descriptor_channel[0] != '\0' && context->descriptor_stream_id >= 0)
-    {
-        if (tp_aeron_add_publication(
-            &producer->descriptor_publication,
-            &producer->aeron,
-            context->descriptor_channel,
-            context->descriptor_stream_id) < 0)
+        if (tp_producer_add_publication(
+            producer,
+            client->context.base.descriptor_channel,
+            client->context.base.descriptor_stream_id,
+            &producer->descriptor_publication) < 0)
         {
-            tp_aeron_client_close(&producer->aeron);
             return -1;
         }
     }
 
-    if (context->control_channel[0] != '\0' && context->control_stream_id >= 0)
+    if (client->context.base.control_channel[0] != '\0' && client->context.base.control_stream_id >= 0)
     {
-        if (tp_aeron_add_publication(
-            &producer->control_publication,
-            &producer->aeron,
-            context->control_channel,
-            context->control_stream_id) < 0)
+        if (tp_producer_add_publication(
+            producer,
+            client->context.base.control_channel,
+            client->context.base.control_stream_id,
+            &producer->control_publication) < 0)
         {
-            tp_aeron_client_close(&producer->aeron);
             return -1;
         }
     }
 
-    if (context->qos_channel[0] != '\0' && context->qos_stream_id >= 0)
+    if (client->context.base.qos_channel[0] != '\0' && client->context.base.qos_stream_id >= 0)
     {
-        if (tp_aeron_add_publication(
-            &producer->qos_publication,
-            &producer->aeron,
-            context->qos_channel,
-            context->qos_stream_id) < 0)
+        if (tp_producer_add_publication(
+            producer,
+            client->context.base.qos_channel,
+            client->context.base.qos_stream_id,
+            &producer->qos_publication) < 0)
         {
-            tp_aeron_client_close(&producer->aeron);
             return -1;
         }
     }
 
-    if (context->metadata_channel[0] != '\0' && context->metadata_stream_id >= 0)
+    if (client->context.base.metadata_channel[0] != '\0' && client->context.base.metadata_stream_id >= 0)
     {
-        if (tp_aeron_add_publication(
-            &producer->metadata_publication,
-            &producer->aeron,
-            context->metadata_channel,
-            context->metadata_stream_id) < 0)
+        if (tp_producer_add_publication(
+            producer,
+            client->context.base.metadata_channel,
+            client->context.base.metadata_stream_id,
+            &producer->metadata_publication) < 0)
         {
-            tp_aeron_client_close(&producer->aeron);
             return -1;
         }
     }
@@ -184,7 +230,7 @@ int tp_producer_init(tp_producer_t *producer, const tp_context_t *context)
     return 0;
 }
 
-int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_t *config)
+int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config)
 {
     tp_shm_expected_t expected;
     size_t i;
@@ -192,7 +238,7 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
 
     if (NULL == producer || NULL == config)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_direct: null input");
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: null input");
         return -1;
     }
 
@@ -205,7 +251,7 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
 
     if (!tp_is_power_of_two(config->header_nslots))
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_direct: header_nslots must be power of two");
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: header_nslots must be power of two");
         return -1;
     }
 
@@ -221,8 +267,8 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
         &producer->header_region,
         config->header_uri,
         1,
-        &producer->context.allowed_paths,
-        &producer->context.log) < 0)
+        &producer->client->context.base.allowed_paths,
+        &producer->client->context.base.log) < 0)
     {
         goto cleanup;
     }
@@ -237,7 +283,7 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
     expected.slot_bytes = TP_HEADER_SLOT_BYTES;
     expected.stride_bytes = TP_NULL_U32;
 
-    if (tp_shm_validate_superblock(&producer->header_region, &expected, &producer->context.log) < 0)
+    if (tp_shm_validate_superblock(&producer->header_region, &expected, &producer->client->context.base.log) < 0)
     {
         goto cleanup;
     }
@@ -250,7 +296,7 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
         memset(pool, 0, sizeof(*pool));
         if (pool_cfg->nslots != config->header_nslots)
         {
-            TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_direct: pool nslots mismatch");
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: pool nslots mismatch");
             goto cleanup;
         }
         pool->pool_id = pool_cfg->pool_id;
@@ -261,8 +307,8 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
             &pool->region,
             pool_cfg->uri,
             1,
-            &producer->context.allowed_paths,
-            &producer->context.log) < 0)
+            &producer->client->context.base.allowed_paths,
+            &producer->client->context.base.log) < 0)
         {
             goto cleanup;
         }
@@ -277,7 +323,7 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
         expected.slot_bytes = TP_NULL_U32;
         expected.stride_bytes = pool->stride_bytes;
 
-        if (tp_shm_validate_superblock(&pool->region, &expected, &producer->context.log) < 0)
+        if (tp_shm_validate_superblock(&pool->region, &expected, &producer->client->context.base.log) < 0)
         {
             goto cleanup;
         }
@@ -288,10 +334,10 @@ int tp_producer_attach_direct(tp_producer_t *producer, const tp_producer_config_
 cleanup:
     for (i = 0; i < producer->pool_count; i++)
     {
-        tp_shm_unmap(&producer->pools[i].region, &producer->context.log);
+        tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base.log);
     }
 
-    tp_shm_unmap(&producer->header_region, &producer->context.log);
+    tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
 
     if (producer->pools)
     {
@@ -501,6 +547,174 @@ int tp_producer_publish_progress(
         state);
 }
 
+int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
+{
+    uint64_t seq;
+    uint32_t header_index;
+    uint64_t timestamp_ns = 0;
+    uint32_t meta_version = 0;
+
+    if (NULL == producer || NULL == frame || NULL == frame->tensor)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_offer_frame: null input");
+        return -1;
+    }
+
+    if (NULL != meta)
+    {
+        timestamp_ns = meta->timestamp_ns;
+        meta_version = meta->meta_version;
+    }
+
+    seq = producer->next_seq++;
+    header_index = (uint32_t)(seq % producer->header_nslots);
+
+    return tp_producer_publish_frame(
+        producer,
+        seq,
+        header_index,
+        frame->tensor,
+        frame->payload,
+        frame->payload_len,
+        frame->pool_id,
+        timestamp_ns,
+        meta_version);
+}
+
+static tp_payload_pool_t *tp_find_pool_for_length(tp_producer_t *producer, size_t length)
+{
+    size_t i;
+    tp_payload_pool_t *best = NULL;
+
+    for (i = 0; i < producer->pool_count; i++)
+    {
+        tp_payload_pool_t *pool = &producer->pools[i];
+        if (pool->stride_bytes >= length)
+        {
+            if (NULL == best || pool->stride_bytes < best->stride_bytes)
+            {
+                best = pool;
+            }
+        }
+    }
+
+    return best;
+}
+
+int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim)
+{
+    tp_payload_pool_t *pool;
+    uint32_t header_index;
+    uint8_t *slot;
+    uint64_t seq;
+
+    if (NULL == producer || NULL == claim)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_try_claim: null input");
+        return -1;
+    }
+
+    pool = tp_find_pool_for_length(producer, length);
+    if (NULL == pool)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_try_claim: no pool for payload length");
+        return -1;
+    }
+
+    seq = producer->next_seq++;
+    header_index = (uint32_t)(seq % producer->header_nslots);
+    slot = tp_slot_at(producer->header_region.addr, header_index);
+
+    claim->seq = seq;
+    claim->header_index = header_index;
+    claim->pool_id = pool->pool_id;
+    claim->payload_len = (uint32_t)length;
+    claim->payload = (uint8_t *)pool->region.addr + TP_SUPERBLOCK_SIZE_BYTES + (header_index * pool->stride_bytes);
+
+    tp_atomic_store_u64((uint64_t *)slot, tp_seq_in_progress(seq));
+
+    return (int64_t)seq;
+}
+
+int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta)
+{
+    tp_frame_metadata_t local_meta;
+
+    if (NULL == producer || NULL == claim)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_commit_claim: null input");
+        return -1;
+    }
+
+    if (NULL == meta)
+    {
+        memset(&local_meta, 0, sizeof(local_meta));
+        meta = &local_meta;
+    }
+
+    return tp_producer_publish_frame(
+        producer,
+        claim->seq,
+        claim->header_index,
+        &claim->tensor,
+        claim->payload,
+        claim->payload_len,
+        claim->pool_id,
+        meta->timestamp_ns,
+        meta->meta_version);
+}
+
+int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim)
+{
+    if (NULL == producer || NULL == claim)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_abort_claim: null input");
+        return -1;
+    }
+
+    return 0;
+}
+
+int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim)
+{
+    uint8_t *slot;
+    uint64_t seq;
+
+    if (NULL == producer || NULL == claim)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_queue_claim: null input");
+        return -1;
+    }
+
+    if (!producer->context.fixed_pool_mode)
+    {
+        return TP_ADMIN_ACTION;
+    }
+
+    seq = producer->next_seq++;
+    claim->seq = seq;
+    slot = tp_slot_at(producer->header_region.addr, claim->header_index);
+    tp_atomic_store_u64((uint64_t *)slot, tp_seq_in_progress(seq));
+
+    return (int64_t)seq;
+}
+
+int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress)
+{
+    if (NULL == producer || NULL == progress)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_offer_progress: null input");
+        return -1;
+    }
+
+    return tp_producer_publish_progress(
+        producer,
+        progress->seq,
+        progress->header_index,
+        progress->payload_bytes_filled,
+        progress->state);
+}
+
 int tp_producer_close(tp_producer_t *producer)
 {
     size_t i;
@@ -534,11 +748,11 @@ int tp_producer_close(tp_producer_t *producer)
         producer->metadata_publication = NULL;
     }
 
-    tp_shm_unmap(&producer->header_region, &producer->context.log);
+    tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
 
     for (i = 0; i < producer->pool_count; i++)
     {
-        tp_shm_unmap(&producer->pools[i].region, &producer->context.log);
+        tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base.log);
     }
 
     if (producer->pools)
@@ -546,8 +760,6 @@ int tp_producer_close(tp_producer_t *producer)
         aeron_free(producer->pools);
         producer->pools = NULL;
     }
-
-    tp_aeron_client_close(&producer->aeron);
 
     return 0;
 }

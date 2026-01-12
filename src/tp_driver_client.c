@@ -531,49 +531,82 @@ static void tp_driver_response_handler(
     }
 }
 
-int tp_driver_client_init(tp_driver_client_t *client, const tp_context_t *context)
+static void tp_driver_async_attach_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
-    if (NULL == client || NULL == context)
+    tp_async_attach_t *async = (tp_async_attach_t *)clientd;
+
+    (void)header;
+
+    if (NULL == async || NULL == buffer)
+    {
+        return;
+    }
+
+    if (tp_driver_decode_attach_response(buffer, length, async->request.correlation_id, &async->response) == 0)
+    {
+        async->done = 1;
+    }
+}
+
+static void tp_driver_async_detach_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_async_detach_t *async = (tp_async_detach_t *)clientd;
+
+    (void)header;
+
+    if (NULL == async || NULL == buffer)
+    {
+        return;
+    }
+
+    if (tp_driver_decode_detach_response(buffer, length, &async->response) == 0)
+    {
+        async->done = 1;
+    }
+}
+
+int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
+{
+    if (NULL == client || NULL == base)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: null input");
         return -1;
     }
 
     memset(client, 0, sizeof(*client));
+    client->client = base;
+    client->subscription = base->control_subscription;
 
-    if (tp_aeron_client_init(&client->aeron, context) < 0)
-    {
-        return -1;
-    }
-
-    if (context->control_channel[0] == '\0' || context->control_stream_id < 0)
+    if (base->context.base.control_channel[0] == '\0' || base->context.base.control_stream_id < 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control channel not configured");
         return -1;
     }
 
-    if (tp_aeron_add_publication(
-        &client->publication,
-        &client->aeron,
-        context->control_channel,
-        context->control_stream_id) < 0)
+    if (NULL == client->subscription)
     {
-        tp_aeron_client_close(&client->aeron);
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control subscription unavailable");
         return -1;
     }
 
-    if (tp_aeron_add_subscription(
-        &client->subscription,
-        &client->aeron,
-        context->control_channel,
-        context->control_stream_id,
-        NULL,
-        NULL,
-        NULL,
-        NULL) < 0)
+    aeron_async_add_publication_t *async_add = NULL;
+
+    if (tp_client_async_add_publication(
+        base,
+        base->context.base.control_channel,
+        base->context.base.control_stream_id,
+        &async_add) < 0)
     {
-        tp_aeron_client_close(&client->aeron);
         return -1;
+    }
+
+    while (NULL == client->publication)
+    {
+        if (tp_client_async_add_publication_poll(&client->publication, async_add) < 0)
+        {
+            return -1;
+        }
+        tp_client_do_work(base);
     }
 
     return 0;
@@ -592,15 +625,176 @@ int tp_driver_client_close(tp_driver_client_t *client)
         client->publication = NULL;
     }
 
-    if (client->subscription)
-    {
-        aeron_subscription_close(client->subscription, NULL, NULL);
-        client->subscription = NULL;
-    }
-
-    tp_aeron_client_close(&client->aeron);
+    client->subscription = NULL;
 
     return 0;
+}
+
+int tp_driver_attach_async(
+    tp_driver_client_t *client,
+    const tp_driver_attach_request_t *request,
+    tp_async_attach_t **out)
+{
+    tp_async_attach_t *async = NULL;
+
+    if (NULL == client || NULL == request || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_async: null input");
+        return -1;
+    }
+
+    if (aeron_alloc((void **)&async, sizeof(*async)) < 0)
+    {
+        return -1;
+    }
+
+    memset(async, 0, sizeof(*async));
+    async->client = client;
+    async->request = *request;
+    async->response.code = tensor_pool_responseCode_INTERNAL_ERROR;
+    *out = async;
+    return 0;
+}
+
+int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out)
+{
+    int fragments;
+
+    if (NULL == async || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_poll: null input");
+        return -1;
+    }
+
+    if (!async->sent)
+    {
+        if (tp_driver_send_attach(async->client, &async->request) < 0)
+        {
+            return -1;
+        }
+        async->sent = 1;
+    }
+
+    if (NULL == async->assembler)
+    {
+        if (aeron_fragment_assembler_create(&async->assembler, tp_driver_async_attach_handler, async) < 0)
+        {
+            return -1;
+        }
+    }
+
+    fragments = aeron_subscription_poll(
+        async->client->subscription,
+        aeron_fragment_assembler_handler,
+        async->assembler,
+        10);
+
+    if (fragments < 0)
+    {
+        return -1;
+    }
+
+    if (!async->done)
+    {
+        return 0;
+    }
+
+    *out = async->response;
+    if (out->code == tensor_pool_responseCode_OK)
+    {
+        if (tp_driver_client_update_lease(async->client, out, async->request.client_id, async->request.role) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (async->assembler)
+    {
+        aeron_fragment_assembler_delete(async->assembler);
+        async->assembler = NULL;
+    }
+
+    return 1;
+}
+
+int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out)
+{
+    tp_async_detach_t *async = NULL;
+
+    if (NULL == client || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_detach_async: null input");
+        return -1;
+    }
+
+    if (aeron_alloc((void **)&async, sizeof(*async)) < 0)
+    {
+        return -1;
+    }
+
+    memset(async, 0, sizeof(*async));
+    async->client = client;
+    async->response.correlation_id = tp_time_now_ns();
+    *out = async;
+    return 0;
+}
+
+int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out)
+{
+    int fragments;
+
+    if (NULL == async || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_detach_poll: null input");
+        return -1;
+    }
+
+    if (!async->sent)
+    {
+        if (tp_driver_detach(
+            async->client,
+            async->response.correlation_id,
+            async->client->active_lease_id,
+            async->client->active_stream_id,
+            async->client->client_id,
+            async->client->role) < 0)
+        {
+            return -1;
+        }
+        async->sent = 1;
+    }
+
+    if (NULL == async->assembler)
+    {
+        if (aeron_fragment_assembler_create(&async->assembler, tp_driver_async_detach_handler, async) < 0)
+        {
+            return -1;
+        }
+    }
+
+    fragments = aeron_subscription_poll(
+        async->client->subscription,
+        aeron_fragment_assembler_handler,
+        async->assembler,
+        10);
+
+    if (fragments < 0)
+    {
+        return -1;
+    }
+
+    if (!async->done)
+    {
+        return 0;
+    }
+
+    *out = async->response;
+    if (async->assembler)
+    {
+        aeron_fragment_assembler_delete(async->assembler);
+        async->assembler = NULL;
+    }
+    return 1;
 }
 
 static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_attach_request_t *request)
@@ -714,7 +908,7 @@ int tp_driver_attach(
     return 0;
 }
 
-int tp_driver_keepalive(tp_driver_client_t *client, uint64_t lease_id, uint32_t stream_id, uint32_t client_id, uint8_t role, uint64_t timestamp_ns)
+int tp_driver_keepalive(tp_driver_client_t *client, uint64_t timestamp_ns)
 {
     uint8_t buffer[128];
     struct tensor_pool_messageHeader msg_header;
@@ -741,10 +935,10 @@ int tp_driver_keepalive(tp_driver_client_t *client, uint64_t lease_id, uint32_t 
     tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_shmLeaseKeepalive_sbe_schema_version());
 
     tensor_pool_shmLeaseKeepalive_wrap_for_encode(&keepalive, (char *)buffer, header_len, sizeof(buffer));
-    tensor_pool_shmLeaseKeepalive_set_leaseId(&keepalive, lease_id);
-    tensor_pool_shmLeaseKeepalive_set_streamId(&keepalive, stream_id);
-    tensor_pool_shmLeaseKeepalive_set_clientId(&keepalive, client_id);
-    tensor_pool_shmLeaseKeepalive_set_role(&keepalive, role);
+    tensor_pool_shmLeaseKeepalive_set_leaseId(&keepalive, client->active_lease_id);
+    tensor_pool_shmLeaseKeepalive_set_streamId(&keepalive, client->active_stream_id);
+    tensor_pool_shmLeaseKeepalive_set_clientId(&keepalive, client->client_id);
+    tensor_pool_shmLeaseKeepalive_set_role(&keepalive, client->role);
     tensor_pool_shmLeaseKeepalive_set_clientTimestampNs(&keepalive, timestamp_ns);
 
     result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
@@ -878,6 +1072,7 @@ int tp_driver_event_poller_init(
 
     memset(poller, 0, sizeof(*poller));
     poller->subscription = subscription;
+    poller->owns_subscription = false;
     if (NULL != handlers)
     {
         poller->handlers = *handlers;

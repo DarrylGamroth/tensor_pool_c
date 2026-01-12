@@ -4,8 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/tp_aeron.h"
-#include "tensor_pool/tp_context.h"
+#include "aeron_fragment_assembler.h"
+
+#include "tensor_pool/tp_client.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,21 +68,49 @@ typedef struct tp_discovery_request_stct
 }
 tp_discovery_request_t;
 
+typedef struct tp_discovery_context_stct
+{
+    char request_channel[1024];
+    int32_t request_stream_id;
+    char response_channel[1024];
+    int32_t response_stream_id;
+}
+tp_discovery_context_t;
+
 typedef struct tp_discovery_client_stct
 {
-    tp_aeron_client_t aeron;
+    tp_client_t *client;
+    tp_discovery_context_t context;
     aeron_publication_t *publication;
     aeron_subscription_t *subscription;
 }
 tp_discovery_client_t;
 
+typedef void (*tp_discovery_handler_t)(void *clientd, const tp_discovery_response_t *response);
+
+typedef struct tp_discovery_handlers_stct
+{
+    tp_discovery_handler_t on_response;
+    void *clientd;
+}
+tp_discovery_handlers_t;
+
+typedef struct tp_discovery_poller_stct
+{
+    tp_discovery_client_t *client;
+    aeron_fragment_assembler_t *assembler;
+    tp_discovery_handlers_t handlers;
+}
+tp_discovery_poller_t;
+
+int tp_discovery_context_init(tp_discovery_context_t *ctx);
+void tp_discovery_context_set_channel(tp_discovery_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_discovery_context_set_response_channel(tp_discovery_context_t *ctx, const char *channel, int32_t stream_id);
+
 int tp_discovery_client_init(
     tp_discovery_client_t *client,
-    const tp_context_t *context,
-    const char *request_channel,
-    int32_t request_stream_id,
-    const char *response_channel,
-    int32_t response_stream_id);
+    tp_client_t *base,
+    const tp_discovery_context_t *context);
 int tp_discovery_client_close(tp_discovery_client_t *client);
 
 int tp_discovery_request(
@@ -101,6 +130,12 @@ int tp_discovery_poll(
     uint64_t request_id,
     tp_discovery_response_t *out,
     int64_t timeout_ns);
+
+int tp_discovery_poller_init(
+    tp_discovery_poller_t *poller,
+    tp_discovery_client_t *client,
+    const tp_discovery_handlers_t *handlers);
+int tp_discovery_poller_poll(tp_discovery_poller_t *poller, int fragment_limit);
 
 int tp_discovery_decode_response(
     const uint8_t *buffer,

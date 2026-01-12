@@ -9,6 +9,8 @@
 #include "tensor_pool/tp_aeron.h"
 #include "tensor_pool/tp_context.h"
 
+typedef struct tp_client_context_stct tp_client_context_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,6 +20,7 @@ typedef struct tp_client_conductor_stct
     tp_aeron_client_t aeron;
     bool use_agent_invoker;
     bool started;
+    bool owns_aeron;
 }
 tp_client_conductor_t;
 
@@ -25,6 +28,14 @@ int tp_client_conductor_init(
     tp_client_conductor_t *conductor,
     const tp_context_t *context,
     bool use_agent_invoker);
+int tp_client_conductor_init_with_client_context(
+    tp_client_conductor_t *conductor,
+    const tp_client_context_t *context);
+int tp_client_conductor_init_with_aeron(
+    tp_client_conductor_t *conductor,
+    aeron_t *aeron,
+    bool use_agent_invoker,
+    bool owns_aeron);
 int tp_client_conductor_start(tp_client_conductor_t *conductor);
 int tp_client_conductor_close(tp_client_conductor_t *conductor);
 int tp_client_conductor_do_work(tp_client_conductor_t *conductor);

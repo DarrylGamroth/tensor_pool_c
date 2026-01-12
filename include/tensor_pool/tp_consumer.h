@@ -2,11 +2,16 @@
 #define TENSOR_POOL_TP_CONSUMER_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
-#include "tensor_pool/tp_aeron.h"
-#include "tensor_pool/tp_context.h"
+#include "aeron_fragment_assembler.h"
+
+#include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
+#include "tensor_pool/tp_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +47,27 @@ typedef struct tp_consumer_config_stct
 }
 tp_consumer_config_t;
 
+typedef struct tp_consumer_context_stct
+{
+    uint32_t stream_id;
+    uint32_t consumer_id;
+    bool use_driver;
+    tp_driver_attach_request_t driver_request;
+    tp_consumer_hello_t hello;
+}
+tp_consumer_context_t;
+
+typedef struct tp_frame_descriptor_stct
+{
+    uint64_t seq;
+    uint32_t header_index;
+    uint64_t timestamp_ns;
+    uint32_t meta_version;
+}
+tp_frame_descriptor_t;
+
+typedef void (*tp_frame_descriptor_handler_t)(void *clientd, const tp_frame_descriptor_t *desc);
+
 typedef struct tp_frame_view_stct
 {
     tp_tensor_header_t tensor;
@@ -56,11 +82,15 @@ tp_frame_view_t;
 
 typedef struct tp_consumer_stct
 {
-    tp_context_t context;
-    tp_aeron_client_t aeron;
+    tp_client_t *client;
+    tp_consumer_context_t context;
     aeron_subscription_t *descriptor_subscription;
     aeron_publication_t *control_publication;
     aeron_publication_t *qos_publication;
+    aeron_fragment_assembler_t *descriptor_assembler;
+    aeron_fragment_assembler_t *control_assembler;
+    tp_frame_descriptor_handler_t descriptor_handler;
+    void *descriptor_clientd;
     tp_shm_region_t header_region;
     tp_consumer_pool_t *pools;
     size_t pool_count;
@@ -71,9 +101,13 @@ typedef struct tp_consumer_stct
 }
 tp_consumer_t;
 
-int tp_consumer_init(tp_consumer_t *consumer, const tp_context_t *context);
-int tp_consumer_attach_direct(tp_consumer_t *consumer, const tp_consumer_config_t *config);
+int tp_consumer_context_init(tp_consumer_context_t *ctx);
+int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *context);
+int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
+void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t header_index, tp_frame_view_t *out);
+int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
+int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_close(tp_consumer_t *consumer);
 
 #ifdef __cplusplus
