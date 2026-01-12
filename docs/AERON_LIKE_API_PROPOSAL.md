@@ -139,6 +139,7 @@ Behavior:
 - `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
 - `tp_producer_queue_claim` re-queues a previously claimed slot without re-claiming; use this for fixed announced buffer pools.
 - When `fixed_pool_mode` is enabled, claims remain valid across `commit` and `queue_claim` until explicitly aborted after acquisition stops.
+- **Fixed pool contract**: `tp_producer_queue_claim` is only valid when `fixed_pool_mode` is enabled; otherwise claims end at `commit` or `abort`.
 
 ## 6. Consumer API (Aeron-like)
 
@@ -708,6 +709,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Claim lifetime**: see claim lifecycle rules; applications must not hold claims after closing the producer.
 - **Discovery responses**: responses delivered via callback are transient; copy data if needed beyond the callback.
+- **Discovery poller ownership**: responses passed to `tp_discovery_handler_t` are valid only for the duration of the callback.
 
 ## 18. Aeron Archive Patterns Adopted
 
@@ -719,3 +721,8 @@ These align with Aeron C client patterns so the API feels familiar.
 ## 19. Implementation Notes
 
 - Use goto-style error unwinding for functions with complex multi-resource lifecycles; avoid it for simple cases.
+
+## 20. Error Codes and Logging
+
+- Error codes follow Aeron-style negative values (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`) for offer/claim/queue operations.
+- All modules emit logs through `tp_client_context_set_log_handler`.
