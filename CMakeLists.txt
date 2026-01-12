@@ -47,11 +47,14 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_context.h
     include/tensor_pool/tp_control.h
     include/tensor_pool/tp_control_adapter.h
+    include/tensor_pool/tp_control_poller.h
     include/tensor_pool/tp_discovery_client.h
     include/tensor_pool/tp_driver_client.h
     include/tensor_pool/tp_error.h
     include/tensor_pool/tp_log.h
+    include/tensor_pool/tp_metadata_poller.h
     include/tensor_pool/tp_producer.h
+    include/tensor_pool/tp_progress_poller.h
     include/tensor_pool/tp_qos.h
     include/tensor_pool/tp_seqlock.h
     include/tensor_pool/tp_shm.h
@@ -72,10 +75,13 @@ set(TP_SOURCES
     src/tp_context.c
     src/tp_control.c
     src/tp_control_adapter.c
+    src/tp_control_poller.c
     src/tp_discovery_client.c
     src/tp_driver_client.c
     src/tp_log.c
+    src/tp_metadata_poller.c
     src/tp_producer.c
+    src/tp_progress_poller.c
     src/tp_qos.c
     src/tp_shm.c
     src/tp_slot.c

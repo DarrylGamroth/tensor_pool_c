@@ -99,3 +99,119 @@ int tp_qos_publish_consumer(
 
     return 0;
 }
+
+static void tp_qos_poller_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_qos_poller_t *poller = (tp_qos_poller_t *)clientd;
+    struct tensor_pool_messageHeader msg_header;
+    uint16_t template_id;
+    uint16_t schema_id;
+    tp_qos_event_t event;
+
+    (void)header;
+
+    if (NULL == poller || NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    {
+        return;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+
+    if (schema_id != tensor_pool_qosProducer_sbe_schema_id())
+    {
+        return;
+    }
+
+    memset(&event, 0, sizeof(event));
+
+    if (template_id == tensor_pool_qosProducer_sbe_template_id())
+    {
+        struct tensor_pool_qosProducer qos;
+        tensor_pool_qosProducer_wrap_for_decode(
+            &qos,
+            (char *)buffer,
+            tensor_pool_messageHeader_encoded_length(),
+            tensor_pool_qosProducer_sbe_block_length(),
+            tensor_pool_qosProducer_sbe_schema_version(),
+            length);
+        event.type = TP_QOS_EVENT_PRODUCER;
+        event.stream_id = tensor_pool_qosProducer_streamId(&qos);
+        event.producer_id = tensor_pool_qosProducer_producerId(&qos);
+        event.epoch = tensor_pool_qosProducer_epoch(&qos);
+        event.current_seq = tensor_pool_qosProducer_currentSeq(&qos);
+        event.watermark = tensor_pool_qosProducer_watermark(&qos);
+    }
+    else if (template_id == tensor_pool_qosConsumer_sbe_template_id())
+    {
+        struct tensor_pool_qosConsumer qos;
+        tensor_pool_qosConsumer_wrap_for_decode(
+            &qos,
+            (char *)buffer,
+            tensor_pool_messageHeader_encoded_length(),
+            tensor_pool_qosConsumer_sbe_block_length(),
+            tensor_pool_qosConsumer_sbe_schema_version(),
+            length);
+        event.type = TP_QOS_EVENT_CONSUMER;
+        event.stream_id = tensor_pool_qosConsumer_streamId(&qos);
+        event.consumer_id = tensor_pool_qosConsumer_consumerId(&qos);
+        event.epoch = tensor_pool_qosConsumer_epoch(&qos);
+        event.last_seq_seen = tensor_pool_qosConsumer_lastSeqSeen(&qos);
+        event.drops_gap = tensor_pool_qosConsumer_dropsGap(&qos);
+        event.drops_late = tensor_pool_qosConsumer_dropsLate(&qos);
+        event.mode = tensor_pool_qosConsumer_mode(&qos);
+    }
+    else
+    {
+        return;
+    }
+
+    if (poller->handlers.on_qos_event)
+    {
+        poller->handlers.on_qos_event(poller->handlers.clientd, &event);
+    }
+}
+
+int tp_qos_poller_init(tp_qos_poller_t *poller, tp_client_t *client, const tp_qos_handlers_t *handlers)
+{
+    if (NULL == poller || NULL == client || NULL == client->qos_subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_qos_poller_init: invalid input");
+        return -1;
+    }
+
+    memset(poller, 0, sizeof(*poller));
+    poller->client = client;
+    if (handlers)
+    {
+        poller->handlers = *handlers;
+    }
+
+    if (aeron_fragment_assembler_create(&poller->assembler, tp_qos_poller_handler, poller) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_qos_poll(tp_qos_poller_t *poller, int fragment_limit)
+{
+    if (NULL == poller || NULL == poller->assembler || NULL == poller->client || NULL == poller->client->qos_subscription)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_qos_poll: poller not initialized");
+        return -1;
+    }
+
+    return aeron_subscription_poll(
+        poller->client->qos_subscription,
+        aeron_fragment_assembler_handler,
+        poller->assembler,
+        fragment_limit);
+}
