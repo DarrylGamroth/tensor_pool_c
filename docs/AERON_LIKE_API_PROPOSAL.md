@@ -44,6 +44,7 @@ void tp_client_context_set_message_timeout_ns(tp_client_context_t *ctx, int64_t 
 void tp_client_context_set_message_retry_attempts(tp_client_context_t *ctx, int32_t attempts);
 void tp_client_context_set_error_handler(tp_client_context_t *ctx, tp_error_handler_t handler, void *clientd);
 void tp_client_context_set_delegating_invoker(tp_client_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
+void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_handler_t handler, void *clientd);
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
@@ -122,7 +123,7 @@ int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
-int tp_producer_recycle_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
+int tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 
 // Per-consumer routing managed internally when enabled.
@@ -134,7 +135,7 @@ Behavior:
 - Producer owns descriptor/control/qos/metadata publications; app never touches Aeron pubs.
 - `tp_producer_poll_control` uses a control adapter and a consumer manager to handle ConsumerHello, per-consumer streams, and progress throttling.
 - `tp_producer_try_claim` supports zero-copy DMA workflows; callers fill `claim->data` then `commit` with metadata.
-- `tp_producer_recycle_claim` advances the sequence and updates descriptors while retaining the same slot reservation for fixed buffer pools.
+- `tp_producer_queue_claim` re-queues a previously claimed slot without re-claiming; use this for fixed announced buffer pools.
 
 ## 6. Consumer API (Aeron-like)
 
@@ -220,6 +221,10 @@ int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_sou
 
 ```c
 typedef struct tp_discovery_client_stct tp_discovery_client_t;
+typedef struct tp_discovery_context_stct tp_discovery_context_t;
+
+int tp_discovery_context_init(tp_discovery_context_t *ctx);
+void tp_discovery_context_set_channel(tp_discovery_context_t *ctx, const char *channel, int32_t stream_id);
 
 int tp_discovery_client_init(tp_discovery_client_t *client, tp_client_t *base, const tp_discovery_context_t *ctx);
 int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_request_t *request);
@@ -255,6 +260,7 @@ tp_consumer_context_t consumer_ctx;
 tp_consumer_t consumer;
 tp_frame_descriptor_handler_t on_descriptor;
 tp_discovery_client_t discovery;
+tp_discovery_context_t discovery_ctx;
 tp_discovery_request_t request;
 tp_discovery_response_t response;
 const tp_discovery_result_t *result;
@@ -290,7 +296,9 @@ request.response_stream_id = 7001;
 request.tags = (const char *const[]){"role:vision"};
 request.tags_count = 1;
 
-tp_discovery_client_init(&discovery, &client, "aeron:ipc", 7000);
+tp_discovery_context_init(&discovery_ctx);
+tp_discovery_context_set_channel(&discovery_ctx, "aeron:ipc", 7000);
+tp_discovery_client_init(&discovery, &client, &discovery_ctx);
 tp_discovery_request(&discovery, &request);
 tp_discovery_poll(&discovery, request.request_id, &response, 5 * 1000 * 1000 * 1000LL);
 
@@ -376,52 +384,60 @@ This models pre-claiming a fixed ring of buffers, announcing them to a camera SD
 typedef struct tp_bgapi_slot_stct
 {
     tp_buffer_claim_t claim;
-    bool in_use;
 } tp_bgapi_slot_t;
 
 tp_bgapi_slot_t slots[8];
 
-static int tp_bgapi_refill(tp_producer_t *producer)
+// Pre-claim slots before acquisition starts.
+static int tp_bgapi_claim_pool(tp_producer_t *producer)
 {
     for (size_t i = 0; i < 8; ++i)
     {
-        if (!slots[i].in_use)
+        if (tp_producer_try_claim(producer, payload_len, &slots[i].claim) < 0)
         {
-            int64_t pos = tp_producer_try_claim(producer, payload_len, &slots[i].claim);
-            if (pos >= 0)
-            {
-                slots[i].in_use = true;
-                // Announce/queue the buffer pointer to BGAPI:
-                // BGAPI_AnnounceBuffer(slots[i].claim.data, payload_len, &handle)
-                // BGAPI_QueueBuffer(handle)
-            }
+            return -1;
         }
     }
     return 0;
 }
 
+static int tp_bgapi_queue_all(tp_producer_t *producer)
+{
+    for (size_t i = 0; i < 8; ++i)
+    {
+        // Announce/queue the buffer pointer to BGAPI:
+        // BGAPI_AnnounceBuffer(slots[i].claim.data, payload_len, &handle)
+        // BGAPI_QueueBuffer(handle)
+        tp_producer_queue_claim(producer, &slots[i].claim);
+    }
+    return 0;
+}
+
+// Before acquisition starts:
+// tp_bgapi_claim_pool(&producer);
+// tp_bgapi_queue_all(&producer);
+
 // BGAPI "buffer filled" callback
 static void on_bgapi_buffer_filled(tp_producer_t *producer, tp_bgapi_slot_t *slot, const tp_frame_metadata_t *meta)
 {
-    tp_producer_recycle_claim(producer, &slot->claim, meta);
-    slot->in_use = false;
-    tp_bgapi_refill(producer); // keep the ring full
+    tp_producer_commit_claim(producer, &slot->claim, meta);
+    tp_producer_queue_claim(producer, &slot->claim);
 }
 
 // BGAPI "buffer cancelled" callback
 static void on_bgapi_buffer_cancelled(tp_producer_t *producer, tp_bgapi_slot_t *slot)
 {
-    tp_producer_abort_claim(producer, &slot->claim);
-    slot->in_use = false;
-    tp_bgapi_refill(producer);
+    tp_producer_queue_claim(producer, &slot->claim);
 }
 ```
 
 Notes:
 - The claim is the TensorPool slot reservation; it remains valid until `commit` or `abort`.
 - BGAPI announced buffer pools are fixed while acquisition is active: do not add/remove buffers while acquiring.
-- If the camera SDK reuses the same buffers, keep the claim alive and re-queue the same buffer after each `commit`; this requires recycling the slot to advance sequence numbers without re-announcing or re-claiming.
-- Important: the API needs an explicit recycle path (e.g., `tp_producer_recycle_claim`) or a documented “commit + requeue same claim” pattern to support fixed buffer pools.
+- If the camera SDK reuses the same buffers, keep the claim alive and re-queue the same buffer after each `commit`.
+- For non-fixed-pool producers, treat `commit` as the end of the claim and discard the handle.
+- For fixed-pool producers, avoid `abort` while acquiring; use `queue_claim` to skip publish and reuse the same slot.
+- Important: use `tp_producer_queue_claim` to re-queue without re-claiming so the announced pool stays fixed.
 - If the camera SDK requires a revoke/unannounce step, do it only after acquisition stops, then `abort`/`commit` and mark the slot free.
 - Slot accounting is owned by the producer: the app must keep track of which claimed slots are “in flight” vs free.
 
@@ -498,30 +514,6 @@ tp_producer_send_data_source_meta(&producer, &meta);
 tp_metadata_poll(&meta_poller, 10);
 ```
 
-### 12.4.2 Discovery (Poller Style)
-
-```c
-static void on_discovery_response(void *clientd, const tp_discovery_response_t *response)
-{
-    (void)clientd;
-    // inspect response->results and select stream_id
-}
-
-tp_discovery_handlers_t discovery_handlers =
-{
-    .on_response = on_discovery_response,
-    .clientd = NULL
-};
-
-tp_discovery_poller_t discovery_poller;
-tp_discovery_poller_init(&discovery_poller, &discovery, &discovery_handlers);
-
-while (running)
-{
-    tp_discovery_poller_poll(&discovery_poller, 10);
-}
-```
-
 ### 12.4.1 Event Types and Error Codes
 
 ```c
@@ -547,6 +539,30 @@ typedef enum tp_error_code_enum
     TP_ADMIN_ACTION = -4,
     TP_CLOSED = -5
 } tp_error_code_t;
+```
+
+### 12.4.2 Discovery (Poller Style)
+
+```c
+static void on_discovery_response(void *clientd, const tp_discovery_response_t *response)
+{
+    (void)clientd;
+    // inspect response->results and select stream_id
+}
+
+tp_discovery_handlers_t discovery_handlers =
+{
+    .on_response = on_discovery_response,
+    .clientd = NULL
+};
+
+tp_discovery_poller_t discovery_poller;
+tp_discovery_poller_init(&discovery_poller, &discovery, &discovery_handlers);
+
+while (running)
+{
+    tp_discovery_poller_poll(&discovery_poller, 10);
+}
 ```
 
 ### 12.5 Progress (Per-Consumer Stream)
@@ -654,7 +670,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
-- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes and releases; `abort` releases without publish; `recycle` publishes metadata while retaining the same slot reservation for fixed buffer pools.
+- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame; `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next call to `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
