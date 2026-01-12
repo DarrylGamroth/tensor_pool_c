@@ -122,11 +122,11 @@ Checklist
 - [x] Add SBE decoders for ConsumerHello/ConsumerConfig/DataSourceAnnounce/DataSourceMeta.
 - [x] Implement control-plane poller with schemaId/templateId gating.
 - [x] Add handler callbacks and clientd wiring (Aeron-style).
-- [ ] Implement per-consumer stream negotiation and validation.
-- [ ] Track per-consumer publications/subscriptions and stale cleanup.
-- [ ] Add progress throttling aggregation + emit logic.
+- [x] Implement per-consumer stream negotiation and validation.
+- [x] Track per-consumer publications/subscriptions and stale cleanup.
+- [x] Add progress throttling aggregation + emit logic.
 - [x] Add unit tests for decoders.
-- [ ] Add unit tests for negotiation and throttling.
+- [x] Add unit tests for negotiation and throttling.
 
 ### Fully implement the driver client
 
@@ -154,11 +154,11 @@ Deliverables
 - `include/tensor_pool/tp_driver_client.h` handler APIs.
 
 Checklist
-- [ ] Expand attach response validation per Driver Spec.
-- [ ] Decode ShmDetachResponse, ShmLeaseRevoked, ShmDriverShutdown.
-- [ ] Add driver event poller with callbacks.
-- [ ] Track lease lifecycle + keepalive cadence helpers.
-- [ ] Add unit tests for attach validation and event decoding.
+- [x] Expand attach response validation per Driver Spec.
+- [x] Decode ShmDetachResponse, ShmLeaseRevoked, ShmDriverShutdown.
+- [x] Add driver event poller with callbacks.
+- [x] Track lease lifecycle + keepalive cadence helpers.
+- [x] Add unit tests for attach validation and event decoding.
 
 ### Fully implement the discovery client
 
@@ -184,12 +184,12 @@ Deliverables
 - `include/tensor_pool/tp_discovery_client.h` filter APIs.
 
 Checklist
-- [ ] Decode payloadPools and tags groups with correct position handling.
-- [ ] Validate required fields (headerSlotBytes/maxDims/payload pools).
-- [ ] Add request helpers for tag filters and optional fields.
-- [ ] Add result filtering helpers.
-- [ ] Extend cleanup helpers for nested allocations.
-- [ ] Add unit tests for response parsing and cleanup.
+- [x] Decode payloadPools and tags groups with correct position handling.
+- [x] Validate required fields (headerSlotBytes/maxDims/payload pools).
+- [x] Add request helpers for tag filters and optional fields.
+- [x] Add result filtering helpers.
+- [x] Extend cleanup helpers for nested allocations.
+- [x] Add unit tests for response parsing and cleanup.
 
 ### Align client with Aeron conductor model
 
@@ -219,12 +219,12 @@ Deliverables
 - Async add APIs for publications/subscriptions.
 
 Checklist
-- [ ] Introduce client context with conductor lifecycle (init/start/close).
-- [ ] Add async add/poll APIs for pubs/subs (Aeron-style).
-- [ ] Implement proxies for attach/keepalive/detach.
-- [ ] Implement response adapters for driver/discovery/control-plane.
-- [ ] Support idle strategy configuration and agent-invoked mode.
-- [ ] Add tests for async lifecycle and error propagation.
+- [x] Introduce client context with conductor lifecycle (init/start/close).
+- [x] Add async add/poll APIs for pubs/subs (Aeron-style).
+- [x] Implement proxies for attach/keepalive/detach.
+- [x] Implement response adapters for driver/discovery/control-plane.
+- [x] Support idle strategy configuration and agent-invoked mode.
+- [x] Add tests for async lifecycle and error propagation.
 
 - CLI tools for attach/keepalive, SHM inspection, and sample producer/consumer.
 - Example configs and usage docs.

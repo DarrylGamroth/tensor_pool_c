@@ -17,14 +17,14 @@ Status key:
 | FrameDescriptor publish | 10.2.1 | Implemented | SBE encode + offer. `src/tp_producer.c` |
 | FrameProgress publish | 10.2.2 | Implemented | `tp_producer_publish_progress`. `src/tp_producer.c` |
 | QoS Producer/Consumer | 10.3 | Implemented | Encoding helpers. `src/tp_qos.c` |
-| Control-plane ConsumerHello | 10.1.2 | Partial | Encoder only; no poller/decoder. `src/tp_control.c` |
-| Control-plane ConsumerConfig | 10.1.3 | Partial | Encoder only; no poller/decoder. `src/tp_control.c` |
-| DataSourceAnnounce / DataSourceMeta | 10.4 | Partial | Producer encoders only. `src/tp_control.c` |
-| Per-consumer descriptor/control streams | 5 | Not implemented | No request/assignment handling beyond fields. |
-| Progress throttling / policy hints | 10.1.2 | Not implemented | No aggregation/rate control logic. |
-| Driver attach/keepalive/detach (client) | Driver Spec 4 | Implemented | Attach request + response decode + keepalive/detach. `src/tp_driver_client.c` |
+| Control-plane ConsumerHello | 10.1.2 | Implemented | Encoder + decoder + poller. `src/tp_control.c`, `src/tp_control_adapter.c` |
+| Control-plane ConsumerConfig | 10.1.3 | Implemented | Encoder + decoder + poller. `src/tp_control.c`, `src/tp_control_adapter.c` |
+| DataSourceAnnounce / DataSourceMeta | 10.4 | Implemented | Encoder + decoder + poller. `src/tp_control.c`, `src/tp_control_adapter.c` |
+| Per-consumer descriptor/control streams | 5 | Implemented | Request/assign + lifecycle + per-consumer publish helpers. `src/tp_consumer_manager.c`, `src/tp_consumer_registry.c` |
+| Progress throttling / policy hints | 10.1.2 | Implemented | Aggregation + emit helper logic. `src/tp_consumer_registry.c`, `src/tp_consumer_manager.c` |
+| Driver attach/keepalive/detach (client) | Driver Spec 4 | Implemented | Attach validation, events, keepalive/detach. `src/tp_driver_client.c` |
 | Driver-side behavior (server) | Driver Spec 3–7 | Not implemented | Client-only in this repo. |
-| Discovery client | Discovery Spec 5 | Implemented | Request/response decode + result parsing. `src/tp_discovery_client.c` |
+| Discovery client | Discovery Spec 5 | Implemented | Request/response decode + tags + validation + cleanup. `src/tp_discovery_client.c` |
 | Aeron-style error handling | General | Implemented | Uses Aeron error stack via `tp_error.h`. |
 | Logging API | General | Implemented | `tp_log_t` with levels + callback. `src/tp_log.c` |
 | Examples (driver model) | Docs Phase 10 | Implemented | `tools/tp_example_producer.c`, `tools/tp_example_consumer.c` |

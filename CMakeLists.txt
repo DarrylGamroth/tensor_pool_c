@@ -39,7 +39,10 @@ add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY
 
 set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_aeron.h
+    include/tensor_pool/tp_client_conductor.h
     include/tensor_pool/tp_consumer.h
+    include/tensor_pool/tp_consumer_manager.h
+    include/tensor_pool/tp_consumer_registry.h
     include/tensor_pool/tp_context.h
     include/tensor_pool/tp_control.h
     include/tensor_pool/tp_control_adapter.h
@@ -60,7 +63,10 @@ set(TP_PUBLIC_HEADERS
 
 set(TP_SOURCES
     src/tp_aeron.c
+    src/tp_client_conductor.c
     src/tp_consumer.c
+    src/tp_consumer_manager.c
+    src/tp_consumer_registry.c
     src/tp_context.c
     src/tp_control.c
     src/tp_control_adapter.c
@@ -165,7 +171,13 @@ target_link_libraries(tensor_pool PUBLIC aeron::aeron_static)
 
 enable_testing()
 
-add_executable(tensor_pool_tests tests/test_tp_smoke.c tests/test_tp_control.c)
+add_executable(tensor_pool_tests
+    tests/test_tp_smoke.c
+    tests/test_tp_control.c
+    tests/test_tp_consumer_registry.c
+    tests/test_tp_driver_client.c
+    tests/test_tp_discovery_client.c
+    tests/test_tp_client_conductor.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 
