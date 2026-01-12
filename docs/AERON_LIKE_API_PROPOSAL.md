@@ -217,6 +217,8 @@ typedef struct tp_discovery_client_stct tp_discovery_client_t;
 int tp_discovery_client_init(tp_discovery_client_t *client, tp_client_t *base, const tp_discovery_context_t *ctx);
 int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_request_t *request);
 int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_discovery_response_t *out, int64_t timeout_ns);
+int tp_discovery_poller_init(tp_discovery_poller_t *poller, tp_discovery_client_t *client, const tp_discovery_handlers_t *handlers);
+int tp_discovery_poller_poll(tp_discovery_poller_t *poller, int fragment_limit);
 ```
 
 ## 11. Progress API
@@ -583,8 +585,11 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Error/status model**: functions return `int` (0 on success, -1 on error) and set `aeron_errcode()`/`aeron_errmsg()` analogs in TensorPool (`tp_errcode()`/`tp_errmsg()`), mirroring Aeron’s error reporting.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
+- **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes and releases; `abort` releases without publish; `recycle` publishes metadata while retaining the same slot reservation for fixed buffer pools.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
+- **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next call to `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
 - **Keepalive scheduling**: keepalive work runs inside `tp_client_do_work` and/or `tp_driver_client_do_work` and uses the same idle strategy/intervals configured in the client context.
 - **Fragment limits and polling**: `tp_*_poll` functions take `fragment_limit` like Aeron, and return number of fragments/events processed.
 - **Poll return semantics**: `tp_*_poll` returns fragment count (`>= 0`) or `-1` on error with `tp_errcode()/tp_errmsg()` set.
+- **Logging coverage**: `tp_client_context_set_log_handler` is the single hook used across client/driver/discovery/control/QoS/metadata modules.
