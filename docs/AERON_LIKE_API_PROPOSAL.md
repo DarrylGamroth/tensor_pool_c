@@ -125,7 +125,7 @@ int tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
-int tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
+int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 
 // Per-consumer routing managed internally when enabled.
@@ -310,7 +310,10 @@ tp_discovery_request(&discovery, &request);
 tp_discovery_poll(&discovery, request.request_id, &response, 5 * 1000 * 1000 * 1000LL);
 
 // Select a result (example: first match)
-result = &response.results[0];
+if (response.result_count > 0)
+{
+    result = &response.results[0];
+}
 
 // Consumer
 tp_consumer_context_init(&consumer_ctx);
@@ -416,12 +419,12 @@ static int tp_bgapi_queue_all(tp_producer_t *producer)
         // Announce/queue the buffer pointer to BGAPI:
         // BGAPI_AnnounceBuffer(slots[i].claim.data, payload_len, &handle)
         // BGAPI_QueueBuffer(handle)
-        tp_producer_queue_claim(producer, &slots[i].claim);
+tp_producer_queue_claim(producer, &slots[i].claim);
     }
     return 0;
 }
 
-// Before acquisition starts:
+// Before acquisition starts (fixed pool mode must be enabled):
 // tp_bgapi_claim_pool(&producer);
 // tp_bgapi_queue_all(&producer);
 
@@ -429,13 +432,19 @@ static int tp_bgapi_queue_all(tp_producer_t *producer)
 static void on_bgapi_buffer_filled(tp_producer_t *producer, tp_bgapi_slot_t *slot, const tp_frame_metadata_t *meta)
 {
     tp_producer_commit_claim(producer, &slot->claim, meta);
-    tp_producer_queue_claim(producer, &slot->claim);
+    if (tp_producer_queue_claim(producer, &slot->claim) < 0)
+    {
+        // handle backpressure; requeue later
+    }
 }
 
 // BGAPI "buffer cancelled" callback
 static void on_bgapi_buffer_cancelled(tp_producer_t *producer, tp_bgapi_slot_t *slot)
 {
-    tp_producer_queue_claim(producer, &slot->claim);
+    if (tp_producer_queue_claim(producer, &slot->claim) < 0)
+    {
+        // handle backpressure; requeue later
+    }
 }
 ```
 
@@ -679,6 +688,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Backpressure semantics**: `tp_producer_offer_frame` returns `int64_t` like Aeron publications: `>= 0` for position, or negative codes for backpressure/admin/closed (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`), mapping to Aeron-style constants.
 - **Try-claim semantics**: `tp_producer_try_claim` mirrors Aeron buffer claim behavior; on success it returns a position and provides a writable buffer, and on failure returns the same negative codes as `tp_producer_offer_frame`.
 - **Claim lifecycle**: `try_claim` reserves a slot; `commit` publishes the frame and ends the claim unless `fixed_pool_mode` is enabled, in which case the claim remains valid for `queue_claim`; `abort` releases without publish (claim invalid); `queue_claim` re-queues the same slot for reuse without re-claiming.
+- **Queue-claim semantics**: `tp_producer_queue_claim` returns a position or negative backpressure/admin/closed codes, mirroring Aeron offer semantics.
 - **Ownership/lifetime rules**: pointers passed to callbacks are only valid for the duration of the callback; apps must copy if they need persistence, mirroring Aeron fragment handling.
 - **Frame view lifetime**: `tp_consumer_read_frame` returns a view valid until the next call to `tp_consumer_poll_descriptors` or `tp_consumer_read_frame` on the same consumer.
 - **Threading model**: single-threaded polling by default; callbacks invoked on the thread calling `tp_*_poll`. No implicit worker threads, consistent with Aeron’s poll pattern.
