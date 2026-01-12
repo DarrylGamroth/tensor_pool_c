@@ -34,8 +34,8 @@ SHM layout:
 - Payload pools: fixed stride, same nslots as header ring.
 
 Commit protocol:
-- commit_word = (frame_id << 1) for WRITING.
-- commit_word = (frame_id << 1) | 1 for COMMITTED.
+- commit_word = (seq << 1) | 0 for WRITING.
+- commit_word = (seq << 1) | 1 for COMMITTED.
 - Use acquire/release semantics and seqlock read rules.
 
 Producer flow (Wire 15.19):
@@ -48,13 +48,12 @@ Producer flow (Wire 15.19):
 Producer startup:
 - Aeron `try_claim`/`offer` returns NOT_CONNECTED when no subscribers are present; this is expected and retryable as consumers come and go.
 - `publication_is_connected`/`channel_status` are observability hints only; do not gate correctness on them.
-- Debug logging: `@tp_debug` uses `Base.@debug`, so set `JULIA_DEBUG=all` (or a narrower module filter) when you want debug-level output.
 
 Consumer flow (Wire 15.19):
-1) Read commit_word (acquire); drop if even.
+1) Read commit_word (acquire); drop if LSB=0.
 2) Read header and payload.
-3) Re-read commit_word (acquire); drop if changed or odd.
-4) Accept only if header.frame_id == descriptor.seq.
+3) Re-read commit_word (acquire); drop if changed or LSB=0.
+4) Accept only if (commit_word >> 1) == descriptor.seq.
 
 Implementation notes:
 - Control/QoS/metadata channels can carry mixed message families; guard on `MessageHeader.schemaId` (or `DriverMessageHeader.schemaId`) before decoding.
