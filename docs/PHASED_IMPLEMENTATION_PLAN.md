@@ -118,6 +118,15 @@ Deliverables
 - New `tp_control_adapter` or similar to surface callbacks.
 - Per-consumer stream manager module.
 
+Checklist
+- [ ] Add SBE decoders for ConsumerHello/ConsumerConfig/DataSourceAnnounce/DataSourceMeta.
+- [ ] Implement control-plane poller with schemaId/templateId gating.
+- [ ] Add handler callbacks and clientd wiring (Aeron-style).
+- [ ] Implement per-consumer stream negotiation and validation.
+- [ ] Track per-consumer publications/subscriptions and stale cleanup.
+- [ ] Add progress throttling aggregation + emit logic.
+- [ ] Add unit tests for decoders, negotiation, throttling.
+
 ### Fully implement the driver client
 
 Scope
@@ -143,6 +152,13 @@ Deliverables
 - `src/tp_driver_client.c` decoding + poller.
 - `include/tensor_pool/tp_driver_client.h` handler APIs.
 
+Checklist
+- [ ] Expand attach response validation per Driver Spec.
+- [ ] Decode ShmDetachResponse, ShmLeaseRevoked, ShmDriverShutdown.
+- [ ] Add driver event poller with callbacks.
+- [ ] Track lease lifecycle + keepalive cadence helpers.
+- [ ] Add unit tests for attach validation and event decoding.
+
 ### Fully implement the discovery client
 
 Scope
@@ -165,6 +181,14 @@ Steps
 Deliverables
 - `src/tp_discovery_client.c` updates + cleanup helpers.
 - `include/tensor_pool/tp_discovery_client.h` filter APIs.
+
+Checklist
+- [ ] Decode payloadPools and tags groups with correct position handling.
+- [ ] Validate required fields (headerSlotBytes/maxDims/payload pools).
+- [ ] Add request helpers for tag filters and optional fields.
+- [ ] Add result filtering helpers.
+- [ ] Extend cleanup helpers for nested allocations.
+- [ ] Add unit tests for response parsing and cleanup.
 
 ### Align client with Aeron conductor model
 
@@ -192,6 +216,14 @@ Steps
 Deliverables
 - New `tp_client_context` + conductor/agent modules.
 - Async add APIs for publications/subscriptions.
+
+Checklist
+- [ ] Introduce client context with conductor lifecycle (init/start/close).
+- [ ] Add async add/poll APIs for pubs/subs (Aeron-style).
+- [ ] Implement proxies for attach/keepalive/detach.
+- [ ] Implement response adapters for driver/discovery/control-plane.
+- [ ] Support idle strategy configuration and agent-invoked mode.
+- [ ] Add tests for async lifecycle and error propagation.
 
 - CLI tools for attach/keepalive, SHM inspection, and sample producer/consumer.
 - Example configs and usage docs.
