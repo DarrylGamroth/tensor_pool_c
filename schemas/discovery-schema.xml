@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.discovery"
+                   id="910"
+                   version="1"
+                   semanticVersion="1.0"
+                   byteOrder="littleEndian">
+
+  <types>
+
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="groupSizeEncoding">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="numInGroup"  primitiveType="uint16"/>
+    </composite>
+
+    <composite name="varAsciiEncoding">
+      <type name="length"  primitiveType="uint32" maxValue="1073741824"/>
+      <type name="varData" primitiveType="uint8" length="0" characterEncoding="US-ASCII"/>
+    </composite>
+
+    <enum name="DiscoveryStatus" encodingType="uint8">
+      <validValue name="OK">1</validValue>
+      <validValue name="NOT_FOUND">2</validValue>
+      <validValue name="ERROR">3</validValue>
+    </enum>
+  </types>
+
+  <sbe:message name="DiscoveryRequest" id="1">
+    <field name="requestId"        id="1" type="uint64"/>
+    <field name="clientId"         id="2" type="uint32"/>
+    <field name="responseStreamId" id="3" type="uint32"/>
+    <field name="streamId"         id="4" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="producerId"       id="5" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="dataSourceId"     id="6" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <group name="tags" id="7" dimensionType="groupSizeEncoding">
+      <field name="tag" id="1" type="varAsciiEncoding"/>
+    </group>
+    <data  name="responseChannel"  id="8" type="varAsciiEncoding"/>
+    <data  name="dataSourceName"   id="9" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="DiscoveryResponse" id="2">
+    <field name="requestId" id="1" type="uint64"/>
+    <field name="status"    id="2" type="DiscoveryStatus"/>
+    <group name="results" id="3" dimensionType="groupSizeEncoding">
+      <field name="streamId"         id="1" type="uint32"/>
+      <field name="producerId"       id="2" type="uint32"/>
+      <field name="epoch"            id="3" type="uint64"/>
+      <field name="layoutVersion"    id="4" type="uint32"/>
+      <field name="headerNslots"     id="5" type="uint32"/>
+      <field name="headerSlotBytes"  id="6" type="uint16"/>
+      <field name="maxDims"          id="7" type="uint8"/>
+      <field name="dataSourceId"     id="8" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+      <field name="driverControlStreamId" id="9" type="uint32"/>
+      <group name="payloadPools" id="10" dimensionType="groupSizeEncoding">
+        <field name="poolId"      id="1" type="uint16"/>
+        <field name="poolNslots"  id="2" type="uint32"/>
+        <field name="strideBytes" id="3" type="uint32"/>
+        <data  name="regionUri"   id="4" type="varAsciiEncoding"/>
+      </group>
+      <group name="tags" id="11" dimensionType="groupSizeEncoding">
+        <field name="tag" id="1" type="varAsciiEncoding"/>
+      </group>
+      <data  name="headerRegionUri"  id="12" type="varAsciiEncoding"/>
+      <data  name="dataSourceName"   id="13" type="varAsciiEncoding"/>
+      <data  name="driverInstanceId" id="14" type="varAsciiEncoding"/>
+      <data  name="driverControlChannel" id="15" type="varAsciiEncoding"/>
+    </group>
+    <data name="errorMessage" id="4" type="varAsciiEncoding"/>
+  </sbe:message>
+</sbe:messageSchema>

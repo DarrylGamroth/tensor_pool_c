@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.control"
+                   id="900"
+                   version="1"
+                   semanticVersion="1.1"
+                   byteOrder="littleEndian">
+
+  <types>
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="groupSizeEncoding">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="numInGroup"  primitiveType="uint16"/>
+    </composite>
+
+    <composite name="varAsciiEncoding">
+      <type name="length"  primitiveType="uint32" maxValue="1073741824"/>
+      <type name="varData" primitiveType="uint8" length="0" characterEncoding="US-ASCII"/>
+    </composite>
+
+    <composite name="varDataEncoding">
+      <type name="length"  primitiveType="uint32" maxValue="1073741824"/>
+      <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+
+    <!-- Constant used for array sizing in generated code -->
+    <type name="MaxDimsConst" primitiveType="uint8" presence="constant">8</type>
+
+    <!-- Fixed-length arrays for TensorHeader (length matches MaxDimsConst) -->
+    <type name="DimsArray"     primitiveType="int32" length="8"/>
+    <type name="StridesArray"  primitiveType="int32" length="8"/>
+
+    <enum name="Bool" encodingType="uint8">
+      <validValue name="FALSE">0</validValue>
+      <validValue name="TRUE">1</validValue>
+    </enum>
+
+  <enum name="Mode" encodingType="uint8">
+    <validValue name="STREAM">1</validValue>
+    <validValue name="RATE_LIMITED">2</validValue>
+  </enum>
+
+    <enum name="FrameProgressState" encodingType="uint8">
+      <validValue name="UNKNOWN">0</validValue>
+      <validValue name="STARTED">1</validValue>
+      <validValue name="PROGRESS">2</validValue>
+      <validValue name="COMPLETE">3</validValue>
+    </enum>
+
+    <enum name="ProgressUnit" encodingType="uint8">
+      <validValue name="NONE">0</validValue>
+      <validValue name="ROWS">1</validValue>
+      <validValue name="COLUMNS">2</validValue>
+    </enum>
+
+    <enum name="ResponseCode" encodingType="int32">
+      <validValue name="OK">0</validValue>
+      <validValue name="UNSUPPORTED">1</validValue>
+      <validValue name="INVALID_PARAMS">2</validValue>
+      <validValue name="REJECTED">3</validValue>
+      <validValue name="INTERNAL_ERROR">4</validValue>
+    </enum>
+
+    <enum name="ClockDomain" encodingType="uint8">
+      <validValue name="MONOTONIC">1</validValue>
+      <validValue name="REALTIME_SYNCED">2</validValue>
+    </enum>
+
+    <enum name="RegionType" encodingType="int16">
+      <validValue name="HEADER_RING">1</validValue>
+      <validValue name="PAYLOAD_POOL">2</validValue>
+    </enum>
+
+    <enum name="Dtype" encodingType="int16">
+      <validValue name="UNKNOWN">0</validValue>
+      <validValue name="UINT8">1</validValue>
+      <validValue name="INT8">2</validValue>
+      <validValue name="UINT16">3</validValue>
+      <validValue name="INT16">4</validValue>
+      <validValue name="UINT32">5</validValue>
+      <validValue name="INT32">6</validValue>
+      <validValue name="UINT64">7</validValue>
+      <validValue name="INT64">8</validValue>
+      <validValue name="FLOAT32">9</validValue>
+      <validValue name="FLOAT64">10</validValue>
+      <validValue name="BOOLEAN">11</validValue>
+      <validValue name="BYTES">13</validValue>
+      <validValue name="BIT">14</validValue>
+    </enum>
+
+    <enum name="MajorOrder" encodingType="int16">
+      <validValue name="UNKNOWN">0</validValue>
+      <validValue name="ROW">1</validValue>
+      <validValue name="COLUMN">2</validValue>
+    </enum>
+
+    <type name="epoch_t"   primitiveType="uint64"/>
+    <type name="seq_t"     primitiveType="uint64"/>
+    <type name="version_t" primitiveType="uint32"/>
+  </types>
+
+  <sbe:message name="ShmPoolAnnounce" id="1">
+    <field name="streamId"        id="1" type="uint32"/>
+    <field name="producerId"      id="2" type="uint32"/>
+    <field name="epoch"           id="3" type="epoch_t"/>
+    <field name="announceTimestampNs" id="4" type="uint64"/>
+    <field name="announceClockDomain" id="5" type="ClockDomain"/>
+    <field name="layoutVersion"   id="6" type="version_t"/>
+    <field name="headerNslots"    id="7" type="uint32"/>
+    <field name="headerSlotBytes" id="8" type="uint16"/>
+    <group name="payloadPools"    id="9" dimensionType="groupSizeEncoding">
+      <field name="poolId"      id="1" type="uint16"/>
+      <field name="poolNslots"  id="2" type="uint32"/>
+      <field name="strideBytes" id="3" type="uint32"/>
+      <data  name="regionUri"   id="4" type="varAsciiEncoding"/>
+    </group>
+    <data  name="headerRegionUri" id="10" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ConsumerHello" id="2">
+    <field name="streamId"              id="1" type="uint32"/>
+    <field name="consumerId"            id="2" type="uint32"/>
+    <field name="supportsShm"           id="3" type="Bool"/>
+    <field name="supportsProgress"      id="4" type="Bool"/>
+    <field name="mode"                  id="5" type="Mode"/>
+    <field name="maxRateHz"             id="6" type="uint32"/>
+    <field name="expectedLayoutVersion" id="7" type="version_t"/>
+    <field name="progressIntervalUs"    id="8" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="progressBytesDelta"    id="9" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="progressMajorDeltaUnits" id="10" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="descriptorStreamId"    id="11" type="uint32"/>
+    <field name="controlStreamId"       id="12" type="uint32"/>
+    <data  name="descriptorChannel"     id="13" type="varAsciiEncoding"/>
+    <data  name="controlChannel"        id="14" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ConsumerConfig" id="3">
+    <field name="streamId"           id="1" type="uint32"/>
+    <field name="consumerId"         id="2" type="uint32"/>
+    <field name="useShm"             id="3" type="Bool"/>
+    <field name="mode"               id="4" type="Mode"/>
+    <field name="descriptorStreamId" id="6" type="uint32"/>
+    <field name="controlStreamId"    id="7" type="uint32"/>
+    <data  name="payloadFallbackUri" id="8" type="varAsciiEncoding"/>
+    <data  name="descriptorChannel"  id="9" type="varAsciiEncoding"/>
+    <data  name="controlChannel"     id="10" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="FrameDescriptor" id="4">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="epoch"       id="2" type="epoch_t"/>
+    <field name="seq"         id="3" type="seq_t"/>
+    <field name="headerIndex" id="4" type="uint32"/>
+    <field name="timestampNs" id="5" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <field name="metaVersion" id="6" type="version_t" presence="optional" nullValue="4294967295"/>
+  </sbe:message>
+
+  <sbe:message name="FrameProgress" id="11">
+    <field name="streamId"          id="1" type="uint32"/>
+    <field name="epoch"             id="2" type="epoch_t"/>
+    <field name="frameId"           id="3" type="seq_t"/>
+    <field name="headerIndex"       id="4" type="uint32"/>
+    <field name="payloadBytesFilled" id="5" type="uint64"/>
+    <field name="state"             id="6" type="FrameProgressState"/>
+  </sbe:message>
+
+  <sbe:message name="QosConsumer" id="5">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="consumerId"  id="2" type="uint32"/>
+    <field name="epoch"       id="3" type="epoch_t"/>
+    <field name="lastSeqSeen" id="4" type="seq_t"/>
+    <field name="dropsGap"    id="5" type="uint64"/>
+    <field name="dropsLate"   id="6" type="uint64"/>
+    <field name="mode"        id="7" type="Mode"/>
+  </sbe:message>
+
+  <sbe:message name="QosProducer" id="6">
+    <field name="streamId"   id="1" type="uint32"/>
+    <field name="producerId" id="2" type="uint32"/>
+    <field name="epoch"      id="3" type="epoch_t"/>
+    <field name="currentSeq" id="4" type="seq_t"/>
+    <field name="watermark"  id="5" type="uint32" presence="optional" nullValue="4294967295"/>
+  </sbe:message>
+
+  <!-- SHM-only composites wrapped without SBE headers -->
+  <sbe:message name="ShmRegionSuperblock" id="50" blockLength="64">
+    <field name="magic"              id="1" type="uint64"/>
+    <field name="layoutVersion"      id="2" type="uint32"/>
+    <field name="epoch"              id="3" type="epoch_t"/>
+    <field name="streamId"           id="4" type="uint32"/>
+    <field name="regionType"         id="5" type="RegionType"/>
+    <field name="poolId"             id="6" type="uint16"/>
+    <field name="nslots"             id="7" type="uint32"/>
+    <field name="slotBytes"          id="8" type="uint32"/>
+    <field name="strideBytes"        id="9" type="uint32"/>
+    <field name="pid"                id="10" type="uint64"/>
+    <field name="startTimestampNs"   id="11" type="uint64"/>
+    <field name="activityTimestampNs" id="12" type="uint64"/>
+  </sbe:message>
+
+  <sbe:message name="SlotHeader" id="51" blockLength="60">
+    <field name="seqCommit"      id="1" type="uint64"/>
+    <field name="valuesLenBytes" id="2" type="uint32"/>
+    <field name="payloadSlot"    id="3" type="uint32"/>
+    <field name="poolId"         id="4" type="uint16"/>
+    <field name="payloadOffset"  id="5" type="uint32"/>
+    <field name="timestampNs"    id="6" type="uint64"/>
+    <field name="metaVersion"    id="7" type="version_t"/>
+    <field name="pad"            id="8" type="uint8" length="26"/>
+    <data  name="headerBytes"    id="9" type="varDataEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="TensorHeader" id="52" blockLength="184">
+    <field name="dtype"           id="1" type="Dtype"/>
+    <field name="majorOrder"      id="2" type="MajorOrder"/>
+    <field name="ndims"           id="3" type="uint8"/>
+    <field name="maxDims"         id="4" type="MaxDimsConst"/>
+    <field name="padAlign"        id="5" type="uint8"/>
+    <field name="progressUnit"         id="6" type="ProgressUnit"/>
+    <field name="progressStrideBytes"  id="7" type="uint32" minValue="1"/>
+    <field name="dims"            id="8" type="DimsArray"/>
+    <field name="strides"         id="9" type="StridesArray"/>
+    <field name="pad"             id="10" type="uint8" length="109"/>
+  </sbe:message>
+
+  <sbe:message name="DataSourceAnnounce" id="7">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="producerId"  id="2" type="uint32"/>
+    <field name="epoch"       id="3" type="epoch_t"/>
+    <field name="metaVersion" id="4" type="version_t"/>
+    <data  name="name"        id="5" type="varAsciiEncoding"/>
+    <data  name="summary"     id="6" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="DataSourceMeta" id="8">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="metaVersion" id="2" type="version_t"/>
+    <field name="timestampNs" id="3" type="uint64"/>
+    <group name="attributes"  id="4" dimensionType="groupSizeEncoding">
+      <data  name="key"    id="1" type="varAsciiEncoding"/>
+      <data  name="format" id="2" type="varAsciiEncoding"/>
+      <data  name="value"  id="3" type="varDataEncoding"/>
+    </group>
+  </sbe:message>
+
+  <sbe:message name="ControlResponse" id="9">
+    <field name="correlationId" id="1" type="int64"/>
+    <field name="code"          id="2" type="ResponseCode"/>
+    <data  name="errorMessage"  id="3" type="varAsciiEncoding"/>
+  </sbe:message>
+
+</sbe:messageSchema>

@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.driver"
+                   id="901"
+                   version="1"
+                   semanticVersion="1.0"
+                   byteOrder="littleEndian">
+
+  <types>
+
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="groupSizeEncoding">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="numInGroup"  primitiveType="uint16"/>
+    </composite>
+
+    <composite name="varAsciiEncoding">
+      <type name="length"  primitiveType="uint32" maxValue="1073741824"/>
+      <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+
+    <enum name="HugepagesPolicy" encodingType="uint8">
+      <validValue name="UNSPECIFIED">0</validValue>
+      <validValue name="STANDARD">1</validValue>
+      <validValue name="HUGEPAGES">2</validValue>
+    </enum>
+
+    <enum name="ResponseCode" encodingType="int32">
+      <validValue name="OK">0</validValue>
+      <validValue name="UNSUPPORTED">1</validValue>
+      <validValue name="INVALID_PARAMS">2</validValue>
+      <validValue name="REJECTED">3</validValue>
+      <validValue name="INTERNAL_ERROR">4</validValue>
+    </enum>
+
+    <enum name="Role" encodingType="uint8">
+      <validValue name="PRODUCER">1</validValue>
+      <validValue name="CONSUMER">2</validValue>
+    </enum>
+
+    <enum name="PublishMode" encodingType="uint8">
+      <validValue name="REQUIRE_EXISTING">1</validValue>
+      <validValue name="EXISTING_OR_CREATE">2</validValue>
+    </enum>
+
+    <enum name="LeaseRevokeReason" encodingType="uint8">
+      <validValue name="DETACHED">1</validValue>
+      <validValue name="EXPIRED">2</validValue>
+      <validValue name="REVOKED">3</validValue>
+    </enum>
+
+    <enum name="ShutdownReason" encodingType="uint8">
+      <validValue name="NORMAL">0</validValue>
+      <validValue name="ADMIN">1</validValue>
+      <validValue name="ERROR">2</validValue>
+    </enum>
+
+    <type name="epoch_t"    primitiveType="uint64"/>
+    <type name="version_t"  primitiveType="uint32"/>
+    <type name="lease_id_t" primitiveType="uint64"/>
+
+  </types>
+
+  <!-- Driver control-plane messages (normative in the Driver Model specification). -->
+
+  <sbe:message name="ShmAttachRequest" id="1">
+    <field name="correlationId"        id="1" type="int64"/>
+    <field name="streamId"             id="2" type="uint32"/>
+    <field name="clientId"             id="3" type="uint32"/>
+    <field name="role"                 id="4" type="Role"/>
+    <field name="expectedLayoutVersion" id="5" type="version_t"/>
+    <field name="maxDims"              id="6" type="uint8"/>
+    <field name="publishMode"          id="7" type="PublishMode" presence="optional" nullValue="255"/>
+    <field name="requireHugepages"     id="8" type="HugepagesPolicy"/>
+  </sbe:message>
+
+  <sbe:message name="ShmAttachResponse" id="2">
+    <field name="correlationId"         id="1" type="int64"/>
+    <field name="code"                  id="2" type="ResponseCode"/>
+    <field name="leaseId"               id="3" type="lease_id_t" presence="optional" nullValue="18446744073709551615"/>
+    <field name="leaseExpiryTimestampNs" id="4" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <field name="streamId"              id="5" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="epoch"                 id="6" type="epoch_t" presence="optional" nullValue="18446744073709551615"/>
+    <field name="layoutVersion"         id="7" type="version_t" presence="optional" nullValue="4294967295"/>
+    <field name="headerNslots"          id="8" type="uint32" presence="optional" nullValue="4294967295"/>
+    <field name="headerSlotBytes"       id="9" type="uint16" presence="optional" nullValue="65535"/>
+    <field name="maxDims"               id="10" type="uint8" presence="optional" nullValue="255"/>
+    <group name="payloadPools"          id="20" dimensionType="groupSizeEncoding">
+      <field name="poolId"      id="1" type="uint16"/>
+      <field name="poolNslots"  id="2" type="uint32"/>
+      <field name="strideBytes" id="3" type="uint32"/>
+      <data  name="regionUri"   id="4" type="varAsciiEncoding"/>
+    </group>
+    <data  name="headerRegionUri"       id="11" type="varAsciiEncoding"/>
+    <data  name="errorMessage"           id="30" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ShmDetachRequest" id="3">
+    <field name="correlationId" id="1" type="int64"/>
+    <field name="leaseId"       id="2" type="lease_id_t"/>
+    <field name="streamId"      id="3" type="uint32"/>
+    <field name="clientId"      id="4" type="uint32"/>
+    <field name="role"          id="5" type="Role"/>
+  </sbe:message>
+
+  <sbe:message name="ShmDetachResponse" id="4">
+    <field name="correlationId" id="1" type="int64"/>
+    <field name="code"          id="2" type="ResponseCode"/>
+    <data  name="errorMessage"  id="3" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ShmLeaseKeepalive" id="5">
+    <field name="leaseId"          id="1" type="lease_id_t"/>
+    <field name="streamId"         id="2" type="uint32"/>
+    <field name="clientId"         id="3" type="uint32"/>
+    <field name="role"             id="4" type="Role"/>
+    <field name="clientTimestampNs" id="5" type="uint64"/>
+  </sbe:message>
+
+  <sbe:message name="ShmDriverShutdown" id="6">
+    <field name="timestampNs" id="1" type="uint64"/>
+    <field name="reason"      id="2" type="ShutdownReason"/>
+    <data  name="errorMessage" id="3" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ShmLeaseRevoked" id="7">
+    <field name="timestampNs" id="1" type="uint64"/>
+    <field name="leaseId"     id="2" type="lease_id_t"/>
+    <field name="streamId"    id="3" type="uint32"/>
+    <field name="clientId"    id="4" type="uint32"/>
+    <field name="role"        id="5" type="Role"/>
+    <field name="reason"      id="6" type="LeaseRevokeReason"/>
+    <data  name="errorMessage" id="7" type="varAsciiEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="ShmDriverShutdownRequest" id="8">
+    <field name="correlationId" id="1" type="int64"/>
+    <field name="reason"        id="2" type="ShutdownReason"/>
+    <data  name="token"         id="3" type="varAsciiEncoding"/>
+    <data  name="errorMessage"  id="4" type="varAsciiEncoding"/>
+  </sbe:message>
+
+</sbe:messageSchema>

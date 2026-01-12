@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.bridge"
+                   id="902"
+                   version="1"
+                   semanticVersion="1.0"
+                   byteOrder="littleEndian">
+
+  <types>
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="varDataEncoding">
+      <type name="length"  primitiveType="uint32" maxValue="1073741824"/>
+      <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+
+    <composite name="varDataEncoding256">
+      <type name="length"  primitiveType="uint32" maxValue="256"/>
+      <type name="varData" primitiveType="uint8" length="0"/>
+    </composite>
+
+    <enum name="Bool" encodingType="uint8">
+      <validValue name="FALSE">0</validValue>
+      <validValue name="TRUE">1</validValue>
+    </enum>
+  </types>
+
+  <sbe:message name="BridgeFrameChunk" id="1">
+    <field name="streamId"       id="1" type="uint32"/>
+    <field name="epoch"          id="2" type="uint64"/>
+    <field name="seq"            id="3" type="uint64"/>
+    <field name="chunkIndex"     id="4" type="uint32" maxValue="65535"/>
+    <field name="chunkCount"     id="5" type="uint32" maxValue="65535"/>
+    <field name="chunkOffset"    id="6" type="uint32"/>
+    <field name="chunkLength"    id="7" type="uint32" maxValue="65535"/>
+    <field name="payloadLength"  id="8" type="uint32" maxValue="1073741824"/>
+    <field name="headerIncluded" id="9" type="Bool"/>
+    <data  name="headerBytes"    id="10" type="varDataEncoding256"/>
+    <data  name="payloadBytes"   id="11" type="varDataEncoding"/>
+  </sbe:message>
+
+</sbe:messageSchema>
