@@ -5,10 +5,13 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_consumer_manager.h"
 #include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_metadata_poller.h"
 #include "tensor_pool/tp_progress_poller.h"
+#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_qos.h"
 
 #include "aeronc.h"
@@ -24,6 +27,9 @@
 #include "wire/tensor_pool/metaBlobComplete.h"
 #include "wire/tensor_pool/mode.h"
 #include "wire/tensor_pool/qosConsumer.h"
+#include "wire/tensor_pool/regionType.h"
+#include "wire/tensor_pool/shmPoolAnnounce.h"
+#include "wire/tensor_pool/shmRegionSuperblock.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -31,6 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 typedef struct tp_poll_state_stct
 {
@@ -47,8 +54,14 @@ typedef struct tp_poll_state_stct
 }
 tp_poll_state_t;
 
-static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, const char *aeron_dir)
+static int tp_test_start_client(
+    tp_client_t *client,
+    tp_client_context_t *ctx,
+    const char *aeron_dir,
+    uint64_t announce_period_ns)
 {
+    const char *allowed_paths[] = { "/tmp" };
+
     if (NULL == aeron_dir)
     {
         return -1;
@@ -64,6 +77,11 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     tp_client_context_set_qos_channel(ctx, "aeron:ipc", 1200);
     tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
     tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+    if (announce_period_ns > 0)
+    {
+        tp_client_context_set_announce_period_ns(ctx, announce_period_ns);
+    }
+    tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -77,6 +95,29 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     }
 
     return 0;
+}
+
+static int tp_test_start_client_any(
+    tp_client_t *client,
+    tp_client_context_t *ctx,
+    uint64_t announce_period_ns)
+{
+    const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
+    size_t i;
+
+    for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+    {
+        if (NULL == candidates[i])
+        {
+            continue;
+        }
+        if (tp_test_start_client(client, ctx, candidates[i], announce_period_ns) == 0)
+        {
+            return 0;
+        }
+    }
+
+    return -1;
 }
 
 static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, aeron_publication_t **out)
@@ -142,6 +183,158 @@ static int tp_test_offer(tp_client_t *client, aeron_publication_t *pub, const ui
     }
 
     return -1;
+}
+
+static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *pub)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    if (NULL == pub)
+    {
+        return -1;
+    }
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_publication_is_connected(pub))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static int tp_test_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        int64_t result = tp_producer_offer_frame(producer, frame, meta);
+        if (result >= 0)
+        {
+            return 0;
+        }
+        tp_client_do_work(producer->client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static void tp_test_write_superblock(
+    int fd,
+    uint32_t stream_id,
+    uint64_t epoch,
+    int16_t region_type,
+    uint16_t pool_id,
+    uint32_t nslots,
+    uint32_t slot_bytes,
+    uint32_t stride_bytes)
+{
+    uint8_t buffer[TP_SUPERBLOCK_SIZE_BYTES];
+    struct tensor_pool_shmRegionSuperblock block;
+
+    memset(buffer, 0, sizeof(buffer));
+
+    tensor_pool_shmRegionSuperblock_wrap_for_encode(&block, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_shmRegionSuperblock_set_magic(&block, TP_MAGIC_U64);
+    tensor_pool_shmRegionSuperblock_set_layoutVersion(&block, 1);
+    tensor_pool_shmRegionSuperblock_set_epoch(&block, epoch);
+    tensor_pool_shmRegionSuperblock_set_streamId(&block, stream_id);
+    tensor_pool_shmRegionSuperblock_set_regionType(&block, region_type);
+    tensor_pool_shmRegionSuperblock_set_poolId(&block, pool_id);
+    tensor_pool_shmRegionSuperblock_set_nslots(&block, nslots);
+    tensor_pool_shmRegionSuperblock_set_slotBytes(&block, slot_bytes);
+    tensor_pool_shmRegionSuperblock_set_strideBytes(&block, stride_bytes);
+    tensor_pool_shmRegionSuperblock_set_pid(&block, (uint64_t)getpid());
+    tensor_pool_shmRegionSuperblock_set_startTimestampNs(&block, 1);
+    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&block, 1);
+
+    lseek(fd, 0, SEEK_SET);
+    (void)write(fd, buffer, sizeof(buffer));
+}
+
+static tp_consumer_entry_t *tp_test_find_consumer_entry(tp_consumer_manager_t *manager, uint32_t consumer_id)
+{
+    size_t i;
+
+    if (NULL == manager)
+    {
+        return NULL;
+    }
+
+    for (i = 0; i < manager->registry.capacity; i++)
+    {
+        tp_consumer_entry_t *entry = &manager->registry.entries[i];
+        if (entry->in_use && entry->consumer_id == consumer_id)
+        {
+            return entry;
+        }
+    }
+
+    return NULL;
+}
+
+typedef struct tp_cadence_state_stct
+{
+    uint32_t stream_id;
+    uint32_t producer_id;
+    uint32_t consumer_id;
+    int producer_qos_count;
+    int consumer_qos_count;
+    int announce_count;
+    int meta_count;
+}
+tp_cadence_state_t;
+
+static void tp_on_cadence_qos(void *clientd, const tp_qos_event_t *event)
+{
+    tp_cadence_state_t *state = (tp_cadence_state_t *)clientd;
+    if (NULL == state || NULL == event)
+    {
+        return;
+    }
+
+    if (event->type == TP_QOS_EVENT_PRODUCER &&
+        event->stream_id == state->stream_id &&
+        event->producer_id == state->producer_id)
+    {
+        state->producer_qos_count++;
+    }
+    else if (event->type == TP_QOS_EVENT_CONSUMER &&
+        event->stream_id == state->stream_id &&
+        event->consumer_id == state->consumer_id)
+    {
+        state->consumer_qos_count++;
+    }
+}
+
+static void tp_on_cadence_announce(const tp_data_source_announce_view_t *view, void *clientd)
+{
+    tp_cadence_state_t *state = (tp_cadence_state_t *)clientd;
+    if (state && view && view->stream_id == state->stream_id)
+    {
+        state->announce_count++;
+    }
+}
+
+static void tp_on_cadence_meta_begin(const tp_data_source_meta_view_t *view, void *clientd)
+{
+    tp_cadence_state_t *state = (tp_cadence_state_t *)clientd;
+    if (state && view && view->stream_id == state->stream_id)
+    {
+        state->meta_count++;
+    }
 }
 
 static void tp_on_consumer_hello(const tp_consumer_hello_view_t *view, void *clientd)
@@ -226,6 +419,618 @@ static void tp_on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     }
 }
 
+static void tp_on_descriptor_fragment(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    int *count = (int *)clientd;
+    (void)buffer;
+    (void)length;
+    (void)header;
+    if (count)
+    {
+        (*count)++;
+    }
+}
+
+void tp_test_cadence(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_context_t producer_ctx;
+    tp_producer_t producer;
+    tp_consumer_context_t consumer_ctx;
+    tp_consumer_t consumer;
+    tp_qos_poller_t qos_poller;
+    tp_qos_handlers_t qos_handlers;
+    tp_metadata_poller_t meta_poller;
+    tp_metadata_handlers_t meta_handlers;
+    tp_cadence_state_t state;
+    tp_data_source_announce_t announce;
+    tp_meta_attribute_t attr;
+    tp_data_source_meta_t meta;
+    uint32_t fmt = 1;
+    uint64_t last_producer_qos_ns = 0;
+    uint64_t last_consumer_qos_ns = 0;
+    uint64_t last_announce_ns = 0;
+    uint64_t last_meta_ns = 0;
+    int producer_qos_updates = 0;
+    int consumer_qos_updates = 0;
+    int announce_updates = 0;
+    int meta_updates = 0;
+    int result = -1;
+    int64_t deadline;
+
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+    memset(&consumer, 0, sizeof(consumer));
+    memset(&state, 0, sizeof(state));
+
+    if (tp_test_start_client_any(&client, &ctx, 5 * 1000 * 1000ULL) < 0)
+    {
+        return;
+    }
+
+    if (tp_producer_context_init(&producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    producer_ctx.stream_id = 50001;
+    producer_ctx.producer_id = 7;
+
+    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_consumer_context_init(&consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    consumer_ctx.stream_id = 50001;
+    consumer_ctx.consumer_id = 9;
+
+    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_publication(&client, producer.qos_publication) < 0 ||
+        tp_test_wait_for_publication(&client, producer.metadata_publication) < 0 ||
+        tp_test_wait_for_publication(&client, consumer.qos_publication) < 0)
+    {
+        goto cleanup;
+    }
+
+    state.stream_id = 50001;
+    state.producer_id = 7;
+    state.consumer_id = 9;
+
+    memset(&qos_handlers, 0, sizeof(qos_handlers));
+    qos_handlers.on_qos_event = tp_on_cadence_qos;
+    qos_handlers.clientd = &state;
+    if (tp_qos_poller_init(&qos_poller, &client, &qos_handlers) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&meta_handlers, 0, sizeof(meta_handlers));
+    meta_handlers.on_data_source_announce = tp_on_cadence_announce;
+    meta_handlers.on_data_source_meta_begin = tp_on_cadence_meta_begin;
+    meta_handlers.clientd = &state;
+    if (tp_metadata_poller_init(&meta_poller, &client, &meta_handlers) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&announce, 0, sizeof(announce));
+    announce.stream_id = 50001;
+    announce.producer_id = 7;
+    announce.epoch = 1;
+    announce.meta_version = 1;
+    announce.name = "cadence";
+    announce.summary = "cadence";
+    if (tp_producer_set_data_source_announce(&producer, &announce) < 0)
+    {
+        goto cleanup;
+    }
+
+    attr.key = "pixel_format";
+    attr.format = "u32";
+    attr.value = (const uint8_t *)&fmt;
+    attr.value_length = sizeof(fmt);
+    meta.stream_id = 50001;
+    meta.meta_version = 1;
+    meta.timestamp_ns = tp_clock_now_ns();
+    meta.attributes = &attr;
+    meta.attribute_count = 1;
+    if (tp_producer_set_data_source_meta(&producer, &meta) < 0)
+    {
+        goto cleanup;
+    }
+
+    deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+    while (tp_clock_now_ns() < deadline)
+    {
+        tp_producer_poll_control(&producer, 10);
+        tp_consumer_poll_control(&consumer, 10);
+        tp_qos_poll(&qos_poller, 10);
+        tp_metadata_poll(&meta_poller, 10);
+        tp_client_do_work(&client);
+
+        if (producer.last_qos_ns != 0 && producer.last_qos_ns != last_producer_qos_ns)
+        {
+            last_producer_qos_ns = producer.last_qos_ns;
+            producer_qos_updates++;
+        }
+        if (consumer.last_qos_ns != 0 && consumer.last_qos_ns != last_consumer_qos_ns)
+        {
+            last_consumer_qos_ns = consumer.last_qos_ns;
+            consumer_qos_updates++;
+        }
+        if (producer.last_announce_ns != 0 && producer.last_announce_ns != last_announce_ns)
+        {
+            last_announce_ns = producer.last_announce_ns;
+            announce_updates++;
+        }
+        if (producer.last_meta_ns != 0 && producer.last_meta_ns != last_meta_ns)
+        {
+            last_meta_ns = producer.last_meta_ns;
+            meta_updates++;
+        }
+
+        if ((state.producer_qos_count >= 2 &&
+            state.consumer_qos_count >= 2 &&
+            state.announce_count >= 2 &&
+            state.meta_count >= 2) ||
+            (producer_qos_updates >= 2 &&
+                consumer_qos_updates >= 2 &&
+                announce_updates >= 2 &&
+                meta_updates >= 2))
+        {
+            result = 0;
+            break;
+        }
+
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+cleanup:
+    if (producer.client)
+    {
+        tp_producer_close(&producer);
+    }
+    if (consumer.client)
+    {
+        tp_consumer_close(&consumer);
+    }
+    if (qos_poller.assembler)
+    {
+        aeron_fragment_assembler_delete(qos_poller.assembler);
+    }
+    if (meta_poller.assembler)
+    {
+        aeron_fragment_assembler_delete(meta_poller.assembler);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_shm_announce_freshness(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_consumer_context_t consumer_ctx;
+    tp_consumer_t consumer;
+    aeron_publication_t *control_pub = NULL;
+    uint8_t buffer[512];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_shmPoolAnnounce announce;
+    struct tensor_pool_shmPoolAnnounce_payloadPools pools;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_announce_headerXXXXXX";
+    char pool_path[] = "/tmp/tp_announce_poolXXXXXX";
+    char header_uri[256];
+    char pool_uri[256];
+    uint64_t now_ns;
+    uint64_t freshness_ns;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&consumer, 0, sizeof(consumer));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    if (tp_consumer_context_init(&consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    consumer_ctx.stream_id = 60001;
+    consumer_ctx.consumer_id = 3;
+
+    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4) != 0 ||
+        ftruncate(pool_fd, TP_SUPERBLOCK_SIZE_BYTES + 64 * 4) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 60001, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 60001, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    now_ns = (uint64_t)tp_clock_now_ns();
+    freshness_ns = client.context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_shmPoolAnnounce_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_shmPoolAnnounce_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_shmPoolAnnounce_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_shmPoolAnnounce_sbe_schema_version());
+
+    tensor_pool_shmPoolAnnounce_wrap_for_encode(&announce, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_shmPoolAnnounce_set_streamId(&announce, 60001);
+    tensor_pool_shmPoolAnnounce_set_producerId(&announce, 2);
+    tensor_pool_shmPoolAnnounce_set_epoch(&announce, 1);
+    tensor_pool_shmPoolAnnounce_set_layoutVersion(&announce, 1);
+    tensor_pool_shmPoolAnnounce_set_headerNslots(&announce, 4);
+    tensor_pool_shmPoolAnnounce_set_headerSlotBytes(&announce, TP_HEADER_SLOT_BYTES);
+    tensor_pool_shmPoolAnnounce_set_announceClockDomain(&announce, tensor_pool_clockDomain_MONOTONIC);
+    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns - (freshness_ns / 2));
+
+    tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_encode(
+        &pools,
+        (char *)buffer,
+        1,
+        tensor_pool_shmPoolAnnounce_sbe_position_ptr(&announce),
+        tensor_pool_shmPoolAnnounce_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_shmPoolAnnounce_payloadPools_next(&pools);
+    tensor_pool_shmPoolAnnounce_payloadPools_set_poolId(&pools, 1);
+    tensor_pool_shmPoolAnnounce_payloadPools_set_poolNslots(&pools, 4);
+    tensor_pool_shmPoolAnnounce_payloadPools_set_strideBytes(&pools, 64);
+    tensor_pool_shmPoolAnnounce_payloadPools_put_regionUri(&pools, pool_uri, strlen(pool_uri));
+    tensor_pool_shmPoolAnnounce_put_headerRegionUri(&announce, header_uri, strlen(header_uri));
+
+    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    {
+        goto cleanup;
+    }
+
+    {
+        int i;
+        for (i = 0; i < 50; i++)
+        {
+            tp_consumer_poll_control(&consumer, 10);
+            tp_client_do_work(&client);
+            {
+                struct timespec ts = { 0, 1000000 };
+                nanosleep(&ts, NULL);
+            }
+        }
+        assert(!consumer.shm_mapped);
+    }
+
+    now_ns = (uint64_t)tp_clock_now_ns();
+    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns);
+    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    {
+        goto cleanup;
+    }
+
+    {
+        int64_t map_deadline = tp_clock_now_ns() + 200 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < map_deadline)
+        {
+            tp_consumer_poll_control(&consumer, 10);
+            tp_client_do_work(&client);
+            if (consumer.shm_mapped)
+            {
+                result = 0;
+                break;
+            }
+            {
+                struct timespec ts = { 0, 1000000 };
+                nanosleep(&ts, NULL);
+            }
+        }
+    }
+
+cleanup:
+    if (control_pub)
+    {
+        aeron_publication_close(control_pub, NULL, NULL);
+    }
+    if (consumer.client)
+    {
+        tp_consumer_close(&consumer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_rate_limit(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_context_t producer_ctx;
+    tp_producer_t producer;
+    tp_consumer_hello_view_t hello;
+    tp_consumer_manager_t *manager;
+    tp_consumer_entry_t *entry = NULL;
+    aeron_subscription_t *descriptor_sub = NULL;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_rate_headerXXXXXX";
+    char pool_path[] = "/tmp/tp_rate_poolXXXXXX";
+    char header_uri[256];
+    char pool_uri[256];
+    tp_producer_config_t config;
+    tp_payload_pool_config_t pool_cfg;
+    uint8_t payload[16];
+    tp_tensor_header_t tensor;
+    tp_frame_t frame;
+    tp_frame_metadata_t meta;
+    int result = -1;
+    int fragments = 0;
+    int64_t deadline;
+
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    client.context.base.descriptor_channel[0] = '\0';
+    client.context.base.descriptor_stream_id = -1;
+
+    if (tp_test_add_subscription(&client, "aeron:ipc", 2100, &descriptor_sub) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4) != 0 ||
+        ftruncate(pool_fd, TP_SUPERBLOCK_SIZE_BYTES + 64 * 4) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 70001, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 70001, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    if (tp_producer_context_init(&producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    producer_ctx.stream_id = 70001;
+    producer_ctx.producer_id = 5;
+
+    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&pool_cfg, 0, sizeof(pool_cfg));
+    pool_cfg.pool_id = 1;
+    pool_cfg.nslots = 4;
+    pool_cfg.stride_bytes = 64;
+    pool_cfg.uri = pool_uri;
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = 70001;
+    config.producer_id = 5;
+    config.epoch = 1;
+    config.layout_version = 1;
+    config.header_nslots = 4;
+    config.header_uri = header_uri;
+    config.pools = &pool_cfg;
+    config.pool_count = 1;
+
+    if (tp_producer_attach(&producer, &config) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_producer_enable_consumer_manager(&producer, 4) < 0)
+    {
+        goto cleanup;
+    }
+    manager = producer.consumer_manager;
+
+    memset(&hello, 0, sizeof(hello));
+    hello.stream_id = 70001;
+    hello.consumer_id = 44;
+    hello.supports_shm = 1;
+    hello.supports_progress = 1;
+    hello.mode = TP_MODE_RATE_LIMITED;
+    hello.max_rate_hz = 1;
+    hello.descriptor_stream_id = 2100;
+    hello.descriptor_channel.data = "aeron:ipc";
+    hello.descriptor_channel.length = 9;
+
+    if (tp_consumer_manager_handle_hello(manager, &hello, (uint64_t)tp_clock_now_ns()) < 0)
+    {
+        goto cleanup;
+    }
+
+    entry = tp_test_find_consumer_entry(manager, 44);
+    if (NULL == entry || NULL == entry->descriptor_publication)
+    {
+        goto cleanup;
+    }
+    deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_subscription_is_connected(descriptor_sub) &&
+            aeron_publication_is_connected(entry->descriptor_publication))
+        {
+            break;
+        }
+        tp_client_do_work(&client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+    if (!aeron_subscription_is_connected(descriptor_sub) ||
+        !aeron_publication_is_connected(entry->descriptor_publication))
+    {
+        goto cleanup;
+    }
+
+    memset(&tensor, 0, sizeof(tensor));
+    tensor.dtype = tensor_pool_dtype_UINT8;
+    tensor.major_order = tensor_pool_majorOrder_ROW;
+    tensor.ndims = 1;
+    tensor.progress_unit = tensor_pool_progressUnit_NONE;
+    tensor.dims[0] = sizeof(payload);
+    tensor.strides[0] = 1;
+    memset(payload, 0xAB, sizeof(payload));
+
+    memset(&frame, 0, sizeof(frame));
+    frame.tensor = &tensor;
+    frame.payload = payload;
+    frame.payload_len = sizeof(payload);
+    frame.pool_id = 1;
+
+    memset(&meta, 0, sizeof(meta));
+    meta.timestamp_ns = 1;
+    meta.meta_version = 1;
+    meta.trace_id = 0;
+
+    if (tp_test_offer_frame(&producer, &frame, &meta) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_test_offer_frame(&producer, &frame, &meta) < 0)
+    {
+        goto cleanup;
+    }
+
+    deadline = tp_clock_now_ns() + 500 * 1000 * 1000LL;
+    while (tp_clock_now_ns() < deadline)
+    {
+        aeron_subscription_poll(descriptor_sub, tp_on_descriptor_fragment, &fragments, 10);
+        if (fragments >= 1)
+        {
+            break;
+        }
+        tp_client_do_work(&client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    if (fragments < 1)
+    {
+        goto cleanup;
+    }
+
+    {
+        int initial = fragments;
+        deadline = tp_clock_now_ns() + 300 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < deadline)
+        {
+            aeron_subscription_poll(descriptor_sub, tp_on_descriptor_fragment, &fragments, 10);
+            tp_client_do_work(&client);
+            {
+                struct timespec ts = { 0, 1000000 };
+                nanosleep(&ts, NULL);
+            }
+        }
+
+        if (fragments == initial)
+        {
+            result = 0;
+        }
+    }
+
+cleanup:
+    if (descriptor_sub)
+    {
+        aeron_subscription_close(descriptor_sub, NULL, NULL);
+    }
+    if (producer.client)
+    {
+        tp_producer_close(&producer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
 void tp_test_pollers(void)
 {
     tp_client_context_t ctx;
@@ -258,24 +1063,9 @@ void tp_test_pollers(void)
     memset(&meta_handlers, 0, sizeof(meta_handlers));
     memset(&progress_handlers, 0, sizeof(progress_handlers));
 
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        size_t i;
-        int started = 0;
-
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
-        {
-            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
-            {
-                started = 1;
-                break;
-            }
-        }
-
-        if (!started)
-        {
-            return;
-        }
+        return;
     }
 
     if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)

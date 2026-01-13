@@ -16,6 +16,7 @@
 #include "wire/tensor_pool/regionType.h"
 #include "wire/tensor_pool/shmRegionSuperblock.h"
 #include "wire/tensor_pool/slotHeader.h"
+#include "wire/tensor_pool/tensorHeader.h"
 
 #include "aeronc.h"
 
@@ -301,6 +302,42 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
         TP_HEADER_SLOT_BYTES);
     assert(tensor_pool_slotHeader_valuesLenBytes(&slot_header) == claim.payload_len);
     assert(tensor_pool_slotHeader_poolId(&slot_header) == claim.pool_id);
+    {
+        size_t pad_offset = tensor_pool_slotHeader_pad_encoding_offset();
+        size_t i;
+        for (i = 0; i < 26; i++)
+        {
+            assert(slot[pad_offset + i] == 0);
+        }
+    }
+    {
+        struct tensor_pool_messageHeader msg_header;
+        struct tensor_pool_tensorHeader tensor_header;
+        size_t header_len = tensor_pool_messageHeader_encoded_length();
+        size_t pad_offset = tensor_pool_tensorHeader_pad_encoding_offset();
+        size_t pad_len = tensor_pool_tensorHeader_sbe_block_length() - pad_offset;
+        size_t i;
+        uint8_t *header_bytes = slot + tensor_pool_slotHeader_sbe_block_length() + sizeof(uint32_t);
+
+        tensor_pool_messageHeader_wrap(
+            &msg_header,
+            (char *)header_bytes,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            header_len + tensor_pool_tensorHeader_sbe_block_length());
+        tensor_pool_tensorHeader_wrap_for_decode(
+            &tensor_header,
+            (char *)header_bytes,
+            header_len,
+            tensor_pool_tensorHeader_sbe_block_length(),
+            tensor_pool_tensorHeader_sbe_schema_version(),
+            header_len + tensor_pool_tensorHeader_sbe_block_length());
+
+        for (i = 0; i < pad_len; i++)
+        {
+            assert(header_bytes[header_len + pad_offset + i] == 0);
+        }
+    }
 
     if (fixed_pool_mode)
     {

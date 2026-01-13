@@ -713,6 +713,8 @@ static int tp_encode_tensor_header(uint8_t *buffer, size_t buffer_len, const tp_
         return -1;
     }
 
+    memset(buffer, 0, buffer_len);
+
     tensor_pool_messageHeader_wrap(
         &msg_header,
         (char *)buffer,
