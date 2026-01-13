@@ -40,12 +40,12 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     }
 
     deadline = tp_clock_now_ns() + 100 * 1000 * 1000LL;
-    read_result = tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame);
+    read_result = tp_consumer_read_frame(state->consumer, desc->seq, &frame);
     while (read_result == 1 && tp_clock_now_ns() < deadline)
     {
         struct timespec ts = { 0, 1000000 };
         nanosleep(&ts, NULL);
-        read_result = tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame);
+        read_result = tp_consumer_read_frame(state->consumer, desc->seq, &frame);
     }
     if (read_result == 0)
     {

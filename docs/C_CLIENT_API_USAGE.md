@@ -66,9 +66,10 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     tp_consumer_t *consumer = (tp_consumer_t *)clientd;
     tp_frame_view_t view;
 
-    if (tp_consumer_read_frame(consumer, desc->seq, desc->header_index, &view) == 0)
+    if (tp_consumer_read_frame(consumer, desc->seq, &view) == 0)
     {
         // view.payload/view.payload_len are valid here.
+        // desc->trace_id carries the producer trace id (0 if unset).
     }
 }
 
@@ -192,7 +193,6 @@ tp_metadata_poll(&meta_poller, 10);
 ```c
 tp_frame_progress_t progress = {
     .seq = seq,
-    .header_index = header_index,
     .payload_bytes_filled = bytes,
     .state = TP_PROGRESS_STARTED
 };

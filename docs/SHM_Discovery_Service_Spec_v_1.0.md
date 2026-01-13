@@ -81,11 +81,11 @@ Deployments define:
 ```toml
 # Single-host default
 discovery.channel   = "aeron:ipc?term-length=1m"
-discovery.stream_id = 7000
+discovery.stream_id = 1000
 
 # Multi-host / fleet
 discovery.channel   = "aeron:udp?endpoint=registry.example.org:40123"
-discovery.stream_id = 7000
+discovery.stream_id = 1000
 ```
 
 When Discovery is embedded in the Driver, `discovery.*` MAY default to the driver control endpoint.

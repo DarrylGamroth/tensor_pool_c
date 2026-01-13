@@ -440,8 +440,7 @@ void tp_test_pollers(void)
         tensor_pool_frameProgress_wrap_for_encode(&progress, (char *)buffer, header_len, sizeof(buffer));
         tensor_pool_frameProgress_set_streamId(&progress, 1);
         tensor_pool_frameProgress_set_epoch(&progress, 1);
-        tensor_pool_frameProgress_set_frameId(&progress, 5);
-        tensor_pool_frameProgress_set_headerIndex(&progress, 0);
+        tensor_pool_frameProgress_set_seq(&progress, 5);
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 128);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_STARTED);
 
@@ -479,9 +478,9 @@ void tp_test_pollers(void)
         tensor_pool_frameDescriptor_set_streamId(&descriptor, 9);
         tensor_pool_frameDescriptor_set_epoch(&descriptor, 1);
         tensor_pool_frameDescriptor_set_seq(&descriptor, 42);
-        tensor_pool_frameDescriptor_set_headerIndex(&descriptor, 0);
         tensor_pool_frameDescriptor_set_timestampNs(&descriptor, 123);
         tensor_pool_frameDescriptor_set_metaVersion(&descriptor, 1);
+        tensor_pool_frameDescriptor_set_traceId(&descriptor, 9);
 
         if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
         {

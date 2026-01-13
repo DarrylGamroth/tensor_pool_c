@@ -156,18 +156,17 @@
     <field name="streamId"    id="1" type="uint32"/>
     <field name="epoch"       id="2" type="epoch_t"/>
     <field name="seq"         id="3" type="seq_t"/>
-    <field name="headerIndex" id="4" type="uint32"/>
-    <field name="timestampNs" id="5" type="uint64" presence="optional" nullValue="18446744073709551615"/>
-    <field name="metaVersion" id="6" type="version_t" presence="optional" nullValue="4294967295"/>
+    <field name="timestampNs" id="4" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <field name="metaVersion" id="5" type="version_t" presence="optional" nullValue="4294967295"/>
+    <field name="traceId"     id="6" type="uint64" presence="optional" nullValue="0"/>
   </sbe:message>
 
   <sbe:message name="FrameProgress" id="11">
     <field name="streamId"          id="1" type="uint32"/>
     <field name="epoch"             id="2" type="epoch_t"/>
-    <field name="frameId"           id="3" type="seq_t"/>
-    <field name="headerIndex"       id="4" type="uint32"/>
-    <field name="payloadBytesFilled" id="5" type="uint64"/>
-    <field name="state"             id="6" type="FrameProgressState"/>
+    <field name="seq"               id="3" type="seq_t"/>
+    <field name="payloadBytesFilled" id="4" type="uint64"/>
+    <field name="state"             id="5" type="FrameProgressState"/>
   </sbe:message>
 
   <sbe:message name="QosConsumer" id="5">

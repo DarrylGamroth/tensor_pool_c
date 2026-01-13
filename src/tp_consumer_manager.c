@@ -11,14 +11,13 @@ int tp_producer_publish_descriptor_to(
     tp_producer_t *producer,
     aeron_publication_t *publication,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t timestamp_ns,
-    uint32_t meta_version);
+    uint32_t meta_version,
+    uint64_t trace_id);
 int tp_producer_publish_progress_to(
     tp_producer_t *producer,
     aeron_publication_t *publication,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state);
 
@@ -321,9 +320,9 @@ int tp_consumer_manager_publish_descriptor(
     tp_consumer_manager_t *manager,
     uint32_t consumer_id,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t timestamp_ns,
-    uint32_t meta_version)
+    uint32_t meta_version,
+    uint64_t trace_id)
 {
     tp_consumer_entry_t *entry;
     aeron_publication_t *publication = NULL;
@@ -348,16 +347,15 @@ int tp_consumer_manager_publish_descriptor(
         manager->producer,
         publication,
         seq,
-        header_index,
         timestamp_ns,
-        meta_version);
+        meta_version,
+        trace_id);
 }
 
 int tp_consumer_manager_publish_progress(
     tp_consumer_manager_t *manager,
     uint32_t consumer_id,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state)
 {
@@ -384,7 +382,6 @@ int tp_consumer_manager_publish_progress(
         manager->producer,
         publication,
         seq,
-        header_index,
         payload_bytes_filled,
         state);
 }

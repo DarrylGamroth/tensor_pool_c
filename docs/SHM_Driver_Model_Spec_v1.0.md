@@ -10,7 +10,7 @@ This document is normative for deployments that use an external SHM Driver.
 The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHOULD”, “SHOULD NOT”, and “MAY” are to be interpreted as described in RFC 2119.
 
 **Normative References**  
-- Shared-Memory Tensor Pool Wire Specification v1.1
+- Shared-Memory Tensor Pool Wire Specification v1.2
 
 **Informative Reference**  
 - Stream ID guidance: `docs/STREAM_ID_CONVENTIONS.md`
@@ -71,6 +71,12 @@ A lease represents authorization for a client to access a specific stream in a s
 ### 4.2 Attach Protocol (Normative)
 
 Clients attach to a stream by issuing a ShmAttachRequest to the driver and receiving a correlated ShmAttachResponse. The attach protocol MUST provide, on success, the current `epoch`, the current `layout_version`, URIs for all SHM regions required by the Wire Specification, and a valid `lease_id`.
+If the deployment uses dynamic TraceLink node IDs, the driver MAY assign a
+node ID as part of the attach response. When present, the node ID is valid for
+the lifetime of the lease.
+Clients MAY request a specific node ID via `desiredNodeId`. If the requested ID
+is unavailable, the driver MUST reject the attach with `code=REJECTED` (or
+`INVALID_PARAMS`) and MUST NOT set `nodeId`.
 
 The driver MAY create new SHM regions on demand when `publishMode=EXISTING_OR_CREATE`; otherwise, it MUST return an error if the stream does not already exist or is not provisioned for the requested role.
 
@@ -78,7 +84,9 @@ Clients SHOULD apply an attach timeout; if no response is received within the co
 
 `correlationId` is client-supplied; the driver MUST echo it unchanged in `ShmAttachResponse`.
 
-For `code=OK`, the response MUST include: `leaseId`, `streamId`, `epoch`, `layoutVersion`, `headerNslots`, `headerSlotBytes`, `maxDims`, `headerRegionUri`, and a complete `payloadPools` group with each pool's `regionUri`, `poolId`, `poolNslots`, and `strideBytes`. `headerSlotBytes` is fixed at `256` by the Wire Specification, and `maxDims` is fixed by the schema constant (v1.1: `8`).
+For `code=OK`, the response MUST include: `leaseId`, `streamId`, `epoch`, `layoutVersion`, `headerNslots`, `headerSlotBytes`, `headerRegionUri`, and a complete `payloadPools` group with each pool's `regionUri`, `poolId`, `poolNslots`, and `strideBytes`. `headerSlotBytes` is fixed at `256` by the Wire Specification.
+If a node ID is assigned, the response MUST also include `nodeId`. If present,
+`nodeId` MUST be non-null and stable for the lease lifetime.
 
 For `code != OK`, the response MUST include `correlationId` and `code`, and SHOULD include `errorMessage` with a diagnostic string.
 
@@ -92,7 +100,7 @@ If `code=OK` and any required field is set to its `nullValue`, the client MUST t
 
 For `code=OK`, `headerRegionUri` and every `payloadPools.regionUri` MUST be present, non-empty, and not blank. If any required URI is absent or empty (length=0), the client MUST treat the response as a protocol error, DROP the attach, and reattach.
 
-For `code=OK`, clients MUST reject the response if `headerSlotBytes != 256`, if `maxDims` does not match the schema constant, or if the `payloadPools` group is empty.
+For `code=OK`, clients MUST reject the response if `headerSlotBytes != 256` or if the `payloadPools` group is empty.
 
 For `code=OK`, the driver MUST set `poolNslots` equal to `headerNslots` for each payload pool. Clients MUST treat any mismatch as a protocol error, DROP the attach, and reattach.
 
@@ -105,7 +113,6 @@ If `errorMessage` is present (length > 0), it MUST be limited to 1024 bytes; dri
 ### 4.3 Attach Request Semantics (Normative)
 
 - `expectedLayoutVersion`: If present and nonzero, the driver MUST reject the request with `code=REJECTED` if the active layout version for the stream does not match. If absent or zero, the driver uses its configured layout version and returns it in the response.
-- `maxDims`: MUST be omitted or zero. The driver MUST ignore any nonzero value and MUST return the schema constant in the response.
 - `publishMode`: `REQUIRE_EXISTING` means the driver MUST reject if the stream is not already provisioned. `EXISTING_OR_CREATE` allows the driver to create or initialize SHM regions on demand.
 - `requireHugepages`: A `HugepagesPolicy` value. If `HUGEPAGES`, the driver MUST reject the request with `code=REJECTED` if it cannot provide hugepage-backed regions that satisfy Wire Specification validation rules. If `STANDARD`, the driver MUST reject the request with `code=REJECTED` if it cannot provide standard page-backed regions. If `UNSPECIFIED`, the driver applies its configured default policy.
 - Streams with zero payload pools are invalid in v1.0; the driver MUST reject attach requests for such streams with `code=INVALID_PARAMS`.
@@ -385,7 +392,7 @@ Deployments MAY configure the driver to delete and recreate existing SHM backing
 
 ## 15. Directory Layout and Namespacing (Informative)
 
-Drivers SHOULD follow the directory layout guidance in the Wire Specification (§15.21a.3). When multiple drivers (embedded or external) can run on the same host, they SHOULD include a stable namespace and driver instance identifier in the path to avoid collisions. Embedded drivers SHOULD use the same `shm_base_dir` layout as external drivers for operational consistency.
+Drivers SHOULD follow the directory layout guidance in the Wire Specification (§15.21a.3). When multiple drivers (embedded or external) can run on the same host, they SHOULD rely on the per-user namespace, stream_id scoping, and (if needed) distinct `shm_base_dir` roots to avoid collisions. Embedded drivers SHOULD use the same `shm_base_dir` layout as external drivers for operational consistency.
 
 ---
 
@@ -529,6 +536,7 @@ See `docs/examples/driver_camera_example.toml` for a concrete example.
     <type name="epoch_t"    primitiveType="uint64"/>
     <type name="version_t"  primitiveType="uint32"/>
     <type name="lease_id_t" primitiveType="uint64"/>
+    <type name="node_id_t"  primitiveType="uint32"/>
 
   </types>
 
@@ -540,9 +548,9 @@ See `docs/examples/driver_camera_example.toml` for a concrete example.
     <field name="clientId"             id="3" type="uint32"/>
     <field name="role"                 id="4" type="Role"/>
     <field name="expectedLayoutVersion" id="5" type="version_t"/>
-    <field name="maxDims"              id="6" type="uint8"/>
-    <field name="publishMode"          id="7" type="PublishMode" presence="optional" nullValue="255"/>
-    <field name="requireHugepages"     id="8" type="HugepagesPolicy"/>
+    <field name="publishMode"          id="6" type="PublishMode" presence="optional" nullValue="255"/>
+    <field name="requireHugepages"     id="7" type="HugepagesPolicy"/>
+    <field name="desiredNodeId"        id="8" type="node_id_t" presence="optional" nullValue="4294967295"/>
   </sbe:message>
 
   <sbe:message name="ShmAttachResponse" id="2">
@@ -555,7 +563,7 @@ See `docs/examples/driver_camera_example.toml` for a concrete example.
     <field name="layoutVersion"         id="7" type="version_t" presence="optional" nullValue="4294967295"/>
     <field name="headerNslots"          id="8" type="uint32" presence="optional" nullValue="4294967295"/>
     <field name="headerSlotBytes"       id="9" type="uint16" presence="optional" nullValue="65535"/>
-    <field name="maxDims"               id="10" type="uint8" presence="optional" nullValue="255"/>
+    <field name="nodeId"                id="10" type="node_id_t" presence="optional" nullValue="4294967295"/>
     <group name="payloadPools"          id="20" dimensionType="groupSizeEncoding">
       <field name="poolId"      id="1" type="uint16"/>
       <field name="poolNslots"  id="2" type="uint32"/>

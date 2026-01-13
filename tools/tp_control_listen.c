@@ -324,19 +324,17 @@ static void tp_on_control_fragment(
 
         if (state && state->json)
         {
-            printf("{\"type\":\"FrameProgress\",\"stream\":%u,\"seq\":%" PRIu64 ",\"header_index\":%u,\"bytes\":%" PRIu64 ",\"state\":%u}\n",
+            printf("{\"type\":\"FrameProgress\",\"stream\":%u,\"seq\":%" PRIu64 ",\"bytes\":%" PRIu64 ",\"state\":%u}\n",
                 tensor_pool_frameProgress_streamId(&progress),
-                tensor_pool_frameProgress_frameId(&progress),
-                tensor_pool_frameProgress_headerIndex(&progress),
+                tensor_pool_frameProgress_seq(&progress),
                 tensor_pool_frameProgress_payloadBytesFilled(&progress),
                 state_value);
         }
         else
         {
-            printf("FrameProgress stream=%u seq=%" PRIu64 " header_index=%u bytes=%" PRIu64 " state=%u\n",
+            printf("FrameProgress stream=%u seq=%" PRIu64 " bytes=%" PRIu64 " state=%u\n",
                 tensor_pool_frameProgress_streamId(&progress),
-                tensor_pool_frameProgress_frameId(&progress),
-                tensor_pool_frameProgress_headerIndex(&progress),
+                tensor_pool_frameProgress_seq(&progress),
                 tensor_pool_frameProgress_payloadBytesFilled(&progress),
                 state_value);
         }

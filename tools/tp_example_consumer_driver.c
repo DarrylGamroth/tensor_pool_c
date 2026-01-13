@@ -32,7 +32,7 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
         return;
     }
 
-    if (tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame) == 0)
+    if (tp_consumer_read_frame(state->consumer, desc->seq, &frame) == 0)
     {
         state->received++;
         fprintf(stdout, "Frame seq=%" PRIu64 " pool_id=%u payload=%u\n",

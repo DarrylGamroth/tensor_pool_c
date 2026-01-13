@@ -90,9 +90,9 @@ int tp_producer_publish_descriptor_to(
     tp_producer_t *producer,
     aeron_publication_t *publication,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t timestamp_ns,
-    uint32_t meta_version)
+    uint32_t meta_version,
+    uint64_t trace_id)
 {
     uint8_t buffer[256];
     struct tensor_pool_messageHeader msg_header;
@@ -127,9 +127,9 @@ int tp_producer_publish_descriptor_to(
     tensor_pool_frameDescriptor_set_streamId(&descriptor, producer->stream_id);
     tensor_pool_frameDescriptor_set_epoch(&descriptor, producer->epoch);
     tensor_pool_frameDescriptor_set_seq(&descriptor, seq);
-    tensor_pool_frameDescriptor_set_headerIndex(&descriptor, header_index);
     tensor_pool_frameDescriptor_set_timestampNs(&descriptor, timestamp_ns);
     tensor_pool_frameDescriptor_set_metaVersion(&descriptor, meta_version);
+    tensor_pool_frameDescriptor_set_traceId(&descriptor, trace_id);
 
     result = aeron_publication_offer(
         publication,
@@ -149,9 +149,9 @@ int tp_producer_publish_descriptor_to(
 static int tp_producer_publish_descriptor(
     tp_producer_t *producer,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t timestamp_ns,
-    uint32_t meta_version)
+    uint32_t meta_version,
+    uint64_t trace_id)
 {
     int result = 0;
     int published = 0;
@@ -171,9 +171,9 @@ static int tp_producer_publish_descriptor(
                 producer,
                 entry->descriptor_publication,
                 seq,
-                header_index,
                 timestamp_ns,
-                meta_version) < 0)
+                meta_version,
+                trace_id) < 0)
             {
                 result = -1;
             }
@@ -187,9 +187,9 @@ static int tp_producer_publish_descriptor(
             producer,
             producer->descriptor_publication,
             seq,
-            header_index,
             timestamp_ns,
-            meta_version) < 0)
+            meta_version,
+            trace_id) < 0)
         {
             result = -1;
         }
@@ -664,19 +664,20 @@ static int tp_encode_tensor_header(uint8_t *buffer, size_t buffer_len, const tp_
 int tp_producer_publish_frame(
     tp_producer_t *producer,
     uint64_t seq,
-    uint32_t header_index,
     const tp_tensor_header_t *tensor,
     const void *payload,
     uint32_t payload_len,
     uint16_t pool_id,
     uint64_t timestamp_ns,
-    uint32_t meta_version)
+    uint32_t meta_version,
+    uint64_t trace_id)
 {
     tp_payload_pool_t *pool;
     uint8_t *slot;
     uint8_t *payload_dst;
     struct tensor_pool_slotHeader slot_header;
     uint8_t header_bytes[TP_HEADER_SLOT_BYTES];
+    uint32_t header_index;
     uint64_t in_progress;
     uint64_t committed;
 
@@ -686,11 +687,7 @@ int tp_producer_publish_frame(
         return -1;
     }
 
-    if (header_index >= producer->header_nslots)
-    {
-        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_frame: header index out of range");
-        return -1;
-    }
+    header_index = (uint32_t)(seq & (producer->header_nslots - 1));
 
     pool = tp_find_pool(producer, pool_id);
     if (NULL == pool)
@@ -746,14 +743,13 @@ int tp_producer_publish_frame(
     __atomic_thread_fence(__ATOMIC_RELEASE);
     tp_atomic_store_u64((uint64_t *)slot, committed);
 
-    return tp_producer_publish_descriptor(producer, seq, header_index, timestamp_ns, meta_version);
+    return tp_producer_publish_descriptor(producer, seq, timestamp_ns, meta_version, trace_id);
 }
 
 int tp_producer_publish_progress_to(
     tp_producer_t *producer,
     aeron_publication_t *publication,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state)
 {
@@ -784,8 +780,7 @@ int tp_producer_publish_progress_to(
     tensor_pool_frameProgress_wrap_for_encode(&progress, (char *)buffer, header_len, sizeof(buffer));
     tensor_pool_frameProgress_set_streamId(&progress, producer->stream_id);
     tensor_pool_frameProgress_set_epoch(&progress, producer->epoch);
-    tensor_pool_frameProgress_set_frameId(&progress, seq);
-    tensor_pool_frameProgress_set_headerIndex(&progress, header_index);
+    tensor_pool_frameProgress_set_seq(&progress, seq);
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, payload_bytes_filled);
     tensor_pool_frameProgress_set_state(&progress, (enum tensor_pool_frameProgressState)state);
 
@@ -801,7 +796,6 @@ int tp_producer_publish_progress_to(
 int tp_producer_publish_progress(
     tp_producer_t *producer,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state)
 {
@@ -823,7 +817,6 @@ int tp_producer_publish_progress(
                 producer,
                 entry->control_publication,
                 seq,
-                header_index,
                 payload_bytes_filled,
                 state) < 0)
             {
@@ -839,7 +832,6 @@ int tp_producer_publish_progress(
             producer,
             producer->control_publication,
             seq,
-            header_index,
             payload_bytes_filled,
             state) < 0)
         {
@@ -860,7 +852,6 @@ int tp_producer_publish_progress(
 int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
 {
     uint64_t seq;
-    uint32_t header_index;
     uint64_t timestamp_ns = 0;
     uint32_t meta_version = 0;
     int result;
@@ -878,18 +869,17 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     }
 
     seq = producer->next_seq++;
-    header_index = (uint32_t)(seq % producer->header_nslots);
 
     result = tp_producer_publish_frame(
         producer,
         seq,
-        header_index,
         frame->tensor,
         frame->payload,
         frame->payload_len,
         frame->pool_id,
         timestamp_ns,
-        meta_version);
+        meta_version,
+        meta ? meta->trace_id : 0);
     if (result < 0)
     {
         return -1;
@@ -939,7 +929,7 @@ int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_
     }
 
     seq = producer->next_seq++;
-    header_index = (uint32_t)(seq % producer->header_nslots);
+    header_index = (uint32_t)(seq & (producer->header_nslots - 1));
     slot = tp_slot_at(producer->header_region.addr, header_index);
 
     claim->seq = seq;
@@ -972,13 +962,13 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
     return tp_producer_publish_frame(
         producer,
         claim->seq,
-        claim->header_index,
         &claim->tensor,
         claim->payload,
         claim->payload_len,
         claim->pool_id,
         meta->timestamp_ns,
-        meta->meta_version);
+        meta->meta_version,
+        meta->trace_id);
 }
 
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim)
@@ -1027,7 +1017,6 @@ int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_
     return tp_producer_publish_progress(
         producer,
         progress->seq,
-        progress->header_index,
         progress->payload_bytes_filled,
         progress->state);
 }

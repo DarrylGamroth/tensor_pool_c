@@ -49,8 +49,7 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
         length);
 
     memset(&view, 0, sizeof(view));
-    view.seq = tensor_pool_frameProgress_frameId(&progress);
-    view.header_index = tensor_pool_frameProgress_headerIndex(&progress);
+    view.seq = tensor_pool_frameProgress_seq(&progress);
     view.payload_bytes_filled = tensor_pool_frameProgress_payloadBytesFilled(&progress);
     if (tensor_pool_frameProgress_state(&progress, &state))
     {

@@ -113,7 +113,7 @@ static void tp_on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
         return;
     }
 
-    read_result = tp_consumer_read_frame(state->consumer, desc->seq, desc->header_index, &frame);
+    read_result = tp_consumer_read_frame(state->consumer, desc->seq, &frame);
     if (read_result == 0)
     {
         state->received++;

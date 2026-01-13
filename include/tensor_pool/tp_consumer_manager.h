@@ -51,15 +51,14 @@ int tp_consumer_manager_publish_descriptor(
     tp_consumer_manager_t *manager,
     uint32_t consumer_id,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t timestamp_ns,
-    uint32_t meta_version);
+    uint32_t meta_version,
+    uint64_t trace_id);
 
 int tp_consumer_manager_publish_progress(
     tp_consumer_manager_t *manager,
     uint32_t consumer_id,
     uint64_t seq,
-    uint32_t header_index,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state);
 

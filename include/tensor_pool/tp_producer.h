@@ -62,6 +62,7 @@ typedef struct tp_frame_metadata_stct
 {
     uint64_t timestamp_ns;
     uint32_t meta_version;
+    uint64_t trace_id;
 }
 tp_frame_metadata_t;
 
@@ -88,7 +89,6 @@ tp_buffer_claim_t;
 typedef struct tp_frame_progress_stct
 {
     uint64_t seq;
-    uint32_t header_index;
     uint64_t payload_bytes_filled;
     tp_progress_state_t state;
 }

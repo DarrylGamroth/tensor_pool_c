@@ -60,9 +60,9 @@ tp_consumer_context_t;
 typedef struct tp_frame_descriptor_stct
 {
     uint64_t seq;
-    uint32_t header_index;
     uint64_t timestamp_ns;
     uint32_t meta_version;
+    uint64_t trace_id;
 }
 tp_frame_descriptor_t;
 
@@ -111,7 +111,7 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx);
 int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *context);
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
-int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t header_index, tp_frame_view_t *out);
+int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_close(tp_consumer_t *consumer);

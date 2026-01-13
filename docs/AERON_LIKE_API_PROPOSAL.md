@@ -207,13 +207,14 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 
 // Frame accessors
-int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t header_index, tp_frame_view_t *out);
+int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
 ```
 
 Behavior:
 - Consumer owns descriptor subscription(s) and switches to per-consumer streams after ConsumerConfig.
 - `tp_consumer_poll_control` updates per-consumer channels and swaps subscriptions.
 - FrameDescriptor handler inside consumer translates to `tp_consumer_read_frame` callback.
+- `tp_consumer_read_frame` derives `header_index = seq & (header_nslots - 1)` using the mapped header ring.
 - When `use_driver` is enabled, `tp_consumer_init` performs driver attach and `tp_consumer_attach` sends ConsumerHello on success.
 - For per-consumer control streams, use `tp_progress_poller_init_with_subscription` with the consumer's assigned control subscription.
 
@@ -320,9 +321,10 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     tp_consumer_t *consumer = (tp_consumer_t *)clientd;
     tp_frame_view_t view;
 
-    if (tp_consumer_read_frame(consumer, desc->seq, desc->header_index, &view) == 0)
+    if (tp_consumer_read_frame(consumer, desc->seq, &view) == 0)
     {
         // process view.data/view.data_length here
+        // desc->trace_id holds the producer trace id (0 if unset).
     }
 }
 

@@ -153,9 +153,9 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
         length);
 
     view.seq = tensor_pool_frameDescriptor_seq(&descriptor);
-    view.header_index = tensor_pool_frameDescriptor_headerIndex(&descriptor);
     view.timestamp_ns = tensor_pool_frameDescriptor_timestampNs(&descriptor);
     view.meta_version = tensor_pool_frameDescriptor_metaVersion(&descriptor);
+    view.trace_id = tensor_pool_frameDescriptor_traceId(&descriptor);
 
     if (consumer->descriptor_handler)
     {
@@ -675,11 +675,12 @@ int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *conf
     return tp_consumer_attach_config(consumer, config);
 }
 
-int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t header_index, tp_frame_view_t *out)
+int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out)
 {
     uint8_t *slot;
     tp_slot_view_t slot_view;
     tp_consumer_pool_t *pool;
+    uint32_t header_index;
     uint64_t seq_first;
     uint64_t seq_second;
 
@@ -689,6 +690,13 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, uint32_t heade
         return -1;
     }
 
+    if (consumer->header_nslots == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_read_frame: header ring unavailable");
+        return -1;
+    }
+
+    header_index = (uint32_t)(seq & (consumer->header_nslots - 1));
     if (header_index >= consumer->header_nslots)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_read_frame: header index out of range");
