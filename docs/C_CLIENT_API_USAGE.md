@@ -153,6 +153,7 @@ tp_producer_queue_claim(&producer, &slots[i]); // re-queue same slot
 
 ```c
 tp_trace_id_generator_t trace_gen;
+tp_frame_t frame;
 uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
     ? producer.driver_attach.node_id
     : 42;
@@ -160,6 +161,8 @@ uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
 tp_trace_id_generator_init_default(&trace_gen, node_id);
 tp_producer_set_trace_id_generator(&producer, &trace_gen);
 
+memset(&frame, 0, sizeof(frame));
+// Populate frame.tensor/frame.payload/frame.payload_len/frame.pool_id before publishing.
 frame.trace_id = 0;
 tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0 };
 tp_producer_offer_frame(&producer, &frame, &meta);
