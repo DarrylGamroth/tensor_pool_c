@@ -14,7 +14,7 @@ It is written to be directly consumable by automated code-generation tools
 **Document Conventions** Normative sections: 6–11, 15.1–15.22, 16. Informative sections: 1–5, 12–14. "NOTE:"/"Rationale:" text is informative. Uppercase MUST/SHOULD/MAY keywords appear only in normative sections and carry RFC 2119 force; any lowercase "must/should/may" in informative text is non-normative.
 **Informative Reference** Stream ID guidance: `docs/STREAM_ID_CONVENTIONS.md`.
 **Version History**
-- v1.2 (2026-01-12): Remove `headerIndex` from `FrameDescriptor`/`FrameProgress` and derive slot indices from `seq`; rename `FrameProgress.frame_id` to `seq`. Clarify file-backed `mmap` guidance. Schema version fields remain unchanged.
+- v1.2 (2026-01-12): Remove `headerIndex` from `FrameDescriptor`/`FrameProgress` and derive slot indices from `seq`; rename `FrameProgress.frame_id` to `seq`. Clarify file-backed `mmap` guidance. Update `stride_bytes` validation to require power-of-two multiples of 64 bytes (no page-alignment requirement). Schema version fields remain unchanged.
 - v1.1 (2025-12-30): Initial RFC-style specification. Adds normative algorithms, compatibility matrix, explicit field alignment (SlotHeader + TensorHeader), language-neutral requirements, and progress reporting protocol. Normative wire/SHM schemas included. Requires `announce_clock_domain` in `ShmPoolAnnounce` and forbids unsynchronized realtime timestamps.
 ---
 
@@ -54,7 +54,7 @@ Each **producer service** owns:
    - Fixed stride per pool.
    - Multiple size classes allowed.
 - v1.2: same slot count as header ring; `payload_slot = header_index` (header_index derived from `seq`; decoupled/free-list mapping is a v2 change).
-  - Choose `stride_bytes` as a power of two and a multiple of the backing page/hugepage size (e.g., 4 KiB or 2 MiB); size-class upward from there (1 MiB, 2 MiB, 4 MiB, 8 MiB on 2 MiB hugepages is a reasonable start).
+  - Choose `stride_bytes` as a power-of-two multiple of 64 bytes (e.g., 64 B, 256 B, 1 KiB, 4 KiB, 1 MiB, 2 MiB, 4 MiB, 8 MiB).
 
 3. **Aeron Publications**
    - `FrameDescriptor` stream (IPC).
@@ -71,6 +71,8 @@ All shared-memory regions are file-backed `mmap` using a URI provided in control
 ### 4.1 Region URI Scheme *(informative)*
 
 The region URI scheme and validation rules are defined normatively in §15.22.
+Page size or hugepage alignment is a deployment consideration but is not a
+protocol requirement for `stride_bytes`.
 
 ### 4.2 Behavior Overview (informative)
 
@@ -937,7 +939,9 @@ Only `path` and `require_hugepages` are defined; unknown parameters MUST be reje
 
 - Consumers MUST reject any `region_uri` with an unknown scheme.
 - For `shm:file`, if `require_hugepages=true`, consumers MUST verify that the mapped region is hugepage-backed. On platforms without a reliable verification mechanism (e.g., Windows), `require_hugepages=true` is unsupported and MUST cause the region to be rejected (no silent downgrade).
-- `stride_bytes` is explicit and MUST NOT be inferred from page size. It MUST be a power of two and a multiple of the backing page size; if `require_hugepages=true`, it MUST also be a multiple of the mapped hugepage size.
+- `stride_bytes` is explicit and MUST NOT be inferred from page size. It MUST be a power-of-two multiple of 64 bytes.
+- Page size or hugepage alignment MAY be chosen by deployments for performance
+  reasons, but it is not a validation requirement in v1.2.
 - For `shm:file`, parameters are separated by `|`; unknown parameters MUST be rejected.
 - Regions that violate these requirements MUST be rejected. On rejection, consumers MAY fall back to a configured `payload_fallback_uri`; otherwise they MUST fail the data source with a clear diagnostic. Rejected regions MUST NOT be partially consumed.
 
