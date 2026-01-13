@@ -193,6 +193,8 @@ tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0 };
 int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
 // frame.trace_id is encoded into FrameDescriptor.trace_id for the output frame.
 
+Note: for N→1 stages, set `frame.trace_id` explicitly so you can emit TraceLinkSet for the derived output.
+
 tp_tracelink_set_t link = {
     .stream_id = producer.stream_id,
     .epoch = producer.epoch,

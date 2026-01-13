@@ -1218,6 +1218,7 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
     {
         return -1;
     }
+    claim->trace_id = trace_id;
 
     return tp_producer_publish_frame(
         producer,
