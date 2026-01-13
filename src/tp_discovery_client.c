@@ -378,6 +378,13 @@ int tp_discovery_decode_response(
                 uint32_t len = tensor_pool_discoveryResponse_results_driverControlChannel_length(&results);
                 const char *channel = tensor_pool_discoveryResponse_results_driverControlChannel(&results);
                 tp_discovery_copy_ascii(result->driver_control_channel, sizeof(result->driver_control_channel), channel, len);
+                if (result->driver_control_stream_id == 0 || result->driver_control_channel[0] == '\0')
+                {
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response missing driver control endpoint", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
             }
         }
     }

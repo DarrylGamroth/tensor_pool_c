@@ -345,6 +345,18 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
         return 1;
     }
 
+    if (version > tensor_pool_shmPoolAnnounce_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_shmPoolAnnounce_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_shmPoolAnnounce_wrap_for_decode(
         &announce,
         (char *)buffer,

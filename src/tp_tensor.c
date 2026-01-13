@@ -84,6 +84,18 @@ int tp_tensor_header_decode(tp_tensor_header_t *out, const uint8_t *buffer, size
         return -1;
     }
 
+    if (version != tensor_pool_tensorHeader_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: schema version mismatch");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_tensorHeader_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_decode: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_tensorHeader_wrap_for_decode(
         &header,
         (char *)buffer,
@@ -289,7 +301,7 @@ int tp_tensor_header_validate(tp_tensor_header_t *header, tp_log_t *log)
 
     for (i = 0; i < header->ndims; i++)
     {
-        if (header->dims[i] <= 0)
+        if (header->dims[i] < 0)
         {
             TP_SET_ERR(EINVAL, "%s", "tp_tensor_header_validate: invalid dims");
             return -1;

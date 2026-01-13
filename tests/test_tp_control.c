@@ -8,6 +8,7 @@
 #include "wire/tensor_pool/metaBlobAnnounce.h"
 #include "wire/tensor_pool/metaBlobChunk.h"
 #include "wire/tensor_pool/metaBlobComplete.h"
+#include "wire/tensor_pool/shmPoolAnnounce.h"
 
 #include <assert.h>
 #include <string.h>
@@ -312,6 +313,32 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_decode_shm_pool_announce_version_gate(void)
+{
+    uint8_t buffer[64];
+    struct tensor_pool_messageHeader header;
+    tp_shm_pool_announce_view_t view;
+    int result = -1;
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_shmPoolAnnounce_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_shmPoolAnnounce_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_shmPoolAnnounce_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_shmPoolAnnounce_sbe_schema_version() + 1);
+
+    if (tp_control_decode_shm_pool_announce(buffer, sizeof(buffer), &view) < 0)
+    {
+        result = 0;
+    }
+
+    assert(result == 0);
+}
+
 void tp_test_decode_consumer_hello(void)
 {
     test_decode_consumer_hello();
@@ -330,4 +357,9 @@ void tp_test_decode_control_response(void)
 void tp_test_decode_meta_blobs(void)
 {
     test_decode_meta_blobs();
+}
+
+void tp_test_decode_shm_pool_announce(void)
+{
+    test_decode_shm_pool_announce_version_gate();
 }

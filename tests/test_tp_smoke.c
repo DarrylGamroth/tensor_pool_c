@@ -14,6 +14,8 @@
 #include "wire/tensor_pool/dtype.h"
 #include "wire/tensor_pool/majorOrder.h"
 #include "wire/tensor_pool/progressUnit.h"
+#include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/tensorHeader.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -28,6 +30,7 @@ void tp_test_decode_consumer_hello(void);
 void tp_test_decode_data_source_meta(void);
 void tp_test_decode_control_response(void);
 void tp_test_decode_meta_blobs(void);
+void tp_test_decode_shm_pool_announce(void);
 void tp_test_consumer_registry(void);
 void tp_test_driver_client_decoders(void);
 void tp_test_discovery_client_decoders(void);
@@ -169,6 +172,9 @@ cleanup:
 static void test_tensor_header(void)
 {
     tp_tensor_header_t header;
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_tensorHeader tensor_header;
 
     memset(&header, 0, sizeof(header));
     header.dtype = tensor_pool_dtype_FLOAT32;
@@ -181,6 +187,50 @@ static void test_tensor_header(void)
     assert(tp_tensor_header_validate(&header, NULL) == 0);
     assert(header.strides[1] == 4);
     assert(header.strides[0] == 12);
+
+    memset(&header, 0, sizeof(header));
+    header.dtype = tensor_pool_dtype_FLOAT32;
+    header.major_order = tensor_pool_majorOrder_ROW;
+    header.ndims = 2;
+    header.progress_unit = tensor_pool_progressUnit_NONE;
+    header.dims[0] = 0;
+    header.dims[1] = 3;
+
+    assert(tp_tensor_header_validate(&header, NULL) == 0);
+
+    memset(buffer, 0, sizeof(buffer));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, tensor_pool_tensorHeader_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_tensorHeader_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_tensorHeader_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_tensorHeader_sbe_schema_version());
+    tensor_pool_tensorHeader_wrap_for_encode(
+        &tensor_header,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        sizeof(buffer));
+    tensor_pool_tensorHeader_set_dtype(&tensor_header, tensor_pool_dtype_FLOAT32);
+    tensor_pool_tensorHeader_set_majorOrder(&tensor_header, tensor_pool_majorOrder_ROW);
+    tensor_pool_tensorHeader_set_ndims(&tensor_header, 1);
+    tensor_pool_tensorHeader_set_padAlign(&tensor_header, 0);
+    tensor_pool_tensorHeader_set_progressUnit(&tensor_header, tensor_pool_progressUnit_NONE);
+    tensor_pool_tensorHeader_set_progressStrideBytes(&tensor_header, 0);
+    tensor_pool_tensorHeader_set_dims(&tensor_header, 0, 1);
+    tensor_pool_tensorHeader_set_strides(&tensor_header, 0, 4);
+
+    assert(tp_tensor_header_decode(&header, buffer, sizeof(buffer), NULL) == 0);
+
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_tensorHeader_sbe_schema_version() + 1);
+    assert(tp_tensor_header_decode(&header, buffer, sizeof(buffer), NULL) < 0);
+
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_tensorHeader_sbe_schema_version());
+    tensor_pool_messageHeader_set_blockLength(&msg_header, tensor_pool_tensorHeader_sbe_block_length() - 1);
+    assert(tp_tensor_header_decode(&header, buffer, sizeof(buffer), NULL) < 0);
 }
 
 int main(void)
@@ -194,6 +244,7 @@ int main(void)
     tp_test_decode_data_source_meta();
     tp_test_decode_control_response();
     tp_test_decode_meta_blobs();
+    tp_test_decode_shm_pool_announce();
     tp_test_consumer_registry();
     tp_test_driver_client_decoders();
     tp_test_discovery_client_decoders();
