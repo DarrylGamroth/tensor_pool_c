@@ -204,6 +204,23 @@ tp_tracelink_set_t link = {
 tp_producer_send_tracelink_set(&producer, &link);
 ```
 
+Convenience form (fills stream/epoch automatically):
+
+```c
+tp_producer_send_tracelink_set_ex(&producer, (uint64_t)seq, out_trace_id, parent_ids, 2);
+```
+
+Claim helper:
+
+```c
+tp_tracelink_set_t set;
+
+if (tp_tracelink_set_from_claim(&producer, &claim, parent_ids, 2, &set) == 0)
+{
+    tp_producer_send_tracelink_set(&producer, &set);
+}
+```
+
 TraceLinkSet validation defaults to checking the most recently published descriptor for the slot. You can override or disable validation:
 
 ```c

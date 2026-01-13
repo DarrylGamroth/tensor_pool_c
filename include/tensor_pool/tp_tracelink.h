@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 struct tp_producer_stct;
+struct tp_buffer_claim_stct;
 
 #define TP_TRACELINK_MAX_PARENTS 256
 
@@ -38,6 +39,18 @@ int tp_tracelink_set_decode(
     size_t max_parents);
 
 int tp_producer_send_tracelink_set(struct tp_producer_stct *producer, const tp_tracelink_set_t *set);
+int tp_producer_send_tracelink_set_ex(
+    struct tp_producer_stct *producer,
+    uint64_t seq,
+    uint64_t trace_id,
+    const uint64_t *parents,
+    size_t parent_count);
+int tp_tracelink_set_from_claim(
+    const struct tp_producer_stct *producer,
+    const struct tp_buffer_claim_stct *claim,
+    const uint64_t *parents,
+    size_t parent_count,
+    tp_tracelink_set_t *out);
 
 #ifdef __cplusplus
 }

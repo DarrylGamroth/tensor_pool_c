@@ -315,3 +315,58 @@ int tp_producer_send_tracelink_set(tp_producer_t *producer, const tp_tracelink_s
     }
     return 0;
 }
+
+int tp_producer_send_tracelink_set_ex(
+    tp_producer_t *producer,
+    uint64_t seq,
+    uint64_t trace_id,
+    const uint64_t *parents,
+    size_t parent_count)
+{
+    tp_tracelink_set_t set;
+
+    if (NULL == producer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_tracelink_set_ex: null producer");
+        return -1;
+    }
+
+    memset(&set, 0, sizeof(set));
+    set.stream_id = producer->stream_id;
+    set.epoch = producer->epoch;
+    set.seq = seq;
+    set.trace_id = trace_id;
+    set.parents = parents;
+    set.parent_count = parent_count;
+
+    return tp_producer_send_tracelink_set(producer, &set);
+}
+
+int tp_tracelink_set_from_claim(
+    const tp_producer_t *producer,
+    const tp_buffer_claim_t *claim,
+    const uint64_t *parents,
+    size_t parent_count,
+    tp_tracelink_set_t *out)
+{
+    if (NULL == producer || NULL == claim || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_set_from_claim: null input");
+        return -1;
+    }
+
+    if (claim->trace_id == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_set_from_claim: trace_id missing");
+        return -1;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = producer->stream_id;
+    out->epoch = producer->epoch;
+    out->seq = claim->seq;
+    out->trace_id = claim->trace_id;
+    out->parents = parents;
+    out->parent_count = parent_count;
+    return 0;
+}

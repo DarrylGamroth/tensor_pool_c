@@ -161,6 +161,13 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
+int tp_producer_send_tracelink_set_ex(tp_producer_t *producer, uint64_t seq, uint64_t trace_id, const uint64_t *parents, size_t parent_count);
+int tp_tracelink_set_from_claim(
+    const tp_producer_t *producer,
+    const tp_buffer_claim_t *claim,
+    const uint64_t *parents,
+    size_t parent_count,
+    tp_tracelink_set_t *out);
 
 // Per-consumer routing managed internally when enabled.
 int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity);
