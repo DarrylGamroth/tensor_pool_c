@@ -7,12 +7,14 @@
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_consumer_manager.h"
 #include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_metadata_poller.h"
 #include "tensor_pool/tp_progress_poller.h"
 #include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_qos.h"
+#include "tensor_pool/tp_slot.h"
 
 #include "aeronc.h"
 
@@ -30,6 +32,8 @@
 #include "wire/tensor_pool/regionType.h"
 #include "wire/tensor_pool/shmPoolAnnounce.h"
 #include "wire/tensor_pool/shmRegionSuperblock.h"
+#include "wire/tensor_pool/slotHeader.h"
+#include "wire/tensor_pool/tensorHeader.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -1012,6 +1016,173 @@ cleanup:
     if (producer.client)
     {
         tp_producer_close(&producer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_progress_layout_validation(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_consumer_context_t consumer_ctx;
+    tp_consumer_t consumer;
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t pool_cfg;
+    tp_frame_progress_t progress;
+    uint8_t header_bytes[128];
+    uint8_t slot_bytes[TP_HEADER_SLOT_BYTES];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_tensorHeader tensor_header;
+    struct tensor_pool_slotHeader slot_header;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_progress_headerXXXXXX";
+    char pool_path[] = "/tmp/tp_progress_poolXXXXXX";
+    char header_uri[256];
+    char pool_uri[256];
+    uint64_t seq = 5;
+    uint32_t header_index = 0;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&consumer, 0, sizeof(consumer));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4) != 0 ||
+        ftruncate(pool_fd, TP_SUPERBLOCK_SIZE_BYTES + 64 * 4) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 80001, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 80001, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    if (tp_consumer_context_init(&consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    consumer_ctx.stream_id = 80001;
+    consumer_ctx.consumer_id = 2;
+
+    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&pool_cfg, 0, sizeof(pool_cfg));
+    pool_cfg.pool_id = 1;
+    pool_cfg.nslots = 4;
+    pool_cfg.stride_bytes = 64;
+    pool_cfg.uri = pool_uri;
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = 80001;
+    config.epoch = 1;
+    config.layout_version = 1;
+    config.header_nslots = 4;
+    config.header_uri = header_uri;
+    config.pools = &pool_cfg;
+    config.pool_count = 1;
+
+    if (tp_consumer_attach(&consumer, &config) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_index = (uint32_t)(seq & (config.header_nslots - 1));
+    memset(header_bytes, 0, sizeof(header_bytes));
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)header_bytes,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(header_bytes));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, tensor_pool_tensorHeader_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_tensorHeader_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_tensorHeader_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_tensorHeader_sbe_schema_version());
+
+    tensor_pool_tensorHeader_wrap_for_encode(
+        &tensor_header,
+        (char *)header_bytes,
+        tensor_pool_messageHeader_encoded_length(),
+        sizeof(header_bytes));
+    tensor_pool_tensorHeader_set_dtype(&tensor_header, tensor_pool_dtype_UINT8);
+    tensor_pool_tensorHeader_set_majorOrder(&tensor_header, tensor_pool_majorOrder_ROW);
+    tensor_pool_tensorHeader_set_ndims(&tensor_header, 2);
+    tensor_pool_tensorHeader_set_padAlign(&tensor_header, 0);
+    tensor_pool_tensorHeader_set_progressUnit(&tensor_header, tensor_pool_progressUnit_ROWS);
+    tensor_pool_tensorHeader_set_progressStrideBytes(&tensor_header, 4);
+    tensor_pool_tensorHeader_set_dims(&tensor_header, 0, 4);
+    tensor_pool_tensorHeader_set_dims(&tensor_header, 1, 4);
+    tensor_pool_tensorHeader_set_strides(&tensor_header, 0, 4);
+    tensor_pool_tensorHeader_set_strides(&tensor_header, 1, 1);
+
+    memset(slot_bytes, 0, sizeof(slot_bytes));
+    tensor_pool_slotHeader_wrap_for_encode(&slot_header, (char *)slot_bytes, 0, sizeof(slot_bytes));
+    tensor_pool_slotHeader_set_seqCommit(&slot_header, tp_seq_committed(seq));
+    tensor_pool_slotHeader_set_valuesLenBytes(&slot_header, 16);
+    tensor_pool_slotHeader_set_payloadSlot(&slot_header, header_index);
+    tensor_pool_slotHeader_set_poolId(&slot_header, 1);
+    tensor_pool_slotHeader_set_payloadOffset(&slot_header, 0);
+    tensor_pool_slotHeader_set_timestampNs(&slot_header, 1);
+    tensor_pool_slotHeader_set_metaVersion(&slot_header, 1);
+    tensor_pool_slotHeader_put_headerBytes(&slot_header, (const char *)header_bytes,
+        tensor_pool_messageHeader_encoded_length() + tensor_pool_tensorHeader_sbe_block_length());
+
+    if (pwrite(
+        header_fd,
+        slot_bytes,
+        sizeof(slot_bytes),
+        TP_SUPERBLOCK_SIZE_BYTES + (header_index * TP_HEADER_SLOT_BYTES)) != (ssize_t)sizeof(slot_bytes))
+    {
+        goto cleanup;
+    }
+
+    memset(&progress, 0, sizeof(progress));
+    progress.seq = seq;
+    progress.payload_bytes_filled = 32;
+    progress.state = TP_PROGRESS_STARTED;
+    assert(tp_consumer_validate_progress(&consumer, &progress) != 0);
+
+    progress.payload_bytes_filled = 8;
+    assert(tp_consumer_validate_progress(&consumer, &progress) == 0);
+
+    result = 0;
+
+cleanup:
+    if (consumer.client)
+    {
+        tp_consumer_close(&consumer);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {

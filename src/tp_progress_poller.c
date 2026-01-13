@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_error.h"
 
 #include "wire/tensor_pool/frameProgress.h"
@@ -11,6 +12,7 @@
 static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_frame_progress_t *view)
 {
     size_t i;
+    int validation = 0;
 
     if (NULL == poller || NULL == view)
     {
@@ -34,8 +36,25 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
                 TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: payload bytes regressed");
                 return -1;
             }
+            if (poller->validator)
+            {
+                validation = poller->validator(poller->validator_clientd, view);
+                if (validation != 0)
+                {
+                    return -1;
+                }
+            }
             entry->last_bytes = view->payload_bytes_filled;
             return 0;
+        }
+    }
+
+    if (poller->validator)
+    {
+        validation = poller->validator(poller->validator_clientd, view);
+        if (validation != 0)
+        {
+            return -1;
         }
     }
 
@@ -98,7 +117,7 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
         view.state = TP_PROGRESS_UNKNOWN;
     }
 
-    if (tp_progress_poller_validate(poller, &view) < 0)
+    if (tp_progress_poller_validate(poller, &view) != 0)
     {
         return;
     }
@@ -168,6 +187,38 @@ void tp_progress_poller_set_max_payload_bytes(tp_progress_poller_t *poller, uint
     }
 
     poller->max_payload_bytes = max_payload_bytes;
+}
+
+static int tp_progress_validate_consumer(void *clientd, const tp_frame_progress_t *progress)
+{
+    const tp_consumer_t *consumer = (const tp_consumer_t *)clientd;
+
+    return tp_consumer_validate_progress(consumer, progress);
+}
+
+void tp_progress_poller_set_validator(
+    tp_progress_poller_t *poller,
+    tp_progress_validator_t validator,
+    void *clientd)
+{
+    if (NULL == poller)
+    {
+        return;
+    }
+
+    poller->validator = validator;
+    poller->validator_clientd = clientd;
+}
+
+void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t *consumer)
+{
+    if (NULL == poller)
+    {
+        return;
+    }
+
+    poller->validator = tp_progress_validate_consumer;
+    poller->validator_clientd = consumer;
 }
 
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)

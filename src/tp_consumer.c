@@ -1045,6 +1045,90 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
     return 0;
 }
 
+int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_progress_t *progress)
+{
+    uint8_t *slot;
+    tp_slot_view_t slot_view;
+    tp_consumer_pool_t *pool;
+    tp_tensor_header_t tensor;
+    uint32_t header_index;
+    uint64_t seq_commit;
+
+    if (NULL == consumer || NULL == progress)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: null input");
+        return -1;
+    }
+
+    if (!consumer->shm_mapped)
+    {
+        return 1;
+    }
+
+    if (consumer->header_nslots == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: header ring unavailable");
+        return -1;
+    }
+
+    header_index = (uint32_t)(progress->seq & (consumer->header_nslots - 1));
+    if (header_index >= consumer->header_nslots)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: header index out of range");
+        return -1;
+    }
+
+    slot = tp_slot_at(consumer->header_region.addr, header_index);
+    seq_commit = tp_atomic_load_u64((uint64_t *)slot);
+    if (tp_seq_value(seq_commit) != progress->seq)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: seq mismatch");
+        return -1;
+    }
+
+    if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context.base.log) < 0)
+    {
+        return -1;
+    }
+
+    pool = tp_consumer_find_pool((tp_consumer_t *)consumer, slot_view.pool_id);
+    if (NULL == pool)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: pool not found");
+        return -1;
+    }
+
+    if (slot_view.values_len_bytes > pool->stride_bytes)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: payload exceeds stride");
+        return -1;
+    }
+
+    if (progress->payload_bytes_filled > slot_view.values_len_bytes)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: payload bytes exceed values");
+        return -1;
+    }
+
+    if (slot_view.header_bytes_length != (tensor_pool_messageHeader_encoded_length() + tensor_pool_tensorHeader_sbe_block_length()))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: header bytes length mismatch");
+        return -1;
+    }
+
+    if (tp_tensor_header_decode(&tensor, slot_view.header_bytes, slot_view.header_bytes_length, &consumer->client->context.base.log) < 0)
+    {
+        return -1;
+    }
+
+    if (tp_tensor_header_validate(&tensor, &consumer->client->context.base.log) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen)
 {
     if (NULL == consumer)

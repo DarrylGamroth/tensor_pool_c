@@ -17,6 +17,8 @@
 extern "C" {
 #endif
 
+typedef struct tp_frame_progress_stct tp_frame_progress_t;
+
 typedef struct tp_consumer_pool_config_stct
 {
     uint16_t pool_id;
@@ -131,6 +133,7 @@ int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_cons
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
+int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_progress_t *progress);
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);

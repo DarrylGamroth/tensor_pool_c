@@ -6,11 +6,14 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_producer.h"
 
+typedef struct tp_consumer_stct tp_consumer_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef void (*tp_on_progress_t)(void *clientd, const tp_frame_progress_t *progress);
+typedef int (*tp_progress_validator_t)(void *clientd, const tp_frame_progress_t *progress);
 
 #define TP_PROGRESS_TRACKER_CAPACITY 64
 
@@ -38,6 +41,8 @@ typedef struct tp_progress_poller_stct
     tp_progress_tracker_entry_t tracker[TP_PROGRESS_TRACKER_CAPACITY];
     uint32_t tracker_cursor;
     uint64_t max_payload_bytes;
+    tp_progress_validator_t validator;
+    void *validator_clientd;
 }
 tp_progress_poller_t;
 
@@ -47,6 +52,11 @@ int tp_progress_poller_init_with_subscription(
     aeron_subscription_t *subscription,
     const tp_progress_handlers_t *handlers);
 void tp_progress_poller_set_max_payload_bytes(tp_progress_poller_t *poller, uint64_t max_payload_bytes);
+void tp_progress_poller_set_validator(
+    tp_progress_poller_t *poller,
+    tp_progress_validator_t validator,
+    void *clientd);
+void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t *consumer);
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit);
 
 #ifdef __cplusplus
