@@ -3,7 +3,7 @@
 This plan implements the Aeron-style client API. It is authoritative over prior API drafts.
 Authoritative references:
 - `docs/AERON_LIKE_API_PROPOSAL.md`
-- `docs/SHM_Tensor_Pool_Wire_Spec_v1.1.md`
+- `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`
 - `docs/SHM_Driver_Model_Spec_v1.0.md`
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
 
