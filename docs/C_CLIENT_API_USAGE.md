@@ -233,7 +233,8 @@ If the consumer receives a per-consumer control stream in `ConsumerConfig`, use 
 ## 10. MergeMap and JoinBarrier
 
 MergeMap announcements are control-plane messages. Apply them to a JoinBarrier and use
-JoinBarrier readiness to gate processing attempts.
+JoinBarrier readiness to gate processing attempts. You can either decode/apply manually or let
+the control poller auto-apply to the JoinBarrier.
 
 ```c
 tp_join_barrier_t barrier;
@@ -243,6 +244,8 @@ tp_join_barrier_set_require_processed(&barrier, false);
 
 // Update cursors from FrameDescriptor callbacks.
 tp_join_barrier_update_observed_seq(&barrier, input_stream_id, desc->seq, tp_clock_now_ns());
+// If require_processed is true, update processed cursor too.
+tp_join_barrier_update_processed_seq(&barrier, input_stream_id, processed_seq, tp_clock_now_ns());
 
 if (tp_join_barrier_is_ready_sequence(&barrier, out_seq, tp_clock_now_ns()) == 1)
 {
@@ -255,9 +258,21 @@ size_t stale_count = 0;
 tp_join_barrier_collect_stale_inputs(&barrier, tp_clock_now_ns(), stale_inputs, 16, &stale_count);
 ```
 
-Timestamp-based joins use `tp_timestamp_merge_map_decode`, `tp_join_barrier_apply_timestamp_map`,
+Timestamp-based joins use `tp_join_barrier_apply_timestamp_map`,
 `tp_join_barrier_update_observed_time`, and `tp_join_barrier_is_ready_timestamp` with the declared
-clock domain and timestamp source.
+clock domain and timestamp source. Output timestamps must be monotonic on every probe:
+
+```c
+tp_join_barrier_t ts_barrier;
+tp_join_barrier_init(&ts_barrier, TP_JOIN_BARRIER_TIMESTAMP, 8);
+tp_join_barrier_apply_timestamp_map(&ts_barrier, &ts_map);
+tp_join_barrier_update_observed_time(&ts_barrier, input_stream_id, desc->timestamp_ns,
+    TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, tp_clock_now_ns());
+if (tp_join_barrier_is_ready_timestamp(&ts_barrier, out_time_ns, TP_CLOCK_DOMAIN_MONOTONIC, tp_clock_now_ns()) == 1)
+{
+    // Proceed to attempt processing for out_time_ns.
+}
+```
 
 For LatestValueJoinBarrier, set ordering explicitly. Timestamp ordering requires an active
 Timestamp MergeMap so the clock domain and timestamp source are defined:
@@ -274,6 +289,17 @@ if (tp_consumer_read_frame(consumer, desc->seq, &view) < 0)
 {
     tp_join_barrier_invalidate_latest(&latest_barrier, desc->stream_id);
     return;
+}
+```
+
+To retrieve the selected latest inputs:
+
+```c
+tp_latest_selection_t latest[16];
+size_t latest_count = 0;
+if (tp_join_barrier_collect_latest(&latest_barrier, latest, 16, &latest_count) == 0)
+{
+    // latest[i].seq/latest[i].timestamp_ns identify the chosen frames.
 }
 ```
 
