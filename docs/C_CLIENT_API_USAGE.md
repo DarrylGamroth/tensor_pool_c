@@ -149,7 +149,59 @@ tp_producer_commit_claim(&producer, &slots[i], &meta);
 tp_producer_queue_claim(&producer, &slots[i]); // re-queue same slot
 ```
 
-## 7. QoS
+## 7. Trace IDs + TraceLinkSet
+
+```c
+tp_trace_id_generator_t trace_gen;
+uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
+    ? producer.driver_attach.node_id
+    : 42;
+
+tp_trace_id_generator_init_default(&trace_gen, node_id);
+tp_producer_set_trace_id_generator(&producer, &trace_gen);
+
+tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = 0 };
+tp_producer_offer_frame(&producer, &frame, &meta);
+// meta.trace_id is populated when a generator is set and trace_id was 0.
+```
+
+N→1 stages mint a new trace id and emit TraceLinkSet:
+
+```c
+uint64_t parent_ids[2] = { left_trace_id, right_trace_id };
+uint64_t out_trace_id = tp_trace_id_generator_next(&trace_gen);
+tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = out_trace_id };
+int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
+
+tp_tracelink_set_t link = {
+    .stream_id = producer.stream_id,
+    .epoch = producer.epoch,
+    .seq = (uint64_t)seq,
+    .trace_id = out_trace_id,
+    .parents = parent_ids,
+    .parent_count = 2
+};
+tp_producer_send_tracelink_set(&producer, &link);
+```
+
+Control-plane listeners can subscribe to TraceLinkSet events:
+
+```c
+static void on_tracelink(const tp_tracelink_set_t *set, void *clientd)
+{
+    (void)clientd;
+    // set->trace_id, set->parents, set->parent_count
+}
+
+tp_control_handlers_t handlers = { .on_tracelink_set = on_tracelink, .clientd = NULL };
+tp_control_poller_t control_poller;
+tp_control_poller_init(&control_poller, &client, &handlers);
+tp_control_poll(&control_poller, 10);
+```
+
+Note: trace ID continuity across epoch changes is a deployment choice. The client API does not reset IDs automatically; mint new trace IDs when desired.
+
+## 8. QoS
 
 ```c
 tp_qos_publish_consumer(&consumer, consumer_id, last_seq_seen, drops_gap, drops_late, TP_MODE_STREAM);
@@ -163,7 +215,7 @@ tp_qos_poller_init(&qos_poller, &client, &qos_handlers);
 tp_qos_poll(&qos_poller, 10);
 ```
 
-## 8. Metadata
+## 9. Metadata
 
 ```c
 // Optional: set a cadence (default is 1s).
