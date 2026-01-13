@@ -43,6 +43,10 @@ void tp_test_shm_security(void)
     char fifo_path[64];
     char link_path[64];
     char base_dir[64];
+    char real_dir[128];
+    char link_dir[128];
+    char nested_file[256];
+    char link_file[256];
     char uri[512];
     int fd = -1;
     int result = -1;
@@ -198,6 +202,64 @@ void tp_test_shm_security(void)
     unlink(link_path);
     tp_context_clear_allowed_paths(&ctx);
 
+    strncpy(base_dir, base_template, sizeof(base_dir) - 1);
+    base_dir[sizeof(base_dir) - 1] = '\0';
+    step = 17;
+    if (NULL == mkdtemp(base_dir))
+    {
+        goto cleanup;
+    }
+
+    snprintf(real_dir, sizeof(real_dir), "%s/real", base_dir);
+    snprintf(link_dir, sizeof(link_dir), "%s/link", base_dir);
+    if (mkdir(real_dir, 0700) != 0)
+    {
+        goto cleanup;
+    }
+
+    snprintf(nested_file, sizeof(nested_file), "%s/nestedXXXXXX", real_dir);
+    fd = create_temp_file(nested_file, TP_SUPERBLOCK_SIZE_BYTES);
+    if (fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (symlink(real_dir, link_dir) != 0)
+    {
+        goto cleanup;
+    }
+
+    allowed_paths[0] = base_dir;
+    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    step = 18;
+    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    {
+        const char *base = strrchr(nested_file, '/');
+        if (NULL == base || *(base + 1) == '\0')
+        {
+            goto cleanup;
+        }
+        snprintf(link_file, sizeof(link_file), "%s/%s", link_dir, base + 1);
+    }
+    snprintf(uri, sizeof(uri), "shm:file?path=%s", link_file);
+    step = 19;
+    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    {
+        goto cleanup;
+    }
+
+    close(fd);
+    fd = -1;
+    unlink(nested_file);
+    unlink(link_dir);
+    rmdir(real_dir);
+    rmdir(base_dir);
+    tp_context_clear_allowed_paths(&ctx);
+
     result = 0;
 
 cleanup:
@@ -210,6 +272,9 @@ cleanup:
     unlink(fifo_path);
     unlink(link_path);
     rmdir(base_dir);
+    unlink(nested_file);
+    unlink(link_dir);
+    rmdir(real_dir);
 
     if (result != 0)
     {

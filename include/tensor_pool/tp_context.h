@@ -22,6 +22,7 @@ typedef struct tp_context_stct
     int32_t qos_stream_id;
     int32_t metadata_stream_id;
     tp_allowed_paths_t allowed_paths;
+    uint64_t announce_period_ns;
     tp_log_t log;
 }
 tp_context_t;
@@ -33,6 +34,7 @@ void tp_context_set_control_channel(tp_context_t *context, const char *channel, 
 void tp_context_set_qos_channel(tp_context_t *context, const char *channel, int32_t stream_id);
 void tp_context_set_metadata_channel(tp_context_t *context, const char *channel, int32_t stream_id);
 void tp_context_set_allowed_paths(tp_context_t *context, const char **paths, size_t length);
+void tp_context_set_announce_period_ns(tp_context_t *context, uint64_t period_ns);
 int tp_context_finalize_allowed_paths(tp_context_t *context);
 void tp_context_clear_allowed_paths(tp_context_t *context);
 

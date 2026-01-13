@@ -66,6 +66,7 @@ void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char
 void tp_client_context_set_driver_timeout_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_keepalive_interval_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_idle_sleep_duration_ns(tp_client_context_t *ctx, uint64_t value);
+void tp_client_context_set_announce_period_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_use_agent_invoker(tp_client_context_t *ctx, bool value);
 
 int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx);

@@ -81,15 +81,42 @@ typedef struct tp_data_source_meta_attr_view_stct
 }
 tp_data_source_meta_attr_view_t;
 
+typedef struct tp_shm_pool_desc_stct
+{
+    uint16_t pool_id;
+    uint32_t nslots;
+    uint32_t stride_bytes;
+    tp_string_view_t region_uri;
+}
+tp_shm_pool_desc_t;
+
+typedef struct tp_shm_pool_announce_view_stct
+{
+    uint32_t stream_id;
+    uint32_t producer_id;
+    uint64_t epoch;
+    uint64_t announce_timestamp_ns;
+    uint8_t announce_clock_domain;
+    uint32_t layout_version;
+    uint32_t header_nslots;
+    uint16_t header_slot_bytes;
+    tp_string_view_t header_region_uri;
+    tp_shm_pool_desc_t *pools;
+    size_t pool_count;
+}
+tp_shm_pool_announce_view_t;
+
 typedef void (*tp_on_consumer_hello_t)(const tp_consumer_hello_view_t *view, void *clientd);
 typedef void (*tp_on_consumer_config_t)(const tp_consumer_config_view_t *view, void *clientd);
 typedef void (*tp_on_data_source_announce_t)(const tp_data_source_announce_view_t *view, void *clientd);
 typedef void (*tp_on_data_source_meta_begin_t)(const tp_data_source_meta_view_t *view, void *clientd);
 typedef void (*tp_on_data_source_meta_attr_t)(const tp_data_source_meta_attr_view_t *attr, void *clientd);
 typedef void (*tp_on_data_source_meta_end_t)(const tp_data_source_meta_view_t *view, void *clientd);
+typedef void (*tp_on_shm_pool_announce_t)(const tp_shm_pool_announce_view_t *view, void *clientd);
 
 typedef struct tp_control_adapter_stct
 {
+    tp_on_shm_pool_announce_t on_shm_pool_announce;
     tp_on_consumer_hello_t on_consumer_hello;
     tp_on_consumer_config_t on_consumer_config;
     tp_on_data_source_announce_t on_data_source_announce;
@@ -120,6 +147,8 @@ int tp_control_subscription_poll(tp_control_subscription_t *control, int fragmen
 int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_consumer_hello_view_t *out);
 int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_consumer_config_view_t *out);
 int tp_control_decode_data_source_announce(const uint8_t *buffer, size_t length, tp_data_source_announce_view_t *out);
+int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp_shm_pool_announce_view_t *out);
+void tp_control_shm_pool_announce_close(tp_shm_pool_announce_view_t *view);
 int tp_control_decode_data_source_meta(
     const uint8_t *buffer,
     size_t length,

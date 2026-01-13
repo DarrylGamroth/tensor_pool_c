@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 int64_t tp_clock_now_ns(void);
+int64_t tp_clock_now_realtime_ns(void);
 
 #ifdef __cplusplus
 }

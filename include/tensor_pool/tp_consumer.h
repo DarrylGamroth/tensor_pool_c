@@ -104,6 +104,13 @@ typedef struct tp_consumer_stct
     tp_driver_attach_info_t driver_attach;
     bool driver_initialized;
     bool driver_attached;
+    bool shm_mapped;
+    uint64_t mapped_epoch;
+    uint64_t announce_join_time_ns;
+    uint64_t last_announce_rx_ns;
+    uint64_t last_announce_timestamp_ns;
+    uint8_t last_announce_clock_domain;
+    uint64_t last_announce_epoch;
 }
 tp_consumer_t;
 

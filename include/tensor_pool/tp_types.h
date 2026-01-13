@@ -11,6 +11,7 @@
 #include "wire/tensor_pool/dtype.h"
 #include "wire/tensor_pool/majorOrder.h"
 #include "wire/tensor_pool/progressUnit.h"
+#include "wire/tensor_pool/clockDomain.h"
 
 #define TP_SUPERBLOCK_SIZE_BYTES 64u
 #define TP_HEADER_SLOT_BYTES 256u
@@ -23,6 +24,8 @@
 
 #define TP_PROGRESS_INTERVAL_DEFAULT_US 250u
 #define TP_PROGRESS_BYTES_DELTA_DEFAULT 65536u
+#define TP_ANNOUNCE_PERIOD_DEFAULT_NS 1000000000ULL
+#define TP_ANNOUNCE_FRESHNESS_MULTIPLIER 3u
 
 typedef enum tp_log_level_enum
 {
@@ -104,6 +107,9 @@ tp_progress_state_t;
 #define TP_PROGRESS_ROWS tensor_pool_progressUnit_ROWS
 #define TP_PROGRESS_COLUMNS tensor_pool_progressUnit_COLUMNS
 #define TP_PROGRESS_NULL tensor_pool_progressUnit_NULL_VALUE
+
+#define TP_CLOCK_DOMAIN_MONOTONIC tensor_pool_clockDomain_MONOTONIC
+#define TP_CLOCK_DOMAIN_REALTIME_SYNCED tensor_pool_clockDomain_REALTIME_SYNCED
 
 enum
 {

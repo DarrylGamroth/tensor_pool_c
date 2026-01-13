@@ -13,6 +13,7 @@ extern "C" {
 
 typedef struct tp_control_handlers_stct
 {
+    tp_on_shm_pool_announce_t on_shm_pool_announce;
     tp_on_consumer_hello_t on_consumer_hello;
     tp_on_consumer_config_t on_consumer_config;
     tp_on_data_source_announce_t on_data_source_announce;

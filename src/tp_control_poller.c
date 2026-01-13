@@ -34,6 +34,7 @@ static void tp_control_poller_handle_meta(
 static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
     tp_control_poller_t *poller = (tp_control_poller_t *)clientd;
+    tp_shm_pool_announce_view_t pool_announce;
     tp_consumer_hello_view_t hello;
     tp_consumer_config_view_t config;
     tp_data_source_announce_view_t announce;
@@ -45,6 +46,14 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
 
     if (NULL == poller || NULL == buffer)
     {
+        return;
+    }
+
+    if (poller->handlers.on_shm_pool_announce &&
+        tp_control_decode_shm_pool_announce(buffer, length, &pool_announce) == 0)
+    {
+        poller->handlers.on_shm_pool_announce(&pool_announce, poller->handlers.clientd);
+        tp_control_shm_pool_announce_close(&pool_announce);
         return;
     }
 

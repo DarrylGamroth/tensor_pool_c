@@ -39,9 +39,163 @@ static tp_consumer_pool_t *tp_consumer_find_pool(tp_consumer_t *consumer, uint16
     return NULL;
 }
 
+static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_config_t *config);
+
 static int tp_is_power_of_two(uint32_t value)
 {
     return value != 0 && (value & (value - 1)) == 0;
+}
+
+static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
+{
+    size_t i;
+
+    if (NULL == consumer)
+    {
+        return;
+    }
+
+    for (i = 0; i < consumer->pool_count; i++)
+    {
+        tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base.log);
+    }
+
+    tp_shm_unmap(&consumer->header_region, &consumer->client->context.base.log);
+
+    if (consumer->pools)
+    {
+        aeron_free(consumer->pools);
+        consumer->pools = NULL;
+    }
+
+    consumer->pool_count = 0;
+    consumer->header_nslots = 0;
+    consumer->shm_mapped = false;
+}
+
+static char *tp_string_view_dup(const tp_string_view_t *view)
+{
+    char *copy;
+
+    if (NULL == view || view->length == 0 || NULL == view->data)
+    {
+        return NULL;
+    }
+
+    copy = calloc(view->length + 1, 1);
+    if (NULL == copy)
+    {
+        return NULL;
+    }
+
+    memcpy(copy, view->data, view->length);
+    copy[view->length] = '\0';
+    return copy;
+}
+
+static int tp_consumer_apply_announce(tp_consumer_t *consumer, const tp_shm_pool_announce_view_t *announce)
+{
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t *pool_cfg = NULL;
+    char *header_uri = NULL;
+    char **pool_uris = NULL;
+    size_t i;
+    int result = -1;
+
+    if (NULL == consumer || NULL == announce)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: null input");
+        return -1;
+    }
+
+    if (announce->header_region_uri.length == 0 || NULL == announce->header_region_uri.data)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: missing header region uri");
+        return -1;
+    }
+
+    if (announce->header_slot_bytes != TP_HEADER_SLOT_BYTES)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: header slot bytes mismatch");
+        return -1;
+    }
+
+    if (announce->pool_count == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: missing payload pools");
+        return -1;
+    }
+
+    header_uri = tp_string_view_dup(&announce->header_region_uri);
+    if (NULL == header_uri)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_consumer_apply_announce: header uri allocation failed");
+        return -1;
+    }
+
+    pool_cfg = calloc(announce->pool_count, sizeof(*pool_cfg));
+    pool_uris = calloc(announce->pool_count, sizeof(*pool_uris));
+    if (NULL == pool_cfg || NULL == pool_uris)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_consumer_apply_announce: pool allocation failed");
+        goto cleanup;
+    }
+
+    for (i = 0; i < announce->pool_count; i++)
+    {
+        const tp_shm_pool_desc_t *pool = &announce->pools[i];
+        char *pool_uri = tp_string_view_dup(&pool->region_uri);
+
+        if (NULL == pool_uri)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_consumer_apply_announce: pool uri allocation failed");
+            goto cleanup;
+        }
+
+        if (pool->nslots != announce->header_nslots)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: pool nslots mismatch");
+            goto cleanup;
+        }
+
+        pool_cfg[i].pool_id = pool->pool_id;
+        pool_cfg[i].nslots = pool->nslots;
+        pool_cfg[i].stride_bytes = pool->stride_bytes;
+        pool_cfg[i].uri = pool_uri;
+        pool_uris[i] = pool_uri;
+    }
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = announce->stream_id;
+    config.epoch = announce->epoch;
+    config.layout_version = announce->layout_version;
+    config.header_nslots = announce->header_nslots;
+    config.header_uri = header_uri;
+    config.pools = pool_cfg;
+    config.pool_count = announce->pool_count;
+
+    tp_consumer_unmap_regions(consumer);
+    if (tp_consumer_attach_config(consumer, &config) < 0)
+    {
+        goto cleanup;
+    }
+
+    consumer->shm_mapped = true;
+    consumer->mapped_epoch = announce->epoch;
+    result = 0;
+
+cleanup:
+    if (pool_uris)
+    {
+        for (i = 0; i < announce->pool_count; i++)
+        {
+            free(pool_uris[i]);
+        }
+    }
+    free(pool_uris);
+    free(pool_cfg);
+    free(header_uri);
+    return result;
 }
 
 static void tp_consumer_fill_driver_request(const tp_consumer_t *consumer, tp_driver_attach_request_t *out)
@@ -157,6 +311,11 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
     view.meta_version = tensor_pool_frameDescriptor_metaVersion(&descriptor);
     view.trace_id = tensor_pool_frameDescriptor_traceId(&descriptor);
 
+    if (!consumer->shm_mapped || consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
+    {
+        return;
+    }
+
     if (consumer->descriptor_handler)
     {
         consumer->descriptor_handler(consumer->descriptor_clientd, &view);
@@ -166,14 +325,85 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
 static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
     tp_consumer_t *consumer = (tp_consumer_t *)clientd;
+    tp_shm_pool_announce_view_t announce;
     tp_consumer_config_view_t view;
     tp_driver_lease_revoked_t revoked;
     tp_driver_shutdown_t shutdown_event;
+    uint64_t now_ns;
+    uint64_t freshness_ns;
+    uint64_t announce_now_ns;
 
     (void)header;
 
     if (NULL == consumer || NULL == buffer)
     {
+        return;
+    }
+
+    if (tp_control_decode_shm_pool_announce(buffer, length, &announce) == 0)
+    {
+        if (consumer->announce_join_time_ns == 0)
+        {
+            consumer->announce_join_time_ns = (uint64_t)tp_clock_now_ns();
+        }
+
+        if (announce.stream_id != consumer->context.stream_id)
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
+        now_ns = (uint64_t)tp_clock_now_ns();
+        freshness_ns = consumer->client->context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+        announce_now_ns = now_ns;
+
+        if (announce.announce_clock_domain == TP_CLOCK_DOMAIN_REALTIME_SYNCED)
+        {
+            announce_now_ns = (uint64_t)tp_clock_now_realtime_ns();
+            if (announce_now_ns == 0)
+            {
+                tp_control_shm_pool_announce_close(&announce);
+                return;
+            }
+        }
+
+        if (announce_now_ns > announce.announce_timestamp_ns &&
+            announce_now_ns - announce.announce_timestamp_ns > freshness_ns)
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
+        if (announce.announce_clock_domain == TP_CLOCK_DOMAIN_MONOTONIC &&
+            announce.announce_timestamp_ns < consumer->announce_join_time_ns)
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
+        if (consumer->context.hello.expected_layout_version != 0 &&
+            announce.layout_version != consumer->context.hello.expected_layout_version)
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
+        if ((consumer->shm_mapped && announce.epoch < consumer->mapped_epoch) ||
+            (consumer->last_announce_epoch != 0 && announce.epoch < consumer->last_announce_epoch))
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
+        if (tp_consumer_apply_announce(consumer, &announce) == 0)
+        {
+            consumer->last_announce_rx_ns = now_ns;
+            consumer->last_announce_timestamp_ns = announce.announce_timestamp_ns;
+            consumer->last_announce_clock_domain = announce.announce_clock_domain;
+            consumer->last_announce_epoch = announce.epoch;
+        }
+
+        tp_control_shm_pool_announce_close(&announce);
         return;
     }
 
@@ -519,6 +749,14 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         pool->nslots = pool_cfg->nslots;
         pool->stride_bytes = pool_cfg->stride_bytes;
 
+        if (tp_shm_validate_stride_alignment(
+            pool_cfg->uri,
+            pool->stride_bytes,
+            &consumer->client->context.base.log) < 0)
+        {
+            goto cleanup;
+        }
+
         if (tp_shm_map(
             &pool->region,
             pool_cfg->uri,
@@ -552,6 +790,8 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         tp_consumer_send_hello(consumer, &hello);
     }
 
+    consumer->shm_mapped = true;
+    consumer->mapped_epoch = config->epoch;
     return 0;
 
 cleanup:
@@ -568,6 +808,7 @@ cleanup:
         consumer->pools = NULL;
     }
 
+    consumer->shm_mapped = false;
     return result;
 }
 
@@ -688,6 +929,11 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_read_frame: null input");
         return -1;
+    }
+
+    if (!consumer->shm_mapped)
+    {
+        return 1;
     }
 
     if (consumer->header_nslots == 0)
@@ -839,8 +1085,6 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
 
 int tp_consumer_close(tp_consumer_t *consumer)
 {
-    size_t i;
-
     if (NULL == consumer)
     {
         return -1;
@@ -882,18 +1126,7 @@ int tp_consumer_close(tp_consumer_t *consumer)
         consumer->control_assembler = NULL;
     }
 
-    tp_shm_unmap(&consumer->header_region, &consumer->client->context.base.log);
-
-    for (i = 0; i < consumer->pool_count; i++)
-    {
-        tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base.log);
-    }
-
-    if (consumer->pools)
-    {
-        aeron_free(consumer->pools);
-        consumer->pools = NULL;
-    }
+    tp_consumer_unmap_regions(consumer);
 
     if (consumer->driver_attached)
     {

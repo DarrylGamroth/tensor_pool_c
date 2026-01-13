@@ -199,6 +199,16 @@ void tp_client_context_set_idle_sleep_duration_ns(tp_client_context_t *ctx, uint
     ctx->idle_sleep_duration_ns = value;
 }
 
+void tp_client_context_set_announce_period_ns(tp_client_context_t *ctx, uint64_t value)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    tp_context_set_announce_period_ns(&ctx->base, value);
+}
+
 void tp_client_context_set_use_agent_invoker(tp_client_context_t *ctx, bool value)
 {
     if (NULL == ctx)

@@ -45,6 +45,7 @@ int tp_context_init(tp_context_t *context)
     context->control_stream_id = -1;
     context->qos_stream_id = -1;
     context->metadata_stream_id = -1;
+    context->announce_period_ns = TP_ANNOUNCE_PERIOD_DEFAULT_NS;
 
     return 0;
 }
@@ -104,6 +105,16 @@ void tp_context_set_allowed_paths(tp_context_t *context, const char **paths, siz
     tp_context_clear_allowed_paths(context);
     context->allowed_paths.paths = paths;
     context->allowed_paths.length = length;
+}
+
+void tp_context_set_announce_period_ns(tp_context_t *context, uint64_t period_ns)
+{
+    if (NULL == context)
+    {
+        return;
+    }
+
+    context->announce_period_ns = period_ns;
 }
 
 int tp_context_finalize_allowed_paths(tp_context_t *context)

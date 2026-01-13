@@ -465,6 +465,14 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
         pool->nslots = pool_cfg->nslots;
         pool->stride_bytes = pool_cfg->stride_bytes;
 
+        if (tp_shm_validate_stride_alignment(
+            pool_cfg->uri,
+            pool->stride_bytes,
+            &producer->client->context.base.log) < 0)
+        {
+            goto cleanup;
+        }
+
         if (tp_shm_map(
             &pool->region,
             pool_cfg->uri,

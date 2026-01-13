@@ -14,6 +14,7 @@
 extern char *realpath(const char *path, char *resolved_path);
 #endif
 #include <sys/mman.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -26,6 +27,10 @@ extern char *realpath(const char *path, char *resolved_path);
 #include "wire/tensor_pool/shmRegionSuperblock.h"
 #include "wire/tensor_pool/regionType.h"
 
+#ifndef HUGETLBFS_MAGIC
+#define HUGETLBFS_MAGIC 0x958458f6
+#endif
+
 static int tp_shm_check_hugepages(int fd, const char *path)
 {
 #if defined(__linux__)
@@ -36,10 +41,6 @@ static int tp_shm_check_hugepages(int fd, const char *path)
         TP_SET_ERR(errno, "tp_shm_map: fstatfs failed for %s", path);
         return -1;
     }
-
-#ifndef HUGETLBFS_MAGIC
-#define HUGETLBFS_MAGIC 0x958458f6
-#endif
 
     if ((uint64_t)statfs_buf.f_type != (uint64_t)HUGETLBFS_MAGIC)
     {
@@ -117,12 +118,135 @@ static int tp_shm_validate_path(const char *resolved_path, const tp_allowed_path
     return 0;
 }
 
+static int tp_shm_open_no_symlink(const char *path, int flags, int *out_fd)
+{
+    int dirfd = -1;
+    int fd = -1;
+    const char *cursor;
+
+    if (NULL == path || NULL == out_fd)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: null path");
+        return -1;
+    }
+
+    if (path[0] != '/')
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: path must be absolute");
+        return -1;
+    }
+
+#if defined(O_NOFOLLOW)
+    flags |= O_NOFOLLOW;
+#else
+    TP_SET_ERR(EINVAL, "tp_shm_map: platform lacks O_NOFOLLOW for %s", path);
+    return -1;
+#endif
+
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+
+    dirfd = open("/", O_RDONLY | O_DIRECTORY
+#ifdef O_CLOEXEC
+        | O_CLOEXEC
+#endif
+    );
+    if (dirfd < 0)
+    {
+        TP_SET_ERR(errno, "tp_shm_map: open root failed for %s", path);
+        return -1;
+    }
+
+    cursor = path;
+    while (*cursor != '\0')
+    {
+        const char *next;
+        size_t len;
+        char component[NAME_MAX + 1];
+        int next_fd;
+
+        while (*cursor == '/')
+        {
+            cursor++;
+        }
+        if (*cursor == '\0')
+        {
+            break;
+        }
+
+        next = strchr(cursor, '/');
+        if (NULL == next)
+        {
+            len = strlen(cursor);
+        }
+        else
+        {
+            len = (size_t)(next - cursor);
+        }
+
+        if (len == 0 || len > NAME_MAX)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_shm_map: invalid path component");
+            close(dirfd);
+            return -1;
+        }
+
+        memcpy(component, cursor, len);
+        component[len] = '\0';
+
+        if (NULL == next)
+        {
+            fd = openat(dirfd, component, flags);
+            if (fd < 0)
+            {
+                TP_SET_ERR(errno, "tp_shm_map: open failed for %s", path);
+            }
+            close(dirfd);
+            dirfd = -1;
+            break;
+        }
+
+        next_fd = openat(dirfd, component, O_RDONLY | O_DIRECTORY
+#ifdef O_NOFOLLOW
+            | O_NOFOLLOW
+#endif
+#ifdef O_CLOEXEC
+            | O_CLOEXEC
+#endif
+        );
+        close(dirfd);
+        dirfd = -1;
+        if (next_fd < 0)
+        {
+            TP_SET_ERR(errno, "tp_shm_map: open directory failed for %s", path);
+            return -1;
+        }
+
+        dirfd = next_fd;
+        cursor = next;
+    }
+
+    if (dirfd >= 0)
+    {
+        close(dirfd);
+    }
+
+    if (fd < 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: path missing file component");
+        return -1;
+    }
+
+    *out_fd = fd;
+    return 0;
+}
+
 static int tp_shm_open_canonical(const char *path, const tp_allowed_paths_t *allowed, int flags, int *out_fd)
 {
     char resolved_path[4096];
     struct stat st_fd;
     struct stat st_path;
-    int open_flags = flags;
     int fd;
 
     if (NULL == path || NULL == out_fd)
@@ -142,21 +266,8 @@ static int tp_shm_open_canonical(const char *path, const tp_allowed_paths_t *all
         return -1;
     }
 
-#if defined(O_NOFOLLOW)
-    open_flags |= O_NOFOLLOW;
-#else
-    TP_SET_ERR(EINVAL, "tp_shm_map: platform lacks O_NOFOLLOW for %s", resolved_path);
-    return -1;
-#endif
-
-#ifdef O_CLOEXEC
-    open_flags |= O_CLOEXEC;
-#endif
-
-    fd = open(path, open_flags);
-    if (fd < 0)
+    if (tp_shm_open_no_symlink(path, flags, &fd) < 0)
     {
-        TP_SET_ERR(errno, "tp_shm_map: open failed for %s", path);
         return -1;
     }
 
@@ -432,6 +543,70 @@ int tp_shm_validate_superblock(const tp_shm_region_t *region, const tp_shm_expec
     if (NULL != log)
     {
         tp_log_emit(log, TP_LOG_DEBUG, "Validated superblock stream=%u epoch=%" PRIu64, stream_id, epoch);
+    }
+
+    return 0;
+}
+
+int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_log_t *log)
+{
+    tp_shm_uri_t parsed;
+    size_t page_size = 0;
+
+    if (NULL == uri)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: null uri");
+        return -1;
+    }
+
+    if (stride_bytes == 0 || (stride_bytes & (stride_bytes - 1)) != 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not power of two");
+        return -1;
+    }
+
+    if (tp_shm_uri_parse(&parsed, uri, log) < 0)
+    {
+        return -1;
+    }
+
+#if defined(__linux__)
+    {
+        struct statfs st;
+        if (statfs(parsed.path, &st) < 0)
+        {
+            TP_SET_ERR(errno, "tp_shm_validate_stride_alignment: statfs failed for %s", parsed.path);
+            return -1;
+        }
+        page_size = (size_t)st.f_bsize;
+        if (parsed.require_hugepages)
+        {
+            if ((uint64_t)st.f_type != (uint64_t)HUGETLBFS_MAGIC)
+            {
+                TP_SET_ERR(EINVAL, "tp_shm_validate_stride_alignment: not hugetlbfs: %s", parsed.path);
+                return -1;
+            }
+        }
+    }
+#else
+    page_size = (size_t)sysconf(_SC_PAGESIZE);
+    if (parsed.require_hugepages)
+    {
+        TP_SET_ERR(EINVAL, "tp_shm_validate_stride_alignment: hugepages unsupported: %s", parsed.path);
+        return -1;
+    }
+#endif
+
+    if (page_size == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: invalid page size");
+        return -1;
+    }
+
+    if (stride_bytes % page_size != 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not aligned to page size");
+        return -1;
     }
 
     return 0;

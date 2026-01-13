@@ -18,6 +18,7 @@
 #include "wire/tensor_pool/qosConsumer.h"
 #include "wire/tensor_pool/qosProducer.h"
 #include "wire/tensor_pool/mode.h"
+#include "wire/tensor_pool/shmPoolAnnounce.h"
 
 #include <inttypes.h>
 #include <signal.h>
@@ -159,6 +160,59 @@ static void tp_on_control_fragment(
 
     if (schema_id != tensor_pool_messageHeader_sbe_schema_id())
     {
+        return;
+    }
+
+    if (template_id == tensor_pool_shmPoolAnnounce_sbe_template_id())
+    {
+        tp_shm_pool_announce_view_t view;
+        if (tp_control_decode_shm_pool_announce(buffer, length, &view) == 0)
+        {
+            if (state && state->json)
+            {
+                size_t i;
+                printf("{\"type\":\"ShmPoolAnnounce\",\"stream\":%u,\"producer\":%u,\"epoch\":%" PRIu64 ",\"layout\":%u,",
+                    view.stream_id, view.producer_id, view.epoch, view.layout_version);
+                printf("\"header_nslots\":%u,\"header_slot_bytes\":%u,", view.header_nslots, view.header_slot_bytes);
+                printf("\"announce_ts\":%" PRIu64 ",\"clock_domain\":%u,", view.announce_timestamp_ns, view.announce_clock_domain);
+                tp_print_json_string_view("header_region_uri", &view.header_region_uri);
+                printf(",\"pools\":[");
+                for (i = 0; i < view.pool_count; i++)
+                {
+                    const tp_shm_pool_desc_t *pool = &view.pools[i];
+                    if (i > 0)
+                    {
+                        printf(",");
+                    }
+                    printf("{\"pool_id\":%u,\"nslots\":%u,\"stride\":%u,", pool->pool_id, pool->nslots, pool->stride_bytes);
+                    tp_print_json_string_view("uri", &pool->region_uri);
+                    printf("}");
+                }
+                printf("]}\n");
+            }
+            else
+            {
+                size_t i;
+                printf("ShmPoolAnnounce stream=%u producer=%u epoch=%" PRIu64 " layout=%u header_nslots=%u header_slot_bytes=%u\n",
+                    view.stream_id,
+                    view.producer_id,
+                    view.epoch,
+                    view.layout_version,
+                    view.header_nslots,
+                    view.header_slot_bytes);
+                printf("  announce_ts=%" PRIu64 " clock_domain=%u ", view.announce_timestamp_ns, view.announce_clock_domain);
+                tp_print_string_view("header_region_uri", &view.header_region_uri);
+                printf("\n");
+                for (i = 0; i < view.pool_count; i++)
+                {
+                    const tp_shm_pool_desc_t *pool = &view.pools[i];
+                    printf("  pool_id=%u nslots=%u stride=%u ", pool->pool_id, pool->nslots, pool->stride_bytes);
+                    tp_print_string_view("uri", &pool->region_uri);
+                    printf("\n");
+                }
+            }
+            tp_control_shm_pool_announce_close(&view);
+        }
         return;
     }
 
