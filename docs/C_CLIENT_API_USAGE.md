@@ -170,6 +170,19 @@ tp_producer_offer_frame(&producer, &frame, &meta);
 // For try-claim paths, set claim.trace_id before tp_producer_commit_claim (0 uses the generator when configured).
 ```
 
+Try-claim example:
+
+```c
+tp_buffer_claim_t claim;
+
+if (tp_producer_try_claim(&producer, payload_len, &claim) >= 0)
+{
+    // Fill claim.payload/claim.tensor as needed.
+    claim.trace_id = 0; // or set a specific trace id
+    tp_producer_commit_claim(&producer, &claim, &meta);
+}
+```
+
 N→1 stages mint a new trace id and emit TraceLinkSet:
 
 ```c
