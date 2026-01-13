@@ -259,6 +259,16 @@ Timestamp-based joins use `tp_timestamp_merge_map_decode`, `tp_join_barrier_appl
 `tp_join_barrier_update_observed_time`, and `tp_join_barrier_is_ready_timestamp` with the declared
 clock domain and timestamp source.
 
+When using LatestValueJoinBarrier, invalidate inputs whose selected frame fails validation:
+
+```c
+if (tp_consumer_read_frame(consumer, desc->seq, &view) < 0)
+{
+    tp_join_barrier_invalidate_latest(&latest_barrier, desc->stream_id);
+    return;
+}
+```
+
 You can also wire merge-map application into the control poller:
 
 ```c
