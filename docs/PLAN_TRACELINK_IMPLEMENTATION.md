@@ -10,6 +10,7 @@ Dependent references:
 - [ ] Confirm TraceLinkSet schemaId=904, templateId=1, and field set per §9.
 - [ ] Confirm `FrameDescriptor.trace_id` is present in the wire schema (or extend it) with null sentinel `0`.
 - [ ] Decide node ID source (config vs driver allocation) and document the default.
+- [ ] For driver allocation, use `ShmAttachResponse.nodeId` per `docs/SHM_Driver_Model_Spec_v1.0.md` §4.2 and treat it as stable for the lease lifetime.
 - [ ] Confirm trace_id propagation rules for 1→1 and N→1 stages are mapped to existing producer/consumer flows.
 - [ ] Review Agrona Snowflake ID generator in `../agrona` and choose parameters (epoch, node ID bit width, sequence width).
 
