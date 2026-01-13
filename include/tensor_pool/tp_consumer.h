@@ -117,6 +117,7 @@ typedef struct tp_consumer_stct
     uint64_t last_seq_seen;
     uint64_t drops_gap;
     uint64_t drops_late;
+    uint64_t last_qos_ns;
     uint64_t announce_join_time_ns;
     uint64_t last_announce_rx_ns;
     uint64_t last_announce_timestamp_ns;

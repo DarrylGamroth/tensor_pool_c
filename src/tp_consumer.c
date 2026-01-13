@@ -9,6 +9,7 @@
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_qos.h"
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
@@ -76,6 +77,7 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
     consumer->last_seq_seen = 0;
     consumer->drops_gap = 0;
     consumer->drops_late = 0;
+    consumer->last_qos_ns = 0;
 }
 
 static char *tp_string_view_dup(const tp_string_view_t *view)
@@ -811,6 +813,7 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     consumer->last_seq_seen = 0;
     consumer->drops_gap = 0;
     consumer->drops_late = 0;
+    consumer->last_qos_ns = 0;
     return 0;
 
 cleanup:
@@ -1100,6 +1103,8 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
 
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
 {
+    uint64_t now_ns;
+
     if (NULL == consumer || NULL == consumer->client || NULL == consumer->client->control_subscription)
     {
         return 0;
@@ -1124,6 +1129,23 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     if (fragments < 0)
     {
         return -1;
+    }
+
+    now_ns = (uint64_t)tp_clock_now_ns();
+    if (consumer->qos_publication && consumer->client->context.base.announce_period_ns > 0)
+    {
+        uint64_t period = consumer->client->context.base.announce_period_ns;
+        if (consumer->last_qos_ns == 0 || now_ns - consumer->last_qos_ns >= period)
+        {
+            tp_qos_publish_consumer(
+                consumer,
+                consumer->context.consumer_id,
+                consumer->last_seq_seen,
+                consumer->drops_gap,
+                consumer->drops_late,
+                consumer->context.hello.mode);
+            consumer->last_qos_ns = now_ns;
+        }
     }
 
     tp_client_do_work(consumer->client);

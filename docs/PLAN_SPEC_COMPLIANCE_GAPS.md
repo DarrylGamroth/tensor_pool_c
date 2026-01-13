@@ -8,12 +8,12 @@ Legend:
 
 ## Remaining (Ranked)
 
-1. [ ] **QoS/metadata cadence enforcement** — Severity: Low — Status: Pending  
+1. [x] **QoS/metadata cadence enforcement** — Severity: Low — Status: Done  
    **Spec:** §10.4, §15.14  
    **Gap:** Periodic publish cadence not enforced (API only).  
    **Impact:** Liveness telemetry optional.
 
-2. [ ] **Producer padding/zero-fill guidance** — Severity: Low — Status: Pending  
+2. [x] **Producer padding/zero-fill guidance** — Severity: Low — Status: Done  
    **Spec:** §8.2  
    **Gap:** Producer does not explicitly zero reserved fields.  
    **Impact:** Cosmetic; consumers ignore.

@@ -8,6 +8,7 @@
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_consumer_manager.h"
 #include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/tp_qos.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_types.h"
@@ -39,6 +40,69 @@ static tp_payload_pool_t *tp_find_pool(tp_producer_t *producer, uint16_t pool_id
     }
 
     return NULL;
+}
+
+static void tp_zero_slot_padding(uint8_t *slot)
+{
+    const size_t offset = tensor_pool_slotHeader_pad_encoding_offset();
+    const size_t length = 26;
+
+    if (NULL == slot)
+    {
+        return;
+    }
+
+    memset(slot + offset, 0, length);
+}
+
+static void tp_producer_clear_cached_meta(tp_producer_t *producer)
+{
+    size_t i;
+
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    for (i = 0; i < producer->cached_attr_count; i++)
+    {
+        tp_meta_attribute_owned_t *attr = &producer->cached_attrs[i];
+        free(attr->key);
+        free(attr->format);
+        free(attr->value);
+        attr->key = NULL;
+        attr->format = NULL;
+        attr->value = NULL;
+        attr->value_length = 0;
+    }
+
+    free(producer->cached_attrs);
+    producer->cached_attrs = NULL;
+    producer->cached_attr_count = 0;
+    producer->cached_meta.attributes = NULL;
+    producer->cached_meta.attribute_count = 0;
+    producer->has_meta = false;
+}
+
+static char *tp_dup_string(const char *value)
+{
+    size_t len;
+    char *copy;
+
+    if (NULL == value)
+    {
+        return NULL;
+    }
+
+    len = strlen(value);
+    copy = calloc(len + 1, 1);
+    if (NULL == copy)
+    {
+        return NULL;
+    }
+    memcpy(copy, value, len);
+    copy[len] = '\0';
+    return copy;
 }
 
 static int tp_is_power_of_two(uint32_t value)
@@ -106,6 +170,8 @@ int tp_producer_publish_descriptor_to(
         TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_descriptor_to: publication unavailable");
         return -1;
     }
+
+    memset(buffer, 0, header_len + tensor_pool_tensorHeader_sbe_block_length());
 
     tensor_pool_messageHeader_wrap(
         &msg_header,
@@ -745,6 +811,7 @@ int tp_producer_publish_frame(
     tensor_pool_slotHeader_set_payloadOffset(&slot_header, 0);
     tensor_pool_slotHeader_set_timestampNs(&slot_header, timestamp_ns);
     tensor_pool_slotHeader_set_metaVersion(&slot_header, meta_version);
+    tp_zero_slot_padding(slot);
 
     if (tp_encode_tensor_header(header_bytes, sizeof(header_bytes), tensor) < 0)
     {
@@ -1118,8 +1185,149 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
         tp_consumer_manager_sweep(producer->consumer_manager, now_ns, stale_ns);
     }
 
+    now_ns = (uint64_t)tp_clock_now_ns();
+    if (producer->client->context.base.announce_period_ns > 0)
+    {
+        uint64_t period = producer->client->context.base.announce_period_ns;
+        if (producer->qos_publication &&
+            (producer->last_qos_ns == 0 || now_ns - producer->last_qos_ns >= period))
+        {
+            tp_qos_publish_producer(producer, producer->next_seq, 0);
+            producer->last_qos_ns = now_ns;
+        }
+
+        if (producer->metadata_publication && producer->has_announce &&
+            (producer->last_announce_ns == 0 || now_ns - producer->last_announce_ns >= period))
+        {
+            tp_producer_send_data_source_announce(producer, &producer->cached_announce);
+            producer->last_announce_ns = now_ns;
+        }
+
+        if (producer->metadata_publication && producer->has_meta &&
+            (producer->last_meta_ns == 0 || now_ns - producer->last_meta_ns >= period))
+        {
+            tp_producer_send_data_source_meta(producer, &producer->cached_meta);
+            producer->last_meta_ns = now_ns;
+        }
+    }
+
     tp_client_do_work(producer->client);
     return fragments;
+}
+
+int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce)
+{
+    if (NULL == producer || NULL == announce)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_set_data_source_announce: null input");
+        return -1;
+    }
+
+    tp_producer_clear_data_source_announce(producer);
+
+    producer->cached_announce.stream_id = announce->stream_id;
+    producer->cached_announce.producer_id = announce->producer_id;
+    producer->cached_announce.epoch = announce->epoch;
+    producer->cached_announce.meta_version = announce->meta_version;
+    producer->cached_announce.name = tp_dup_string(announce->name);
+    producer->cached_announce.summary = tp_dup_string(announce->summary);
+    producer->has_announce = true;
+
+    if ((announce->name && NULL == producer->cached_announce.name) ||
+        (announce->summary && NULL == producer->cached_announce.summary))
+    {
+        tp_producer_clear_data_source_announce(producer);
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_set_data_source_announce: allocation failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+int tp_producer_set_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta)
+{
+    size_t i;
+
+    if (NULL == producer || NULL == meta)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_set_data_source_meta: null input");
+        return -1;
+    }
+
+    tp_producer_clear_data_source_meta(producer);
+
+    producer->cached_meta.stream_id = meta->stream_id;
+    producer->cached_meta.meta_version = meta->meta_version;
+    producer->cached_meta.timestamp_ns = meta->timestamp_ns;
+    producer->cached_attr_count = meta->attribute_count;
+
+    if (meta->attribute_count > 0)
+    {
+        producer->cached_attrs = calloc(meta->attribute_count, sizeof(*producer->cached_attrs));
+        if (NULL == producer->cached_attrs)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_producer_set_data_source_meta: allocation failed");
+            return -1;
+        }
+    }
+
+    for (i = 0; i < meta->attribute_count; i++)
+    {
+        const tp_meta_attribute_t *src = &meta->attributes[i];
+        tp_meta_attribute_owned_t *dst = &producer->cached_attrs[i];
+
+        if (NULL == src->key || NULL == src->format || (NULL == src->value && src->value_length > 0))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_set_data_source_meta: invalid attribute");
+            tp_producer_clear_data_source_meta(producer);
+            return -1;
+        }
+
+        dst->key = tp_dup_string(src->key);
+        dst->format = tp_dup_string(src->format);
+        if (src->value_length > 0)
+        {
+            dst->value = calloc(src->value_length, 1);
+            if (NULL != dst->value)
+            {
+                memcpy(dst->value, src->value, src->value_length);
+                dst->value_length = src->value_length;
+            }
+        }
+
+        if ((src->key && NULL == dst->key) ||
+            (src->format && NULL == dst->format) ||
+            (src->value_length > 0 && NULL == dst->value))
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_producer_set_data_source_meta: allocation failed");
+            tp_producer_clear_data_source_meta(producer);
+            return -1;
+        }
+    }
+
+    producer->cached_meta.attributes = (const tp_meta_attribute_t *)producer->cached_attrs;
+    producer->cached_meta.attribute_count = producer->cached_attr_count;
+    producer->has_meta = true;
+    return 0;
+}
+
+void tp_producer_clear_data_source_announce(tp_producer_t *producer)
+{
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    free((char *)producer->cached_announce.name);
+    free((char *)producer->cached_announce.summary);
+    memset(&producer->cached_announce, 0, sizeof(producer->cached_announce));
+    producer->has_announce = false;
+}
+
+void tp_producer_clear_data_source_meta(tp_producer_t *producer)
+{
+    tp_producer_clear_cached_meta(producer);
+    memset(&producer->cached_meta, 0, sizeof(producer->cached_meta));
 }
 
 int tp_producer_close(tp_producer_t *producer)
@@ -1180,6 +1388,9 @@ int tp_producer_close(tp_producer_t *producer)
         aeron_free(producer->consumer_manager);
         producer->consumer_manager = NULL;
     }
+
+    tp_producer_clear_data_source_meta(producer);
+    tp_producer_clear_data_source_announce(producer);
 
     if (producer->driver_attached)
     {

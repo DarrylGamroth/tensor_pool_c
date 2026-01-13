@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
@@ -66,6 +67,15 @@ typedef struct tp_frame_metadata_stct
 }
 tp_frame_metadata_t;
 
+typedef struct tp_meta_attribute_owned_stct
+{
+    char *key;
+    char *format;
+    uint8_t *value;
+    uint32_t value_length;
+}
+tp_meta_attribute_owned_t;
+
 typedef struct tp_frame_stct
 {
     const tp_tensor_header_t *tensor;
@@ -118,6 +128,15 @@ typedef struct tp_producer_stct
     bool driver_attached;
     tp_consumer_manager_t *consumer_manager;
     uint64_t last_consumer_sweep_ns;
+    uint64_t last_qos_ns;
+    uint64_t last_announce_ns;
+    uint64_t last_meta_ns;
+    tp_data_source_announce_t cached_announce;
+    bool has_announce;
+    tp_data_source_meta_t cached_meta;
+    tp_meta_attribute_owned_t *cached_attrs;
+    size_t cached_attr_count;
+    bool has_meta;
 }
 tp_producer_t;
 
@@ -132,6 +151,10 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
+int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
+int tp_producer_set_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);
+void tp_producer_clear_data_source_announce(tp_producer_t *producer);
+void tp_producer_clear_data_source_meta(tp_producer_t *producer);
 int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity);
 int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit);
 int tp_producer_close(tp_producer_t *producer);
