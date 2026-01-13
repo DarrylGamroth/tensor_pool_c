@@ -189,6 +189,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_discovery_client.c
     tests/test_tp_client_conductor.c
     tests/test_tp_pollers.c
+    tests/test_tp_rollover.c
     tests/test_tp_producer_claim.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool aeron)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)

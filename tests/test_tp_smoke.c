@@ -31,6 +31,7 @@ void tp_test_discovery_client_decoders(void);
 void tp_test_client_conductor_lifecycle(void);
 void tp_test_pollers(void);
 void tp_test_producer_claim_lifecycle(void);
+void tp_test_rollover(void);
 
 static void test_version(void)
 {
@@ -182,6 +183,7 @@ int main(void)
     tp_test_client_conductor_lifecycle();
     tp_test_pollers();
     tp_test_producer_claim_lifecycle();
+    tp_test_rollover();
 
     return 0;
 }
