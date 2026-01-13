@@ -166,6 +166,9 @@ tp_qos_poll(&qos_poller, 10);
 ## 8. Metadata
 
 ```c
+// Optional: set a cadence (default is 1s).
+tp_client_context_set_announce_period_ns(&ctx, 1000 * 1000 * 1000ULL);
+
 tp_data_source_announce_t announce = {
     .stream_id = stream_id,
     .producer_id = producer_id,
@@ -175,6 +178,9 @@ tp_data_source_announce_t announce = {
     .summary = "primary sensor"
 };
 tp_producer_send_data_source_announce(&producer, &announce);
+
+// Cache announce/meta for periodic re-broadcast on tp_producer_poll_control().
+tp_producer_set_data_source_announce(&producer, &announce);
 
 tp_metadata_handlers_t meta_handlers = {
     .on_data_source_announce = on_announce,
@@ -186,6 +192,21 @@ tp_metadata_handlers_t meta_handlers = {
 tp_metadata_poller_t meta_poller;
 tp_metadata_poller_init(&meta_poller, &client, &meta_handlers);
 tp_metadata_poll(&meta_poller, 10);
+
+// Example metadata publish + cache.
+uint32_t fmt = 1;
+tp_meta_attribute_t attrs[1] = {
+    { .key = "pixel_format", .format = "u32", .value = (const uint8_t *)&fmt, .value_length = sizeof(fmt) }
+};
+tp_data_source_meta_t meta = {
+    .stream_id = stream_id,
+    .meta_version = 1,
+    .timestamp_ns = tp_clock_now_ns(),
+    .attributes = attrs,
+    .attribute_count = 1
+};
+tp_producer_send_data_source_meta(&producer, &meta);
+tp_producer_set_data_source_meta(&producer, &meta);
 ```
 
 ## 9. Progress
