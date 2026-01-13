@@ -421,9 +421,13 @@ Required keys (unless stated otherwise):
 - `driver.control_channel` (string): Aeron channel for control-plane messages. Default: `"aeron:ipc?term-length=4m"`.
 - `driver.control_stream_id` (uint32): control-plane stream ID. Default: `1000`.
 - `shm.base_dir` (string): root directory for SHM backing files. Default: `"/dev/shm/tensorpool"`.
+- `shm.namespace` (string): namespace segment for canonical layout. Default: `"default"`.
 - `profiles.*` (table): at least one profile must be defined.
 - `profiles.<name>.payload_pools` (array): must contain at least one pool entry.
 - `streams.*` (table): if `policies.allow_dynamic_streams=false`, each stream MUST be explicitly defined.
+
+Note: the wire spec refers to `shm_base_dir` (snake_case). Drivers SHOULD accept both
+`shm.base_dir` and `shm_base_dir` (with identical semantics) for interoperability.
 
 Optional keys and defaults:
 

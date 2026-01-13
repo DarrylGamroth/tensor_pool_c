@@ -42,8 +42,8 @@ pool_path="${tmpdir}/tp_pool.bin"
 header_uri="shm:file?path=${header_path}"
 pool_uri="shm:file?path=${pool_path}"
 
-"${SHM_CREATE_BIN}" "${header_path}" header "${STREAM_ID}" "${EPOCH}" 0 "${HEADER_NSLOTS}" 0 "${LAYOUT_VERSION}"
-"${SHM_CREATE_BIN}" "${pool_path}" pool "${STREAM_ID}" "${EPOCH}" "${POOL_ID}" "${HEADER_NSLOTS}" "${POOL_STRIDE}" "${LAYOUT_VERSION}"
+"${SHM_CREATE_BIN}" --noncanonical "${header_path}" header "${STREAM_ID}" "${EPOCH}" 0 "${HEADER_NSLOTS}" 0 "${LAYOUT_VERSION}"
+"${SHM_CREATE_BIN}" --noncanonical "${pool_path}" pool "${STREAM_ID}" "${EPOCH}" "${POOL_ID}" "${HEADER_NSLOTS}" "${POOL_STRIDE}" "${LAYOUT_VERSION}"
 
 set +e
 "${CONSUMER_BIN}" "${AERON_DIR}" "${CONTROL_CHANNEL}" "${STREAM_ID}" "${CLIENT_ID}" "${MAX_FRAMES}" \

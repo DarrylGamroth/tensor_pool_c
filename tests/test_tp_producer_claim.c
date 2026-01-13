@@ -102,6 +102,8 @@ static int tp_test_add_subscription(tp_client_t *client, const char *channel, in
 
 static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, const char *aeron_dir)
 {
+    const char *allowed_paths[] = { "/tmp" };
+
     if (NULL == aeron_dir)
     {
         return -1;
@@ -114,6 +116,7 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
 
     tp_client_context_set_aeron_dir(ctx, aeron_dir);
     tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+    tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -234,12 +237,6 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
             result = 0;
             goto cleanup;
         }
-    }
-
-    {
-        const char *paths[] = { "/tmp" };
-        tp_context_set_allowed_paths(&ctx.base, paths, 1);
-        client.context.base.allowed_paths = ctx.base.allowed_paths;
     }
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)

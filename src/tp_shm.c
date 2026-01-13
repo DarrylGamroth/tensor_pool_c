@@ -55,38 +55,18 @@ static int tp_shm_check_hugepages(int fd, const char *path)
 #endif
 }
 
-static int tp_shm_validate_path(const char *path, const tp_allowed_paths_t *allowed)
+static int tp_shm_validate_path(const char *resolved_path, const tp_allowed_paths_t *allowed)
 {
-    struct stat st;
-    char resolved_path[4096];
+    struct stat st_path;
 
-    if (NULL == realpath(path, resolved_path))
-    {
-        TP_SET_ERR(errno, "tp_shm_map: realpath failed for %s", path);
-        return -1;
-    }
-
-    if (stat(resolved_path, &st) < 0)
-    {
-        TP_SET_ERR(errno, "tp_shm_map: stat failed for %s", resolved_path);
-        return -1;
-    }
-
-    if (!S_ISREG(st.st_mode))
-    {
-        TP_SET_ERR(EINVAL, "tp_shm_map: not a regular file: %s", resolved_path);
-        return -1;
-    }
-
-    if (NULL != allowed && allowed->length > 0 && NULL != allowed->paths)
+    if (NULL != allowed && allowed->canonical_length > 0 && NULL != allowed->canonical_paths)
     {
         size_t i;
         bool allowed_match = false;
 
-        for (i = 0; i < allowed->length; i++)
+        for (i = 0; i < allowed->canonical_length; i++)
         {
-            const char *base = allowed->paths[i];
-            char resolved_base[4096];
+            const char *base = allowed->canonical_paths[i];
             size_t base_len;
 
             if (NULL == base)
@@ -94,18 +74,13 @@ static int tp_shm_validate_path(const char *path, const tp_allowed_paths_t *allo
                 continue;
             }
 
-            if (NULL == realpath(base, resolved_base))
-            {
-                continue;
-            }
-
-            base_len = strlen(resolved_base);
+            base_len = strlen(base);
             if (0 == base_len)
             {
                 continue;
             }
 
-            if (0 == strncmp(resolved_path, resolved_base, base_len))
+            if (0 == strncmp(resolved_path, base, base_len))
             {
                 if (resolved_path[base_len] == '/' || resolved_path[base_len] == '\0')
                 {
@@ -121,7 +96,99 @@ static int tp_shm_validate_path(const char *path, const tp_allowed_paths_t *allo
             return -1;
         }
     }
+    else if (NULL != allowed && allowed->length > 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: allowed paths not canonicalized");
+        return -1;
+    }
 
+    if (stat(resolved_path, &st_path) < 0)
+    {
+        TP_SET_ERR(errno, "tp_shm_map: stat failed for %s", resolved_path);
+        return -1;
+    }
+
+    if (!S_ISREG(st_path.st_mode))
+    {
+        TP_SET_ERR(EINVAL, "tp_shm_map: not a regular file: %s", resolved_path);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int tp_shm_open_canonical(const char *path, const tp_allowed_paths_t *allowed, int flags, int *out_fd)
+{
+    char resolved_path[4096];
+    struct stat st_fd;
+    struct stat st_path;
+    int open_flags = flags;
+    int fd;
+
+    if (NULL == path || NULL == out_fd)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: null path");
+        return -1;
+    }
+
+    if (NULL == realpath(path, resolved_path))
+    {
+        TP_SET_ERR(errno, "tp_shm_map: realpath failed for %s", path);
+        return -1;
+    }
+
+    if (tp_shm_validate_path(resolved_path, allowed) < 0)
+    {
+        return -1;
+    }
+
+#if defined(O_NOFOLLOW)
+    open_flags |= O_NOFOLLOW;
+#else
+    TP_SET_ERR(EINVAL, "tp_shm_map: platform lacks O_NOFOLLOW for %s", resolved_path);
+    return -1;
+#endif
+
+#ifdef O_CLOEXEC
+    open_flags |= O_CLOEXEC;
+#endif
+
+    fd = open(path, open_flags);
+    if (fd < 0)
+    {
+        TP_SET_ERR(errno, "tp_shm_map: open failed for %s", path);
+        return -1;
+    }
+
+    if (fstat(fd, &st_fd) < 0)
+    {
+        TP_SET_ERR(errno, "tp_shm_map: fstat failed for %s", path);
+        close(fd);
+        return -1;
+    }
+
+    if (!S_ISREG(st_fd.st_mode))
+    {
+        TP_SET_ERR(EINVAL, "tp_shm_map: not a regular file: %s", resolved_path);
+        close(fd);
+        return -1;
+    }
+
+    if (stat(resolved_path, &st_path) < 0)
+    {
+        TP_SET_ERR(errno, "tp_shm_map: stat failed for %s", resolved_path);
+        close(fd);
+        return -1;
+    }
+
+    if (st_fd.st_dev != st_path.st_dev || st_fd.st_ino != st_path.st_ino)
+    {
+        TP_SET_ERR(EINVAL, "tp_shm_map: path identity mismatch for %s", resolved_path);
+        close(fd);
+        return -1;
+    }
+
+    *out_fd = fd;
     return 0;
 }
 
@@ -145,15 +212,8 @@ int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_
         return -1;
     }
 
-    if (tp_shm_validate_path(region->uri.path, allowed) < 0)
+    if (tp_shm_open_canonical(region->uri.path, allowed, flags, &region->fd) < 0)
     {
-        return -1;
-    }
-
-    region->fd = open(region->uri.path, flags);
-    if (region->fd < 0)
-    {
-        TP_SET_ERR(errno, "tp_shm_map: open failed for %s", region->uri.path);
         return -1;
     }
 

@@ -255,6 +255,8 @@ static int tp_client_add_subscription(
 
 int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
 {
+    int result = -1;
+
     if (NULL == client || NULL == ctx)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_client_init: null input");
@@ -268,6 +270,14 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
         return -1;
     }
 
+    client->context.base.allowed_paths.canonical_paths = NULL;
+    client->context.base.allowed_paths.canonical_length = 0;
+
+    if (tp_context_finalize_allowed_paths(&client->context.base) < 0)
+    {
+        return -1;
+    }
+
     if (NULL != ctx->aeron)
     {
         if (tp_client_conductor_init_with_aeron(
@@ -276,18 +286,25 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
             ctx->use_agent_invoker,
             ctx->owns_aeron_client) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
     else
     {
         if (tp_client_conductor_init_with_client_context(&client->conductor, ctx) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
-    return 0;
+    result = 0;
+
+cleanup:
+    if (result < 0)
+    {
+        tp_context_clear_allowed_paths(&client->context.base);
+    }
+    return result;
 }
 
 int tp_client_start(tp_client_t *client)
@@ -423,6 +440,7 @@ int tp_client_close(tp_client_t *client)
 
     client->driver_clients = NULL;
 
+    tp_context_clear_allowed_paths(&client->context.base);
     return tp_client_conductor_close(&client->conductor);
 }
 

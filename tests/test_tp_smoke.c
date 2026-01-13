@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp_seqlock.h"
+#include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_uri.h"
@@ -32,6 +33,7 @@ void tp_test_client_conductor_lifecycle(void);
 void tp_test_pollers(void);
 void tp_test_producer_claim_lifecycle(void);
 void tp_test_rollover(void);
+void tp_test_shm_security(void);
 
 static void test_version(void)
 {
@@ -96,8 +98,8 @@ static void test_shm_superblock(void)
     tp_shm_region_t region = { 0 };
     tp_shm_expected_t expected;
     char uri[512];
-    tp_allowed_paths_t allowed;
     const char *allowed_paths[1];
+    tp_context_t ctx;
     size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
     int result = -1;
 
@@ -115,10 +117,17 @@ static void test_shm_superblock(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", path_template);
     allowed_paths[0] = "/tmp";
-    allowed.paths = allowed_paths;
-    allowed.length = 1;
+    if (tp_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    {
+        goto cleanup;
+    }
 
-    if (tp_shm_map(&region, uri, 0, &allowed, NULL) != 0)
+    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) != 0)
     {
         goto cleanup;
     }
@@ -141,6 +150,7 @@ static void test_shm_superblock(void)
     result = 0;
 
 cleanup:
+    tp_context_clear_allowed_paths(&ctx);
     if (fd >= 0)
     {
         tp_shm_unmap(&region, NULL);
@@ -184,6 +194,7 @@ int main(void)
     tp_test_pollers();
     tp_test_producer_claim_lifecycle();
     tp_test_rollover();
+    tp_test_shm_security();
 
     return 0;
 }

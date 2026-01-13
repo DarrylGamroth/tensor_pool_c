@@ -16,6 +16,8 @@ typedef struct tp_allowed_paths_stct
 {
     const char **paths;
     size_t length;
+    char **canonical_paths;
+    size_t canonical_length;
 }
 tp_allowed_paths_t;
 
