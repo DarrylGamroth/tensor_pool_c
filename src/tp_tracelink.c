@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "aeronc.h"
+#include "aeron_alloc.h"
 
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_producer.h"
@@ -252,8 +253,11 @@ static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, siz
 
 int tp_producer_send_tracelink_set(tp_producer_t *producer, const tp_tracelink_set_t *set)
 {
-    uint8_t buffer[1024];
+    uint8_t stack_buffer[512];
+    uint8_t *buffer = stack_buffer;
+    size_t buffer_len = sizeof(stack_buffer);
     size_t encoded_len = 0;
+    size_t required_len;
 
     if (NULL == producer || NULL == producer->control_publication || NULL == set)
     {
@@ -275,10 +279,39 @@ int tp_producer_send_tracelink_set(tp_producer_t *producer, const tp_tracelink_s
         }
     }
 
-    if (tp_tracelink_set_encode(buffer, sizeof(buffer), set, &encoded_len) < 0)
+    required_len = tensor_pool_messageHeader_encoded_length() +
+        tensor_pool_traceLinkSet_sbe_block_length() +
+        4 + (set->parent_count * sizeof(uint64_t));
+    if (required_len > buffer_len)
     {
+        if (aeron_alloc((void **)&buffer, required_len) < 0)
+        {
+            return -1;
+        }
+        buffer_len = required_len;
+    }
+
+    if (tp_tracelink_set_encode(buffer, buffer_len, set, &encoded_len) < 0)
+    {
+        if (buffer != stack_buffer)
+        {
+            aeron_free(buffer);
+        }
         return -1;
     }
 
-    return tp_offer_message(producer->control_publication, buffer, encoded_len);
+    if (tp_offer_message(producer->control_publication, buffer, encoded_len) < 0)
+    {
+        if (buffer != stack_buffer)
+        {
+            aeron_free(buffer);
+        }
+        return -1;
+    }
+
+    if (buffer != stack_buffer)
+    {
+        aeron_free(buffer);
+    }
+    return 0;
 }
