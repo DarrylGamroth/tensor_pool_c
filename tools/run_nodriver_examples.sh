@@ -13,7 +13,7 @@ CONTROL_CHANNEL="aeron:ipc"
 STREAM_ID=10000
 CLIENT_ID=42
 POOL_ID=1
-POOL_STRIDE=64
+POOL_STRIDE="${POOL_STRIDE:-$(getconf PAGESIZE 2>/dev/null || echo 4096)}"
 HEADER_NSLOTS=32
 EPOCH=1
 LAYOUT_VERSION=1
@@ -51,6 +51,11 @@ set +e
 consumer_pid=$!
 
 sleep 0.2
+if ! kill -0 "${consumer_pid}" 2>/dev/null; then
+  wait "${consumer_pid}"
+  echo "Consumer failed to start" >&2
+  exit 1
+fi
 
 "${PRODUCER_BIN}" "${AERON_DIR}" "${CONTROL_CHANNEL}" "${STREAM_ID}" "${CLIENT_ID}" \
   "${header_uri}" "${pool_uri}" "${POOL_ID}" "${POOL_STRIDE}" "${HEADER_NSLOTS}" "${EPOCH}" "${LAYOUT_VERSION}" "${MAX_FRAMES}"
