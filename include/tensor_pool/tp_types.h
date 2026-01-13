@@ -122,6 +122,27 @@ tp_response_code_t;
 #define TP_CLOCK_DOMAIN_MONOTONIC tensor_pool_clockDomain_MONOTONIC
 #define TP_CLOCK_DOMAIN_REALTIME_SYNCED tensor_pool_clockDomain_REALTIME_SYNCED
 
+typedef enum tp_merge_rule_type_enum
+{
+    TP_MERGE_RULE_OFFSET = 0,
+    TP_MERGE_RULE_WINDOW = 1
+}
+tp_merge_rule_type_t;
+
+typedef enum tp_merge_time_rule_type_enum
+{
+    TP_MERGE_TIME_OFFSET_NS = 0,
+    TP_MERGE_TIME_WINDOW_NS = 1
+}
+tp_merge_time_rule_type_t;
+
+typedef enum tp_timestamp_source_enum
+{
+    TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR = 1,
+    TP_TIMESTAMP_SOURCE_SLOT_HEADER = 2
+}
+tp_timestamp_source_t;
+
 enum
 {
     TP_BACK_PRESSURED = -2,

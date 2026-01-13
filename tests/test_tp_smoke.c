@@ -34,6 +34,7 @@ void tp_test_decode_shm_pool_announce(void);
 void tp_test_consumer_registry(void);
 void tp_test_driver_client_decoders(void);
 void tp_test_discovery_client_decoders(void);
+void tp_test_join_barrier(void);
 void tp_test_client_conductor_lifecycle(void);
 void tp_test_pollers(void);
 void tp_test_cadence(void);
@@ -249,6 +250,7 @@ int main(void)
     tp_test_consumer_registry();
     tp_test_driver_client_decoders();
     tp_test_discovery_client_decoders();
+    tp_test_join_barrier();
     tp_test_client_conductor_lifecycle();
     tp_test_pollers();
     tp_test_cadence();

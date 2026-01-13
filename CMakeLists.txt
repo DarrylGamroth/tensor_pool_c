@@ -52,7 +52,9 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_discovery_client.h
     include/tensor_pool/tp_driver_client.h
     include/tensor_pool/tp_error.h
+    include/tensor_pool/tp_join_barrier.h
     include/tensor_pool/tp_log.h
+    include/tensor_pool/tp_merge_map.h
     include/tensor_pool/tp_metadata_poller.h
     include/tensor_pool/tp_producer.h
     include/tensor_pool/tp_progress_poller.h
@@ -80,7 +82,9 @@ set(TP_SOURCES
     src/tp_control_poller.c
     src/tp_discovery_client.c
     src/tp_driver_client.c
+    src/tp_join_barrier.c
     src/tp_log.c
+    src/tp_merge_map.c
     src/tp_metadata_poller.c
     src/tp_producer.c
     src/tp_progress_poller.c
@@ -115,6 +119,7 @@ if (TP_ENABLE_SBE_CODEGEN)
     set(SBE_OUTPUT_DRIVER "${SBE_OUTPUT_DIR}/driver")
     set(SBE_OUTPUT_DISCOVERY "${SBE_OUTPUT_DIR}/discovery")
     set(SBE_OUTPUT_BRIDGE "${SBE_OUTPUT_DIR}/bridge")
+    set(SBE_OUTPUT_MERGE "${SBE_OUTPUT_DIR}/merge")
     set(SBE_SCHEMA_DIR "${CMAKE_CURRENT_LIST_DIR}/schemas")
     set(SBE_JAVA_OPTS "--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED")
 
@@ -124,6 +129,7 @@ if (TP_ENABLE_SBE_CODEGEN)
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DRIVER}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DISCOVERY}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_BRIDGE}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_MERGE}"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
             -Dsbe.output.dir="${SBE_OUTPUT_WIRE}"
@@ -152,12 +158,20 @@ if (TP_ENABLE_SBE_CODEGEN)
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
             "${SBE_SCHEMA_DIR}/bridge-schema.xml"
+        COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
+            -Dsbe.target.language=C
+            -Dsbe.output.dir="${SBE_OUTPUT_MERGE}"
+            -Dsbe.target.namespace=tensor_pool
+            -Dsbe.generate.ir=true
+            -jar "${SBE_TOOL_JAR}"
+            "${SBE_SCHEMA_DIR}/merge-schema.xml"
         COMMAND "${CMAKE_COMMAND}" -E touch "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
         DEPENDS
             "${SBE_SCHEMA_DIR}/wire-schema.xml"
             "${SBE_SCHEMA_DIR}/driver-schema.xml"
             "${SBE_SCHEMA_DIR}/discovery-schema.xml"
             "${SBE_SCHEMA_DIR}/bridge-schema.xml"
+            "${SBE_SCHEMA_DIR}/merge-schema.xml"
         VERBATIM
     )
 
@@ -187,6 +201,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_consumer_registry.c
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c
+    tests/test_tp_join_barrier.c
     tests/test_tp_client_conductor.c
     tests/test_tp_pollers.c
     tests/test_tp_rollover.c
