@@ -163,6 +163,7 @@ tp_producer_set_trace_id_generator(&producer, &trace_gen);
 tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = 0 };
 tp_producer_offer_frame(&producer, &frame, &meta);
 // meta.trace_id is populated when a generator is set and trace_id was 0.
+// The resolved trace_id is written into FrameDescriptor.trace_id for the published frame.
 ```
 
 N→1 stages mint a new trace id and emit TraceLinkSet:
@@ -172,6 +173,7 @@ uint64_t parent_ids[2] = { left_trace_id, right_trace_id };
 uint64_t out_trace_id = tp_trace_id_generator_next(&trace_gen);
 tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = out_trace_id };
 int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
+// out_meta.trace_id is encoded into FrameDescriptor.trace_id for the output frame.
 
 tp_tracelink_set_t link = {
     .stream_id = producer.stream_id,
