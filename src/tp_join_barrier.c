@@ -38,7 +38,9 @@ static void tp_join_barrier_clear(tp_join_barrier_t *barrier)
     barrier->epoch = 0;
     barrier->stale_timeout_ns = TP_NULL_U64;
     barrier->lateness_ns = TP_NULL_U64;
+    barrier->last_out_time_ns = 0;
     barrier->clock_domain = 0;
+    barrier->has_last_out_time = false;
     barrier->rule_count = 0;
     if (barrier->sequence_rules)
     {
@@ -67,6 +69,7 @@ int tp_join_barrier_init(tp_join_barrier_t *barrier, tp_join_barrier_type_t type
     barrier->rule_capacity = rule_capacity;
     barrier->stale_timeout_ns = TP_NULL_U64;
     barrier->lateness_ns = TP_NULL_U64;
+    barrier->latest_ordering = TP_LATEST_ORDERING_SEQUENCE;
 
     if (aeron_alloc((void **)&barrier->sequence_rules, sizeof(tp_sequence_merge_rule_t) * rule_capacity) < 0)
     {
@@ -133,6 +136,16 @@ void tp_join_barrier_set_require_processed(tp_join_barrier_t *barrier, bool requ
     barrier->require_processed = require_processed;
 }
 
+void tp_join_barrier_set_latest_ordering(tp_join_barrier_t *barrier, tp_latest_ordering_t ordering)
+{
+    if (NULL == barrier)
+    {
+        return;
+    }
+
+    barrier->latest_ordering = ordering;
+}
+
 static void tp_join_barrier_load_sequence_rules(tp_join_barrier_t *barrier, const tp_sequence_merge_map_t *map)
 {
     size_t i;
@@ -184,6 +197,8 @@ int tp_join_barrier_apply_sequence_map(tp_join_barrier_t *barrier, const tp_sequ
     barrier->out_stream_id = map->out_stream_id;
     barrier->epoch = map->epoch;
     barrier->stale_timeout_ns = map->stale_timeout_ns;
+    barrier->last_out_time_ns = 0;
+    barrier->has_last_out_time = false;
     barrier->rule_count = map->rule_count;
     tp_join_barrier_load_sequence_rules(barrier, map);
     return 0;
@@ -215,6 +230,8 @@ int tp_join_barrier_apply_timestamp_map(tp_join_barrier_t *barrier, const tp_tim
     barrier->stale_timeout_ns = map->stale_timeout_ns;
     barrier->lateness_ns = (map->lateness_ns == TP_NULL_U64) ? 0 : map->lateness_ns;
     barrier->clock_domain = map->clock_domain;
+    barrier->last_out_time_ns = 0;
+    barrier->has_last_out_time = false;
     barrier->rule_count = map->rule_count;
     tp_join_barrier_load_timestamp_rules(barrier, map);
     return 0;
@@ -244,6 +261,8 @@ int tp_join_barrier_apply_latest_value_sequence_map(tp_join_barrier_t *barrier, 
     barrier->out_stream_id = map->out_stream_id;
     barrier->epoch = map->epoch;
     barrier->stale_timeout_ns = map->stale_timeout_ns;
+    barrier->last_out_time_ns = 0;
+    barrier->has_last_out_time = false;
     barrier->rule_count = map->rule_count;
     tp_join_barrier_load_sequence_rules(barrier, map);
     return 0;
@@ -275,6 +294,8 @@ int tp_join_barrier_apply_latest_value_timestamp_map(tp_join_barrier_t *barrier,
     barrier->stale_timeout_ns = map->stale_timeout_ns;
     barrier->lateness_ns = (map->lateness_ns == TP_NULL_U64) ? 0 : map->lateness_ns;
     barrier->clock_domain = map->clock_domain;
+    barrier->last_out_time_ns = 0;
+    barrier->has_last_out_time = false;
     barrier->rule_count = map->rule_count;
     tp_join_barrier_load_timestamp_rules(barrier, map);
     return 0;
@@ -695,6 +716,12 @@ int tp_join_barrier_is_ready_timestamp(tp_join_barrier_t *barrier, uint64_t out_
         return -1;
     }
 
+    if (barrier->has_last_out_time && out_time_ns < barrier->last_out_time_ns)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_timestamp: out_time regression");
+        return -1;
+    }
+
     states = (tp_join_input_state_t *)barrier->state;
 
     for (i = 0; i < barrier->rule_count; i++)
@@ -715,6 +742,8 @@ int tp_join_barrier_is_ready_timestamp(tp_join_barrier_t *barrier, uint64_t out_
         }
     }
 
+    barrier->last_out_time_ns = out_time_ns;
+    barrier->has_last_out_time = true;
     return 1;
 }
 
@@ -741,6 +770,15 @@ int tp_join_barrier_is_ready_latest(
         return 0;
     }
 
+    if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP)
+    {
+        if (barrier->has_last_out_time && out_time_ns < barrier->last_out_time_ns)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_latest: out_time regression");
+            return -1;
+        }
+    }
+
     states = (tp_join_input_state_t *)barrier->state;
 
     for (i = 0; i < barrier->rule_count; i++)
@@ -750,6 +788,16 @@ int tp_join_barrier_is_ready_latest(
         if (tp_join_barrier_is_stale(barrier, state, now_ns))
         {
             continue;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_SEQUENCE && !state->has_observed_seq)
+        {
+            return 0;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && !state->has_observed_time)
+        {
+            return 0;
         }
 
         if (barrier->clock_domain != 0 && clock_domain != barrier->clock_domain)
@@ -773,7 +821,12 @@ int tp_join_barrier_is_ready_latest(
             return 0;
         }
 
-        if (state->has_min_seq_in_epoch && state->has_observed_seq && state->observed_seq < state->min_seq_in_epoch)
+        if (!state->has_min_seq_in_epoch)
+        {
+            return 0;
+        }
+
+        if (state->has_observed_seq && state->observed_seq < state->min_seq_in_epoch)
         {
             return 0;
         }
@@ -782,6 +835,12 @@ int tp_join_barrier_is_ready_latest(
         {
             return 0;
         }
+    }
+
+    if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP)
+    {
+        barrier->last_out_time_ns = out_time_ns;
+        barrier->has_last_out_time = true;
     }
 
     return 1;
@@ -798,5 +857,67 @@ int tp_join_barrier_invalidate_latest(tp_join_barrier_t *barrier, uint32_t strea
     }
 
     state->latest_valid = false;
+    return 0;
+}
+
+int tp_join_barrier_collect_latest(
+    tp_join_barrier_t *barrier,
+    tp_latest_selection_t *selections,
+    size_t capacity,
+    size_t *out_count)
+{
+    size_t i;
+    size_t count = 0;
+    tp_join_input_state_t *states;
+
+    if (NULL == barrier || NULL == selections || NULL == out_count)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: invalid input");
+        return -1;
+    }
+
+    if (barrier->type != TP_JOIN_BARRIER_LATEST_VALUE)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: invalid barrier");
+        return -1;
+    }
+
+    if (barrier->rule_count > capacity)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: capacity too small");
+        return -1;
+    }
+
+    states = (tp_join_input_state_t *)barrier->state;
+    for (i = 0; i < barrier->rule_count; i++)
+    {
+        tp_join_input_state_t *state = &states[i];
+
+        if (!state->latest_valid || !state->has_min_seq_in_epoch)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: latest not ready");
+            return -1;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_SEQUENCE && !state->has_observed_seq)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: missing sequence");
+            return -1;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && !state->has_observed_time)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: missing timestamp");
+            return -1;
+        }
+
+        selections[count].stream_id = state->stream_id;
+        selections[count].seq = state->observed_seq;
+        selections[count].timestamp_ns = state->observed_time_ns;
+        selections[count].timestamp_source = state->timestamp_source;
+        count++;
+    }
+
+    *out_count = count;
     return 0;
 }
