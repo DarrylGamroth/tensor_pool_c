@@ -18,7 +18,7 @@ Legend:
    **Gap:** Producer does not explicitly zero reserved fields.  
    **Impact:** Cosmetic; consumers ignore.
 
-3. [ ] **Bridge service compliance** — Severity: Low — Status: Pending  
+3. [ ] **Bridge service compliance** — Severity: Low — Status: Not present  
    **Spec:** §12  
    **Gap:** Bridge not implemented in this repo.  
    **Impact:** Out of scope unless bridge is required.
