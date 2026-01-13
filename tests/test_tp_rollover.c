@@ -324,6 +324,7 @@ void tp_test_rollover(void)
         goto cleanup;
     }
 
+    memset(&frame, 0, sizeof(frame));
     frame.tensor = &header;
     frame.payload_len = sizeof(float) * 4;
     frame.payload = (float[4]){ 1.0f, 2.0f, 3.0f, 4.0f };

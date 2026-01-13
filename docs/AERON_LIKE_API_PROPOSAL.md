@@ -175,6 +175,7 @@ Behavior:
 - `tp_producer_queue_claim` re-queues a previously claimed slot without re-claiming; use this for fixed announced buffer pools.
 - When `fixed_pool_mode` is enabled, claims remain valid across `commit` and `queue_claim` until explicitly aborted after acquisition stops.
 - **Fixed pool contract**: `tp_producer_queue_claim` is only valid when `fixed_pool_mode` is enabled; otherwise claims end at `commit` or `abort`.
+- `FrameDescriptor.trace_id` is supplied via `tp_frame_t.trace_id` or `tp_buffer_claim_t.trace_id`; `tp_frame_metadata_t` only carries timestamp and meta_version.
 
 ## 6. Consumer API (Aeron-like)
 

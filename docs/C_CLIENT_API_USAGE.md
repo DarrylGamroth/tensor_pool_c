@@ -160,10 +160,11 @@ uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
 tp_trace_id_generator_init_default(&trace_gen, node_id);
 tp_producer_set_trace_id_generator(&producer, &trace_gen);
 
-tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = 0 };
+frame.trace_id = 0;
+tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0 };
 tp_producer_offer_frame(&producer, &frame, &meta);
-// meta.trace_id is populated when a generator is set and trace_id was 0.
-// The resolved trace_id is written into FrameDescriptor.trace_id for the published frame.
+// If frame.trace_id is 0 and a generator is set, a trace_id is minted and written into FrameDescriptor.trace_id.
+// For try-claim paths, set claim.trace_id before tp_producer_commit_claim (0 uses the generator when configured).
 ```
 
 N→1 stages mint a new trace id and emit TraceLinkSet:
@@ -171,9 +172,10 @@ N→1 stages mint a new trace id and emit TraceLinkSet:
 ```c
 uint64_t parent_ids[2] = { left_trace_id, right_trace_id };
 uint64_t out_trace_id = tp_trace_id_generator_next(&trace_gen);
-tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0, .trace_id = out_trace_id };
+frame.trace_id = out_trace_id;
+tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0 };
 int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
-// out_meta.trace_id is encoded into FrameDescriptor.trace_id for the output frame.
+// frame.trace_id is encoded into FrameDescriptor.trace_id for the output frame.
 
 tp_tracelink_set_t link = {
     .stream_id = producer.stream_id,

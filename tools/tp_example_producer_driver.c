@@ -163,6 +163,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Tensor header invalid: %s\n", tp_errmsg());
     }
+    memset(&frame, 0, sizeof(frame));
     frame.tensor = &header;
     frame.payload = payload;
     frame.payload_len = sizeof(payload);

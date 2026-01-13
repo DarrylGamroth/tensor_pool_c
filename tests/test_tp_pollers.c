@@ -954,11 +954,11 @@ void tp_test_rate_limit(void)
     frame.payload = payload;
     frame.payload_len = sizeof(payload);
     frame.pool_id = 1;
+    frame.trace_id = 0;
 
     memset(&meta, 0, sizeof(meta));
     meta.timestamp_ns = 1;
     meta.meta_version = 1;
-    meta.trace_id = 0;
 
     if (tp_test_offer_frame(&producer, &frame, &meta) < 0)
     {

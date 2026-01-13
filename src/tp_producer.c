@@ -169,20 +169,15 @@ static int tp_producer_default_tracelink_validator(const tp_tracelink_set_t *set
 
 static int tp_producer_resolve_trace_id(
     tp_producer_t *producer,
-    const tp_frame_metadata_t *meta,
+    uint64_t requested_trace_id,
     uint64_t *out_trace_id)
 {
-    uint64_t trace_id = 0;
+    uint64_t trace_id = requested_trace_id;
 
     if (NULL == producer || NULL == out_trace_id)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_resolve_trace_id: null input");
         return -1;
-    }
-
-    if (meta)
-    {
-        trace_id = meta->trace_id;
     }
 
     if (trace_id == 0 && producer->trace_id_generator)
@@ -1107,7 +1102,6 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     uint64_t timestamp_ns = 0;
     uint32_t meta_version = 0;
     uint64_t trace_id = 0;
-    bool update_meta_trace = false;
     int result;
 
     if (NULL == producer || NULL == frame || NULL == frame->tensor)
@@ -1120,17 +1114,11 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     {
         timestamp_ns = meta->timestamp_ns;
         meta_version = meta->meta_version;
-        update_meta_trace = (meta->trace_id == 0 && producer->trace_id_generator != NULL);
     }
 
-    if (tp_producer_resolve_trace_id(producer, meta, &trace_id) < 0)
+    if (tp_producer_resolve_trace_id(producer, frame->trace_id, &trace_id) < 0)
     {
         return -1;
-    }
-
-    if (update_meta_trace)
-    {
-        meta->trace_id = trace_id;
     }
 
     seq = producer->next_seq++;
@@ -1202,6 +1190,7 @@ int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_
     claim->pool_id = pool->pool_id;
     claim->payload_len = (uint32_t)length;
     claim->payload = (uint8_t *)pool->region.addr + TP_SUPERBLOCK_SIZE_BYTES + (header_index * pool->stride_bytes);
+    claim->trace_id = 0;
 
     tp_atomic_store_u64((uint64_t *)slot, tp_seq_in_progress(seq));
 
@@ -1225,7 +1214,7 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
         meta = &local_meta;
     }
 
-    if (tp_producer_resolve_trace_id(producer, meta, &trace_id) < 0)
+    if (tp_producer_resolve_trace_id(producer, claim->trace_id, &trace_id) < 0)
     {
         return -1;
     }
@@ -1271,6 +1260,7 @@ int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *clai
 
     seq = producer->next_seq++;
     claim->seq = seq;
+    claim->trace_id = 0;
     slot = tp_slot_at(producer->header_region.addr, claim->header_index);
     tp_atomic_store_u64((uint64_t *)slot, tp_seq_in_progress(seq));
 

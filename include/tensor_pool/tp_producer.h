@@ -66,7 +66,6 @@ typedef struct tp_frame_metadata_stct
 {
     uint64_t timestamp_ns;
     uint32_t meta_version;
-    uint64_t trace_id;
 }
 tp_frame_metadata_t;
 
@@ -85,6 +84,7 @@ typedef struct tp_frame_stct
     const void *payload;
     uint32_t payload_len;
     uint16_t pool_id;
+    uint64_t trace_id;
 }
 tp_frame_t;
 
@@ -95,6 +95,7 @@ typedef struct tp_buffer_claim_stct
     uint16_t pool_id;
     uint32_t payload_len;
     uint8_t *payload;
+    uint64_t trace_id;
     tp_tensor_header_t tensor;
 }
 tp_buffer_claim_t;
