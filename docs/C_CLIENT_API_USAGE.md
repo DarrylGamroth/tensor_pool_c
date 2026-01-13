@@ -232,22 +232,8 @@ If the consumer receives a per-consumer control stream in `ConsumerConfig`, use 
 
 ## 10. MergeMap and JoinBarrier
 
-MergeMap announcements are control-plane messages. Decode them in your control fragment handler,
-apply them to a JoinBarrier, and then use JoinBarrier readiness to gate processing attempts.
-
-```c
-static void on_control_fragment(void *clientd, const uint8_t *buffer, size_t length)
-{
-    tp_join_barrier_t *barrier = (tp_join_barrier_t *)clientd;
-    tp_sequence_merge_rule_t rules[16];
-    tp_sequence_merge_map_t map;
-
-    if (tp_sequence_merge_map_decode(buffer, length, &map, rules, 16) == 0)
-    {
-        tp_join_barrier_apply_sequence_map(barrier, &map);
-    }
-}
-```
+MergeMap announcements are control-plane messages. Apply them to a JoinBarrier and use
+JoinBarrier readiness to gate processing attempts.
 
 ```c
 tp_join_barrier_t barrier;
