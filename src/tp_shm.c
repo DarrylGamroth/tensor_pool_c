@@ -567,7 +567,6 @@ int tp_shm_validate_superblock(const tp_shm_region_t *region, const tp_shm_expec
 int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_log_t *log)
 {
     tp_shm_uri_t parsed;
-    size_t page_size = 0;
 
     if (NULL == uri)
     {
@@ -578,6 +577,12 @@ int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_
     if (stride_bytes == 0 || (stride_bytes & (stride_bytes - 1)) != 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not power of two");
+        return -1;
+    }
+
+    if (stride_bytes < 64 || (stride_bytes % 64) != 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not aligned to 64 bytes");
         return -1;
     }
 
@@ -594,7 +599,6 @@ int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_
             TP_SET_ERR(errno, "tp_shm_validate_stride_alignment: statfs failed for %s", parsed.path);
             return -1;
         }
-        page_size = (size_t)st.f_bsize;
         if (parsed.require_hugepages)
         {
             if ((uint64_t)st.f_type != (uint64_t)HUGETLBFS_MAGIC)
@@ -605,25 +609,12 @@ int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_
         }
     }
 #else
-    page_size = (size_t)sysconf(_SC_PAGESIZE);
     if (parsed.require_hugepages)
     {
         TP_SET_ERR(EINVAL, "tp_shm_validate_stride_alignment: hugepages unsupported: %s", parsed.path);
         return -1;
     }
 #endif
-
-    if (page_size == 0)
-    {
-        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: invalid page size");
-        return -1;
-    }
-
-    if (stride_bytes % page_size != 0)
-    {
-        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not aligned to page size");
-        return -1;
-    }
 
     return 0;
 }
