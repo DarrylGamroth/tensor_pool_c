@@ -378,6 +378,14 @@ if (tp_join_barrier_is_ready_timestamp(&ts_barrier, out_time_ns, TP_CLOCK_DOMAIN
 }
 ```
 
+WINDOW_NS rules require `latenessNs` to permit lagged inputs. If `latenessNs` is zero, readiness
+still requires `observed_time >= out_time`. Set it on the active timestamp map before applying:
+
+```c
+ts_map.lateness_ns = 10 * 1000 * 1000; // 10 ms
+tp_join_barrier_apply_timestamp_map(&ts_barrier, &ts_map);
+```
+
 For LatestValueJoinBarrier, set ordering explicitly. Timestamp ordering requires an active
 Timestamp MergeMap so the clock domain and timestamp source are defined:
 

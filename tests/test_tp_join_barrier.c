@@ -248,6 +248,51 @@ static void test_join_barrier_timestamp(void)
     tp_join_barrier_close(&barrier);
 }
 
+static void test_join_barrier_timestamp_window_lateness(void)
+{
+    tp_join_barrier_t barrier;
+    tp_timestamp_merge_rule_t rules[1];
+    tp_timestamp_merge_map_t map;
+
+    rules[0].input_stream_id = 9;
+    rules[0].rule_type = TP_MERGE_TIME_WINDOW_NS;
+    rules[0].timestamp_source = TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR;
+    rules[0].offset_ns = 0;
+    rules[0].window_ns = 50;
+
+    map.out_stream_id = 77;
+    map.epoch = 1;
+    map.stale_timeout_ns = TP_NULL_U64;
+    map.clock_domain = TP_CLOCK_DOMAIN_MONOTONIC;
+    map.lateness_ns = 0;
+    map.rules = rules;
+    map.rule_count = 1;
+
+    assert(tp_join_barrier_init(&barrier, TP_JOIN_BARRIER_TIMESTAMP, 1) == 0);
+    assert(tp_join_barrier_apply_timestamp_map(&barrier, &map) == 0);
+    assert(tp_join_barrier_update_observed_time(
+        &barrier,
+        9,
+        95,
+        TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR,
+        TP_CLOCK_DOMAIN_MONOTONIC,
+        1) == 0);
+    assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_MONOTONIC, 2) == 0);
+
+    map.lateness_ns = 10;
+    assert(tp_join_barrier_apply_timestamp_map(&barrier, &map) == 0);
+    assert(tp_join_barrier_update_observed_time(
+        &barrier,
+        9,
+        95,
+        TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR,
+        TP_CLOCK_DOMAIN_MONOTONIC,
+        3) == 0);
+    assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_MONOTONIC, 4) == 1);
+
+    tp_join_barrier_close(&barrier);
+}
+
 static void test_join_barrier_latest_value(void)
 {
     tp_join_barrier_t barrier;
@@ -388,6 +433,7 @@ void tp_test_join_barrier(void)
     test_join_barrier_sequence();
     test_join_barrier_epoch_change_blocks();
     test_join_barrier_timestamp();
+    test_join_barrier_timestamp_window_lateness();
     test_join_barrier_latest_value();
     test_join_barrier_latest_timestamp_ordering();
     test_join_barrier_latest_timestamp_requires_map();
