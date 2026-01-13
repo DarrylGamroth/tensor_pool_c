@@ -14,17 +14,17 @@ static void usage(const char *name)
     fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <max_frames>\n", name);
 }
 
-typedef struct tp_consumer_state_stct
+typedef struct tp_consumer_sample_state_stct
 {
     tp_consumer_t *consumer;
     int received;
     int limit;
 }
-tp_consumer_state_t;
+tp_consumer_sample_state_t;
 
 static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 {
-    tp_consumer_state_t *state = (tp_consumer_state_t *)clientd;
+    tp_consumer_sample_state_t *state = (tp_consumer_sample_state_t *)clientd;
     tp_frame_view_t frame;
 
     if (NULL == state || NULL == desc || NULL == state->consumer)
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
     tp_consumer_t consumer;
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t *pool_cfg = NULL;
-    tp_consumer_state_t state;
+    tp_consumer_sample_state_t state;
     uint32_t stream_id;
     uint32_t client_id;
     int max_frames;

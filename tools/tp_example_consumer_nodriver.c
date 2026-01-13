@@ -17,18 +17,18 @@ static void usage(const char *name)
         name);
 }
 
-typedef struct tp_consumer_state_stct
+typedef struct tp_consumer_sample_state_stct
 {
     tp_consumer_t *consumer;
     int received;
     int limit;
     int errors;
 }
-tp_consumer_state_t;
+tp_consumer_sample_state_t;
 
 static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 {
-    tp_consumer_state_t *state = (tp_consumer_state_t *)clientd;
+    tp_consumer_sample_state_t *state = (tp_consumer_sample_state_t *)clientd;
     tp_frame_view_t frame;
     const float expected[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
     int read_result;
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     tp_consumer_t consumer;
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t pool_cfg;
-    tp_consumer_state_t state;
+    tp_consumer_sample_state_t state;
     uint32_t stream_id;
     uint32_t client_id;
     int max_frames;

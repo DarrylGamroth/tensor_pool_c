@@ -46,6 +46,36 @@ static void tp_metadata_poller_handler(void *clientd, const uint8_t *buffer, siz
             }
         }
     }
+
+    if (poller->handlers.on_meta_blob_announce)
+    {
+        tp_meta_blob_announce_view_t blob_announce;
+        if (tp_control_decode_meta_blob_announce(buffer, length, &blob_announce) == 0)
+        {
+            poller->handlers.on_meta_blob_announce(&blob_announce, poller->handlers.clientd);
+            return;
+        }
+    }
+
+    if (poller->handlers.on_meta_blob_chunk)
+    {
+        tp_meta_blob_chunk_view_t blob_chunk;
+        if (tp_control_decode_meta_blob_chunk(buffer, length, &blob_chunk) == 0)
+        {
+            poller->handlers.on_meta_blob_chunk(&blob_chunk, poller->handlers.clientd);
+            return;
+        }
+    }
+
+    if (poller->handlers.on_meta_blob_complete)
+    {
+        tp_meta_blob_complete_view_t blob_complete;
+        if (tp_control_decode_meta_blob_complete(buffer, length, &blob_complete) == 0)
+        {
+            poller->handlers.on_meta_blob_complete(&blob_complete, poller->handlers.clientd);
+            return;
+        }
+    }
 }
 
 int tp_metadata_poller_init(tp_metadata_poller_t *poller, tp_client_t *client, const tp_metadata_handlers_t *handlers)

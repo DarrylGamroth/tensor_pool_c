@@ -10,6 +10,7 @@
 
 #include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
+#include "wire/tensor_pool/controlResponse.h"
 #include "wire/tensor_pool/dataSourceAnnounce.h"
 #include "wire/tensor_pool/dataSourceMeta.h"
 #include "wire/tensor_pool/frameProgress.h"
@@ -212,6 +213,29 @@ static void tp_on_control_fragment(
                 }
             }
             tp_control_shm_pool_announce_close(&view);
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_controlResponse_sbe_template_id())
+    {
+        tp_control_response_view_t view;
+        if (tp_control_decode_control_response(buffer, length, &view) == 0)
+        {
+            if (state && state->json)
+            {
+                printf("{\"type\":\"ControlResponse\",\"correlation_id\":%" PRIi64 ",\"code\":%d,",
+                    view.correlation_id,
+                    view.code);
+                tp_print_json_string_view("error_message", &view.error_message);
+                printf("}\n");
+            }
+            else
+            {
+                printf("ControlResponse correlation_id=%" PRIi64 " code=%d ", view.correlation_id, view.code);
+                tp_print_string_view("error_message", &view.error_message);
+                printf("\n");
+            }
         }
         return;
     }

@@ -30,6 +30,9 @@ extern char *realpath(const char *path, char *resolved_path);
 #ifndef HUGETLBFS_MAGIC
 #define HUGETLBFS_MAGIC 0x958458f6
 #endif
+#ifndef TMPFS_MAGIC
+#define TMPFS_MAGIC 0x01021994
+#endif
 
 static int tp_shm_check_hugepages(int fd, const char *path)
 {
@@ -327,6 +330,19 @@ int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_
     {
         return -1;
     }
+
+#if defined(__linux__)
+    {
+        struct statfs statfs_buf;
+        if (fstatfs(region->fd, &statfs_buf) == 0)
+        {
+            if (statfs_buf.f_type != TMPFS_MAGIC && statfs_buf.f_type != HUGETLBFS_MAGIC)
+            {
+                tp_log_emit(log, TP_LOG_WARN, "tp_shm_map: file-backed mapping for %s", region->uri.path);
+            }
+        }
+    }
+#endif
 
     if (region->uri.require_hugepages)
     {

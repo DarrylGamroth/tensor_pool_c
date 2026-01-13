@@ -155,6 +155,7 @@ static int tp_producer_publish_descriptor(
 {
     int result = 0;
     int published = 0;
+    uint64_t now_ns = (uint64_t)tp_clock_now_ns();
 
     if (producer->consumer_manager)
     {
@@ -166,6 +167,16 @@ static int tp_producer_publish_descriptor(
             if (!entry->in_use || NULL == entry->descriptor_publication)
             {
                 continue;
+            }
+            if (entry->mode == TP_MODE_RATE_LIMITED && entry->max_rate_hz > 0)
+            {
+                uint64_t interval_ns = 1000000000ULL / entry->max_rate_hz;
+                if (interval_ns > 0 && entry->last_descriptor_ns != 0 &&
+                    now_ns - entry->last_descriptor_ns < interval_ns)
+                {
+                    continue;
+                }
+                entry->last_descriptor_ns = now_ns;
             }
             if (tp_producer_publish_descriptor_to(
                 producer,
@@ -1152,16 +1163,16 @@ int tp_producer_close(tp_producer_t *producer)
 
     tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
 
-    for (i = 0; i < producer->pool_count; i++)
-    {
-        tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base.log);
-    }
-
     if (producer->pools)
     {
+        for (i = 0; i < producer->pool_count; i++)
+        {
+            tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base.log);
+        }
         aeron_free(producer->pools);
         producer->pools = NULL;
     }
+    producer->pool_count = 0;
 
     if (producer->consumer_manager)
     {

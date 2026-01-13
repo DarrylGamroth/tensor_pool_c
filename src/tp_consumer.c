@@ -70,7 +70,12 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
 
     consumer->pool_count = 0;
     consumer->header_nslots = 0;
+    consumer->state = TP_CONSUMER_STATE_UNMAPPED;
     consumer->shm_mapped = false;
+    consumer->mapped_epoch = 0;
+    consumer->last_seq_seen = 0;
+    consumer->drops_gap = 0;
+    consumer->drops_late = 0;
 }
 
 static char *tp_string_view_dup(const tp_string_view_t *view)
@@ -180,6 +185,7 @@ static int tp_consumer_apply_announce(tp_consumer_t *consumer, const tp_shm_pool
         goto cleanup;
     }
 
+    consumer->state = TP_CONSUMER_STATE_MAPPED;
     consumer->shm_mapped = true;
     consumer->mapped_epoch = announce->epoch;
     result = 0;
@@ -314,6 +320,15 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
     if (!consumer->shm_mapped || consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
     {
         return;
+    }
+
+    if (consumer->last_seq_seen != 0 && view.seq > consumer->last_seq_seen + 1)
+    {
+        consumer->drops_gap += (view.seq - consumer->last_seq_seen - 1);
+    }
+    if (view.seq > consumer->last_seq_seen)
+    {
+        consumer->last_seq_seen = view.seq;
     }
 
     if (consumer->descriptor_handler)
@@ -790,8 +805,12 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         tp_consumer_send_hello(consumer, &hello);
     }
 
+    consumer->state = TP_CONSUMER_STATE_MAPPED;
     consumer->shm_mapped = true;
     consumer->mapped_epoch = config->epoch;
+    consumer->last_seq_seen = 0;
+    consumer->drops_gap = 0;
+    consumer->drops_late = 0;
     return 0;
 
 cleanup:
@@ -808,6 +827,7 @@ cleanup:
         consumer->pools = NULL;
     }
 
+    consumer->state = TP_CONSUMER_STATE_UNMAPPED;
     consumer->shm_mapped = false;
     return result;
 }
@@ -954,6 +974,7 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
     seq_first = tp_atomic_load_u64((uint64_t *)slot);
     if (!tp_seq_is_committed(seq_first))
     {
+        consumer->drops_late++;
         return 1;
     }
 
@@ -1008,12 +1029,38 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
     seq_second = tp_atomic_load_u64((uint64_t *)slot);
     if (seq_second != seq_first || !tp_seq_is_committed(seq_second))
     {
+        consumer->drops_late++;
         return 1;
     }
 
     if (tp_seq_value(seq_second) != seq)
     {
+        consumer->drops_late++;
         return 1;
+    }
+
+    return 0;
+}
+
+int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen)
+{
+    if (NULL == consumer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_get_drop_counts: null input");
+        return -1;
+    }
+
+    if (drops_gap)
+    {
+        *drops_gap = consumer->drops_gap;
+    }
+    if (drops_late)
+    {
+        *drops_late = consumer->drops_late;
+    }
+    if (last_seq_seen)
+    {
+        *last_seq_seen = consumer->last_seq_seen;
     }
 
     return 0;

@@ -37,6 +37,7 @@ typedef struct tp_consumer_entry_stct
     char descriptor_channel[TP_URI_MAX_LENGTH];
     uint32_t control_stream_id;
     char control_channel[TP_URI_MAX_LENGTH];
+    uint64_t last_descriptor_ns;
     aeron_publication_t *descriptor_publication;
     aeron_publication_t *control_publication;
 }

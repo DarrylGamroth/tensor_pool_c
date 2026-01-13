@@ -152,7 +152,7 @@ static int tp_test_init_producer(
     memset(&pool_cfg, 0, sizeof(pool_cfg));
     pool_cfg.pool_id = 1;
     pool_cfg.nslots = 4;
-    pool_cfg.stride_bytes = 128;
+    pool_cfg.stride_bytes = 4096;
     pool_cfg.uri = pool_uri;
 
     memset(&config, 0, sizeof(config));
@@ -193,7 +193,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     char header_uri[512];
     char pool_uri[512];
     size_t header_size = TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4;
-    size_t pool_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
+    size_t pool_size = TP_SUPERBLOCK_SIZE_BYTES + 4096 * 4;
     int result = -1;
 
     memset(&client, 0, sizeof(client));
@@ -213,7 +213,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     }
 
     tp_test_write_superblock(header_fd, 7, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
-    tp_test_write_superblock(pool_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 128);
+    tp_test_write_superblock(pool_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 4096);
 
     snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);

@@ -11,8 +11,12 @@
 
 #include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
+#include "wire/tensor_pool/controlResponse.h"
 #include "wire/tensor_pool/dataSourceAnnounce.h"
 #include "wire/tensor_pool/dataSourceMeta.h"
+#include "wire/tensor_pool/metaBlobAnnounce.h"
+#include "wire/tensor_pool/metaBlobChunk.h"
+#include "wire/tensor_pool/metaBlobComplete.h"
 #include "wire/tensor_pool/messageHeader.h"
 
 static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, size_t length)
@@ -324,4 +328,165 @@ int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_sou
     }
 
     return tp_offer_message(producer->metadata_publication, buffer, tensor_pool_dataSourceMeta_sbe_position(&msg));
+}
+
+int tp_producer_send_meta_blob_announce(tp_producer_t *producer, const tp_meta_blob_announce_t *announce)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_metaBlobAnnounce msg;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_metaBlobAnnounce_sbe_block_length();
+
+    if (NULL == producer || NULL == producer->metadata_publication || NULL == announce)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_meta_blob_announce: metadata publication unavailable");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_metaBlobAnnounce_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_metaBlobAnnounce_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_metaBlobAnnounce_sbe_schema_version());
+
+    tensor_pool_metaBlobAnnounce_wrap_for_encode(&msg, (char *)buffer, header_len, sizeof(buffer));
+    tensor_pool_metaBlobAnnounce_set_streamId(&msg, announce->stream_id);
+    tensor_pool_metaBlobAnnounce_set_metaVersion(&msg, announce->meta_version);
+    tensor_pool_metaBlobAnnounce_set_blobType(&msg, announce->blob_type);
+    tensor_pool_metaBlobAnnounce_set_totalLen(&msg, announce->total_len);
+    tensor_pool_metaBlobAnnounce_set_checksum(&msg, announce->checksum);
+
+    return tp_offer_message(producer->metadata_publication, buffer, tensor_pool_metaBlobAnnounce_sbe_position(&msg));
+}
+
+int tp_producer_send_meta_blob_chunk(tp_producer_t *producer, const tp_meta_blob_chunk_t *chunk)
+{
+    uint8_t buffer[4096];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_metaBlobChunk msg;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_metaBlobChunk_sbe_block_length();
+
+    if (NULL == producer || NULL == producer->metadata_publication || NULL == chunk || NULL == chunk->bytes)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_meta_blob_chunk: metadata publication unavailable");
+        return -1;
+    }
+
+    if (chunk->bytes_length == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_meta_blob_chunk: empty chunk");
+        return -1;
+    }
+
+    if (chunk->bytes_length > sizeof(buffer) - header_len - body_len)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_meta_blob_chunk: chunk too large");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_metaBlobChunk_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_metaBlobChunk_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_metaBlobChunk_sbe_schema_version());
+
+    tensor_pool_metaBlobChunk_wrap_for_encode(&msg, (char *)buffer, header_len, sizeof(buffer));
+    tensor_pool_metaBlobChunk_set_streamId(&msg, chunk->stream_id);
+    tensor_pool_metaBlobChunk_set_metaVersion(&msg, chunk->meta_version);
+    tensor_pool_metaBlobChunk_set_chunkOffset(&msg, chunk->offset);
+    if (tensor_pool_metaBlobChunk_put_bytes(&msg, (const char *)chunk->bytes, chunk->bytes_length) < 0)
+    {
+        return -1;
+    }
+
+    return tp_offer_message(producer->metadata_publication, buffer, tensor_pool_metaBlobChunk_sbe_position(&msg));
+}
+
+int tp_producer_send_meta_blob_complete(tp_producer_t *producer, const tp_meta_blob_complete_t *complete)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_metaBlobComplete msg;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_metaBlobComplete_sbe_block_length();
+
+    if (NULL == producer || NULL == producer->metadata_publication || NULL == complete)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_meta_blob_complete: metadata publication unavailable");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_metaBlobComplete_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_metaBlobComplete_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_metaBlobComplete_sbe_schema_version());
+
+    tensor_pool_metaBlobComplete_wrap_for_encode(&msg, (char *)buffer, header_len, sizeof(buffer));
+    tensor_pool_metaBlobComplete_set_streamId(&msg, complete->stream_id);
+    tensor_pool_metaBlobComplete_set_metaVersion(&msg, complete->meta_version);
+    tensor_pool_metaBlobComplete_set_checksum(&msg, complete->checksum);
+
+    return tp_offer_message(producer->metadata_publication, buffer, tensor_pool_metaBlobComplete_sbe_position(&msg));
+}
+
+int tp_producer_send_control_response(tp_producer_t *producer, const tp_control_response_t *response)
+{
+    uint8_t buffer[512];
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_controlResponse resp;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_controlResponse_sbe_block_length();
+
+    if (NULL == producer || NULL == producer->control_publication || NULL == response)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_control_response: control publication unavailable");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_controlResponse_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_controlResponse_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_controlResponse_sbe_schema_version());
+
+    tensor_pool_controlResponse_wrap_for_encode(&resp, (char *)buffer, header_len, sizeof(buffer));
+    tensor_pool_controlResponse_set_correlationId(&resp, response->correlation_id);
+    tensor_pool_controlResponse_set_code(&resp, (enum tensor_pool_responseCode)response->code);
+
+    if (NULL != response->error_message)
+    {
+        if (tensor_pool_controlResponse_put_errorMessage(&resp, response->error_message, strlen(response->error_message)) < 0)
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        tensor_pool_controlResponse_put_errorMessage(&resp, "", 0);
+    }
+
+    return tp_offer_message(producer->control_publication, buffer, tensor_pool_controlResponse_sbe_position(&resp));
 }

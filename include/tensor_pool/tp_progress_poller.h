@@ -12,6 +12,16 @@ extern "C" {
 
 typedef void (*tp_on_progress_t)(void *clientd, const tp_frame_progress_t *progress);
 
+#define TP_PROGRESS_TRACKER_CAPACITY 64
+
+typedef struct tp_progress_tracker_entry_stct
+{
+    uint64_t seq;
+    uint64_t last_bytes;
+    uint8_t in_use;
+}
+tp_progress_tracker_entry_t;
+
 typedef struct tp_progress_handlers_stct
 {
     tp_on_progress_t on_progress;
@@ -25,6 +35,9 @@ typedef struct tp_progress_poller_stct
     aeron_subscription_t *subscription;
     aeron_fragment_assembler_t *assembler;
     tp_progress_handlers_t handlers;
+    tp_progress_tracker_entry_t tracker[TP_PROGRESS_TRACKER_CAPACITY];
+    uint32_t tracker_cursor;
+    uint64_t max_payload_bytes;
 }
 tp_progress_poller_t;
 
@@ -33,6 +46,7 @@ int tp_progress_poller_init_with_subscription(
     tp_progress_poller_t *poller,
     aeron_subscription_t *subscription,
     const tp_progress_handlers_t *handlers);
+void tp_progress_poller_set_max_payload_bytes(tp_progress_poller_t *poller, uint64_t max_payload_bytes);
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit);
 
 #ifdef __cplusplus

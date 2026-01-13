@@ -12,6 +12,7 @@
 #include "wire/tensor_pool/majorOrder.h"
 #include "wire/tensor_pool/progressUnit.h"
 #include "wire/tensor_pool/clockDomain.h"
+#include "wire/tensor_pool/responseCode.h"
 
 #define TP_SUPERBLOCK_SIZE_BYTES 64u
 #define TP_HEADER_SLOT_BYTES 256u
@@ -61,6 +62,16 @@ typedef enum tp_progress_state_enum
     TP_PROGRESS_NULL = 255
 }
 tp_progress_state_t;
+
+typedef enum tp_response_code_enum
+{
+    TP_RESPONSE_OK = tensor_pool_responseCode_OK,
+    TP_RESPONSE_UNSUPPORTED = tensor_pool_responseCode_UNSUPPORTED,
+    TP_RESPONSE_INVALID_PARAMS = tensor_pool_responseCode_INVALID_PARAMS,
+    TP_RESPONSE_REJECTED = tensor_pool_responseCode_REJECTED,
+    TP_RESPONSE_INTERNAL_ERROR = tensor_pool_responseCode_INTERNAL_ERROR
+}
+tp_response_code_t;
 
 #define TP_ROLE_PRODUCER tensor_pool_role_PRODUCER
 #define TP_ROLE_CONSUMER tensor_pool_role_CONSUMER

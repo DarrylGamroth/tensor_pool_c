@@ -37,6 +37,7 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     tp_shm_pool_announce_view_t pool_announce;
     tp_consumer_hello_view_t hello;
     tp_consumer_config_view_t config;
+    tp_control_response_view_t response;
     tp_data_source_announce_view_t announce;
     tp_driver_lease_revoked_t revoked;
     tp_driver_shutdown_t shutdown_event;
@@ -66,6 +67,12 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     if (poller->handlers.on_consumer_config && tp_control_decode_consumer_config(buffer, length, &config) == 0)
     {
         poller->handlers.on_consumer_config(&config, poller->handlers.clientd);
+        return;
+    }
+
+    if (poller->handlers.on_control_response && tp_control_decode_control_response(buffer, length, &response) == 0)
+    {
+        poller->handlers.on_control_response(&response, poller->handlers.clientd);
         return;
     }
 

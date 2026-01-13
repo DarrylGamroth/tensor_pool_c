@@ -57,6 +57,13 @@ typedef struct tp_consumer_context_stct
 }
 tp_consumer_context_t;
 
+typedef enum tp_consumer_state_enum
+{
+    TP_CONSUMER_STATE_UNMAPPED = 0,
+    TP_CONSUMER_STATE_MAPPED = 1
+}
+tp_consumer_state_t;
+
 typedef struct tp_frame_descriptor_stct
 {
     uint64_t seq;
@@ -104,8 +111,12 @@ typedef struct tp_consumer_stct
     tp_driver_attach_info_t driver_attach;
     bool driver_initialized;
     bool driver_attached;
+    tp_consumer_state_t state;
     bool shm_mapped;
     uint64_t mapped_epoch;
+    uint64_t last_seq_seen;
+    uint64_t drops_gap;
+    uint64_t drops_late;
     uint64_t announce_join_time_ns;
     uint64_t last_announce_rx_ns;
     uint64_t last_announce_timestamp_ns;
@@ -119,6 +130,7 @@ int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_cons
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
+int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_close(tp_consumer_t *consumer);

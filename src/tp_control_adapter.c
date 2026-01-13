@@ -13,8 +13,12 @@
 #include "wire/tensor_pool/shmPoolAnnounce.h"
 #include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
+#include "wire/tensor_pool/controlResponse.h"
 #include "wire/tensor_pool/dataSourceAnnounce.h"
 #include "wire/tensor_pool/dataSourceMeta.h"
+#include "wire/tensor_pool/metaBlobAnnounce.h"
+#include "wire/tensor_pool/metaBlobChunk.h"
+#include "wire/tensor_pool/metaBlobComplete.h"
 #include "wire/tensor_pool/messageHeader.h"
 
 static tp_string_view_t tp_string_view_from_parts(const char *data, size_t length)
@@ -358,10 +362,12 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
     out->header_slot_bytes = tensor_pool_shmPoolAnnounce_headerSlotBytes(&announce);
     {
         enum tensor_pool_clockDomain clock_domain;
-        if (tensor_pool_shmPoolAnnounce_announceClockDomain(&announce, &clock_domain))
+        if (!tensor_pool_shmPoolAnnounce_announceClockDomain(&announce, &clock_domain))
         {
-            out->announce_clock_domain = (uint8_t)clock_domain;
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: invalid clock domain");
+            return -1;
         }
+        out->announce_clock_domain = (uint8_t)clock_domain;
     }
 
     tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_decode(
@@ -405,6 +411,243 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
     header_uri = tensor_pool_shmPoolAnnounce_get_headerRegionUri_as_string_view(&announce);
     out->header_region_uri.data = header_uri.data;
     out->header_region_uri.length = header_uri.length;
+
+    return 0;
+}
+
+int tp_control_decode_control_response(const uint8_t *buffer, size_t length, tp_control_response_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_controlResponse resp;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+    struct tensor_pool_controlResponse_string_view error_view;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_control_response: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_control_response: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_controlResponse_sbe_schema_id() ||
+        template_id != tensor_pool_controlResponse_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_controlResponse_wrap_for_decode(
+        &resp,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->correlation_id = tensor_pool_controlResponse_correlationId(&resp);
+    {
+        enum tensor_pool_responseCode code;
+        if (!tensor_pool_controlResponse_code(&resp, &code))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_control_response: invalid response code");
+            return -1;
+        }
+        out->code = (tp_response_code_t)code;
+    }
+
+    error_view = tensor_pool_controlResponse_get_errorMessage_as_string_view(&resp);
+    out->error_message.data = error_view.data;
+    out->error_message.length = error_view.length;
+
+    return 0;
+}
+
+int tp_control_decode_meta_blob_announce(const uint8_t *buffer, size_t length, tp_meta_blob_announce_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_metaBlobAnnounce msg;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_announce: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_announce: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_metaBlobAnnounce_sbe_schema_id() ||
+        template_id != tensor_pool_metaBlobAnnounce_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_metaBlobAnnounce_wrap_for_decode(
+        &msg,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_metaBlobAnnounce_streamId(&msg);
+    out->meta_version = tensor_pool_metaBlobAnnounce_metaVersion(&msg);
+    out->blob_type = tensor_pool_metaBlobAnnounce_blobType(&msg);
+    out->total_len = tensor_pool_metaBlobAnnounce_totalLen(&msg);
+    out->checksum = tensor_pool_metaBlobAnnounce_checksum(&msg);
+
+    return 0;
+}
+
+int tp_control_decode_meta_blob_chunk(const uint8_t *buffer, size_t length, tp_meta_blob_chunk_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_metaBlobChunk msg;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+    struct tensor_pool_metaBlobChunk_string_view bytes_view;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_chunk: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_chunk: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_metaBlobChunk_sbe_schema_id() ||
+        template_id != tensor_pool_metaBlobChunk_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_metaBlobChunk_wrap_for_decode(
+        &msg,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_metaBlobChunk_streamId(&msg);
+    out->meta_version = tensor_pool_metaBlobChunk_metaVersion(&msg);
+    out->offset = tensor_pool_metaBlobChunk_chunkOffset(&msg);
+    bytes_view = tensor_pool_metaBlobChunk_get_bytes_as_string_view(&msg);
+    out->bytes = tp_string_view_from_parts(bytes_view.data, bytes_view.length);
+
+    return 0;
+}
+
+int tp_control_decode_meta_blob_complete(const uint8_t *buffer, size_t length, tp_meta_blob_complete_view_t *out)
+{
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_metaBlobComplete msg;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint16_t block_length;
+    uint16_t version;
+
+    if (NULL == buffer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_complete: null input");
+        return -1;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_complete: buffer too short");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+
+    template_id = tensor_pool_messageHeader_templateId(&header);
+    schema_id = tensor_pool_messageHeader_schemaId(&header);
+    block_length = tensor_pool_messageHeader_blockLength(&header);
+    version = tensor_pool_messageHeader_version(&header);
+
+    if (schema_id != tensor_pool_metaBlobComplete_sbe_schema_id() ||
+        template_id != tensor_pool_metaBlobComplete_sbe_template_id())
+    {
+        return 1;
+    }
+
+    tensor_pool_metaBlobComplete_wrap_for_decode(
+        &msg,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        block_length,
+        version,
+        length);
+
+    memset(out, 0, sizeof(*out));
+    out->stream_id = tensor_pool_metaBlobComplete_streamId(&msg);
+    out->meta_version = tensor_pool_metaBlobComplete_metaVersion(&msg);
+    out->checksum = tensor_pool_metaBlobComplete_checksum(&msg);
 
     return 0;
 }
@@ -581,6 +824,16 @@ static void tp_control_fragment_handler(void *clientd, const uint8_t *buffer, si
         if (tp_control_decode_consumer_config(buffer, length, &view) == 0)
         {
             control->adapter.on_consumer_config(&view, control->adapter.clientd);
+        }
+        return;
+    }
+
+    if (template_id == tensor_pool_controlResponse_sbe_template_id() && control->adapter.on_control_response)
+    {
+        tp_control_response_view_t view;
+        if (tp_control_decode_control_response(buffer, length, &view) == 0)
+        {
+            control->adapter.on_control_response(&view, control->adapter.clientd);
         }
         return;
     }

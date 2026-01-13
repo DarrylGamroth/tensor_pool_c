@@ -2,8 +2,12 @@
 #include "tensor_pool/tp_types.h"
 
 #include "wire/tensor_pool/consumerHello.h"
+#include "wire/tensor_pool/controlResponse.h"
 #include "wire/tensor_pool/dataSourceMeta.h"
 #include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/metaBlobAnnounce.h"
+#include "wire/tensor_pool/metaBlobChunk.h"
+#include "wire/tensor_pool/metaBlobComplete.h"
 
 #include <assert.h>
 #include <string.h>
@@ -160,6 +164,154 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_decode_control_response(void)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_controlResponse resp;
+    tp_control_response_view_t view;
+    int result = -1;
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_controlResponse_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_controlResponse_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_controlResponse_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_controlResponse_sbe_schema_version());
+
+    tensor_pool_controlResponse_wrap_for_encode(&resp, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_controlResponse_set_correlationId(&resp, 42);
+    tensor_pool_controlResponse_set_code(&resp, tensor_pool_responseCode_INVALID_PARAMS);
+    tensor_pool_controlResponse_put_errorMessage(&resp, "bad", 3);
+
+    if (tp_control_decode_control_response(buffer, sizeof(buffer), &view) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(view.correlation_id == 42);
+    assert(view.code == TP_RESPONSE_INVALID_PARAMS);
+    assert(view.error_message.length == 3);
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_decode_meta_blobs(void)
+{
+    uint8_t buffer[512];
+    struct tensor_pool_messageHeader header;
+    int result = -1;
+
+    {
+        struct tensor_pool_metaBlobAnnounce announce;
+        tp_meta_blob_announce_view_t view;
+
+        tensor_pool_messageHeader_wrap(
+            &header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_metaBlobAnnounce_sbe_block_length());
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobAnnounce_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobAnnounce_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobAnnounce_sbe_schema_version());
+
+        tensor_pool_metaBlobAnnounce_wrap_for_encode(&announce, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+        tensor_pool_metaBlobAnnounce_set_streamId(&announce, 9);
+        tensor_pool_metaBlobAnnounce_set_metaVersion(&announce, 5);
+        tensor_pool_metaBlobAnnounce_set_blobType(&announce, 2);
+        tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 1024);
+        tensor_pool_metaBlobAnnounce_set_checksum(&announce, 77);
+
+        if (tp_control_decode_meta_blob_announce(buffer, sizeof(buffer), &view) != 0)
+        {
+            goto cleanup;
+        }
+
+        assert(view.stream_id == 9);
+        assert(view.meta_version == 5);
+        assert(view.blob_type == 2);
+        assert(view.total_len == 1024);
+        assert(view.checksum == 77);
+    }
+
+    {
+        struct tensor_pool_metaBlobChunk chunk;
+        tp_meta_blob_chunk_view_t view;
+        const char data[] = "payload";
+
+        tensor_pool_messageHeader_wrap(
+            &header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_metaBlobChunk_sbe_block_length());
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobChunk_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobChunk_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobChunk_sbe_schema_version());
+
+        tensor_pool_metaBlobChunk_wrap_for_encode(&chunk, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+        tensor_pool_metaBlobChunk_set_streamId(&chunk, 9);
+        tensor_pool_metaBlobChunk_set_metaVersion(&chunk, 5);
+        tensor_pool_metaBlobChunk_set_chunkOffset(&chunk, 12);
+        tensor_pool_metaBlobChunk_put_bytes(&chunk, data, sizeof(data) - 1);
+
+        if (tp_control_decode_meta_blob_chunk(buffer, sizeof(buffer), &view) != 0)
+        {
+            goto cleanup;
+        }
+
+        assert(view.stream_id == 9);
+        assert(view.meta_version == 5);
+        assert(view.offset == 12);
+        assert(view.bytes.length == sizeof(data) - 1);
+    }
+
+    {
+        struct tensor_pool_metaBlobComplete complete;
+        tp_meta_blob_complete_view_t view;
+
+        tensor_pool_messageHeader_wrap(
+            &header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_metaBlobComplete_sbe_block_length());
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobComplete_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobComplete_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobComplete_sbe_schema_version());
+
+        tensor_pool_metaBlobComplete_wrap_for_encode(&complete, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+        tensor_pool_metaBlobComplete_set_streamId(&complete, 9);
+        tensor_pool_metaBlobComplete_set_metaVersion(&complete, 5);
+        tensor_pool_metaBlobComplete_set_checksum(&complete, 88);
+
+        if (tp_control_decode_meta_blob_complete(buffer, sizeof(buffer), &view) != 0)
+        {
+            goto cleanup;
+        }
+
+        assert(view.stream_id == 9);
+        assert(view.meta_version == 5);
+        assert(view.checksum == 88);
+    }
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
 void tp_test_decode_consumer_hello(void)
 {
     test_decode_consumer_hello();
@@ -168,4 +320,14 @@ void tp_test_decode_consumer_hello(void)
 void tp_test_decode_data_source_meta(void)
 {
     test_decode_data_source_meta();
+}
+
+void tp_test_decode_control_response(void)
+{
+    test_decode_control_response();
+}
+
+void tp_test_decode_meta_blobs(void)
+{
+    test_decode_meta_blobs();
 }

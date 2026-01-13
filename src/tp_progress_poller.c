@@ -8,6 +8,44 @@
 #include "wire/tensor_pool/frameProgress.h"
 #include "wire/tensor_pool/messageHeader.h"
 
+static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_frame_progress_t *view)
+{
+    size_t i;
+
+    if (NULL == poller || NULL == view)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: null input");
+        return -1;
+    }
+
+    if (poller->max_payload_bytes > 0 && view->payload_bytes_filled > poller->max_payload_bytes)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: payload bytes exceed max");
+        return -1;
+    }
+
+    for (i = 0; i < TP_PROGRESS_TRACKER_CAPACITY; i++)
+    {
+        tp_progress_tracker_entry_t *entry = &poller->tracker[i];
+        if (entry->in_use && entry->seq == view->seq)
+        {
+            if (view->payload_bytes_filled < entry->last_bytes)
+            {
+                TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: payload bytes regressed");
+                return -1;
+            }
+            entry->last_bytes = view->payload_bytes_filled;
+            return 0;
+        }
+    }
+
+    poller->tracker[poller->tracker_cursor].seq = view->seq;
+    poller->tracker[poller->tracker_cursor].last_bytes = view->payload_bytes_filled;
+    poller->tracker[poller->tracker_cursor].in_use = 1;
+    poller->tracker_cursor = (poller->tracker_cursor + 1) % TP_PROGRESS_TRACKER_CAPACITY;
+    return 0;
+}
+
 static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
     tp_progress_poller_t *poller = (tp_progress_poller_t *)clientd;
@@ -58,6 +96,11 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
     else
     {
         view.state = TP_PROGRESS_UNKNOWN;
+    }
+
+    if (tp_progress_poller_validate(poller, &view) < 0)
+    {
+        return;
     }
 
     if (poller->handlers.on_progress)
@@ -115,6 +158,16 @@ int tp_progress_poller_init_with_subscription(
     }
 
     return 0;
+}
+
+void tp_progress_poller_set_max_payload_bytes(tp_progress_poller_t *poller, uint64_t max_payload_bytes)
+{
+    if (NULL == poller)
+    {
+        return;
+    }
+
+    poller->max_payload_bytes = max_payload_bytes;
 }
 
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)

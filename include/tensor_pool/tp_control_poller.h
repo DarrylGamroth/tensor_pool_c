@@ -16,6 +16,7 @@ typedef struct tp_control_handlers_stct
     tp_on_shm_pool_announce_t on_shm_pool_announce;
     tp_on_consumer_hello_t on_consumer_hello;
     tp_on_consumer_config_t on_consumer_config;
+    tp_on_control_response_t on_control_response;
     tp_on_data_source_announce_t on_data_source_announce;
     tp_on_data_source_meta_begin_t on_data_source_meta_begin;
     tp_on_data_source_meta_attr_t on_data_source_meta_attr;

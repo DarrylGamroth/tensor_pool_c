@@ -8,91 +8,91 @@ Legend:
 
 ## Critical
 
-- [ ] **ShmPoolAnnounce handling (consumer path)** — Status: Pending  
+- [x] **ShmPoolAnnounce handling (consumer path)** — Status: Done  
   **Spec:** §10.1.1, §15.18, §15.21  
   **Gap:** No decoding/handling of `ShmPoolAnnounce`; no epoch/freshness gating or state machine.  
   **Impact:** Core protocol state missing.
 
-- [ ] **Epoch mismatch drop on FrameDescriptor** — Status: Pending  
+- [x] **Epoch mismatch drop on FrameDescriptor** — Status: Done  
   **Spec:** §10.2.1  
   **Gap:** Descriptor handler does not drop mismatched epochs.  
   **Impact:** Consumers may accept stale frames.
 
-- [ ] **Strict symlink-safe open across full path** — Status: Pending  
+- [x] **Strict symlink-safe open across full path** — Status: Done  
   **Spec:** §15.21a.5 step 6  
   **Gap:** `O_NOFOLLOW` only protects final component; intermediate symlinks remain possible.  
   **Impact:** TOCTOU hardening incomplete.
 
 ## High
 
-- [ ] **Stride alignment and power-of-two validation** — Status: Pending  
+- [x] **Stride alignment and power-of-two validation** — Status: Done  
   **Spec:** §15.22  
   **Gap:** `stride_bytes` power-of-two and page/hugepage alignment not enforced.  
   **Impact:** Invalid regions may be mapped.
 
-- [ ] **FrameProgress validation rules** — Status: Pending  
+- [x] **FrameProgress validation rules** — Status: Done  
   **Spec:** §10.2.2  
   **Gap:** No monotonic or bounds checks for `payload_bytes_filled`.  
   **Impact:** Consumers may accept invalid progress updates.
 
-- [ ] **Per-consumer descriptor rate cap (`max_rate_hz`)** — Status: Pending  
+- [x] **Per-consumer descriptor rate cap (`max_rate_hz`)** — Status: Done  
   **Spec:** §5  
   **Gap:** `max_rate_hz` stored but not enforced.  
   **Impact:** Consumers can be overwhelmed.
 
-- [ ] **Superblock validation vs ShmPoolAnnounce** — Status: Pending  
+- [x] **Superblock validation vs ShmPoolAnnounce** — Status: Done  
   **Spec:** §15.1, §15.5  
   **Gap:** No cross-validation between superblock and announce fields.  
   **Impact:** Mismatched layouts may be consumed.
 
-- [ ] **FrameDescriptor publish ordering / epoch checks** — Status: Pending  
+- [x] **FrameDescriptor publish ordering / epoch checks** — Status: Done  
   **Spec:** §10.2.1, §8.3  
   **Gap:** No explicit enforcement that descriptors are published only after commit + visibility.  
   **Impact:** Consumers may read uncommitted payloads on weakly-ordered systems.
 
 ## Medium
 
-- [ ] **ShmPoolAnnounce freshness rules** — Status: Pending  
+- [x] **ShmPoolAnnounce freshness rules** — Status: Done  
   **Spec:** §10.1.1, §15.2, §15.18  
   **Gap:** No freshness window or join-time logic.  
   **Impact:** Stale announces may be accepted.
 
-- [ ] **Metadata blob support** — Status: Pending  
+- [x] **Metadata blob support** — Status: Done  
   **Spec:** §10.3.3, §15.9  
   **Gap:** No chunked blob handling beyond `DataSourceMeta`.  
   **Impact:** Large metadata unsupported.
 
-- [ ] **Consumer state machine implementation** — Status: Pending  
+- [x] **Consumer state machine implementation** — Status: Done  
   **Spec:** §15.12, §15.21  
   **Gap:** No explicit M0/M1 mapping state tracking.  
   **Impact:** Harder to enforce remap boundaries.
 
-- [ ] **Drop accounting** — Status: Pending  
+- [x] **Drop accounting** — Status: Done  
   **Spec:** §15.4  
   **Gap:** No drop metrics or accounting path.  
   **Impact:** QoS observability incomplete.
 
-- [ ] **Timebase / clock-domain handling** — Status: Pending  
+- [x] **Timebase / clock-domain handling** — Status: Done  
   **Spec:** §15.7, §10.1.1  
   **Gap:** No validation of announce clock domain and join-time logic.  
   **Impact:** Stale data acceptance under replay.
 
-- [ ] **Enum registry versioning / unknown enum handling** — Status: Pending  
+- [x] **Enum registry versioning / unknown enum handling** — Status: Done  
   **Spec:** §15.8  
   **Gap:** Enums validated, but no explicit registry/versioning guard.  
   **Impact:** Future compatibility risk.
 
-- [ ] **File-backed SHM region guidance** — Status: Pending  
+- [x] **File-backed SHM region guidance** — Status: Done  
   **Spec:** §15.16a  
   **Gap:** No fsync/prefault/mlock policy enforcement.  
   **Impact:** Durability/perf assumptions may break.
 
-- [ ] **ControlResponse error codes (control-plane)** — Status: Pending  
+- [x] **ControlResponse error codes (control-plane)** — Status: Done  
   **Spec:** §15.17  
   **Gap:** No full ControlResponse error surface on wire control path.  
   **Impact:** Limited error reporting.
 
-- [ ] **Compatibility matrix enforcement** — Status: Pending  
+- [x] **Compatibility matrix enforcement** — Status: Done  
   **Spec:** §15.20  
   **Gap:** No runtime enforcement against compatibility matrix.  
   **Impact:** Incompatible versions may be accepted.
@@ -113,4 +113,3 @@ Legend:
   **Spec:** §12  
   **Gap:** Bridge not implemented in this repo.  
   **Impact:** Out of scope unless bridge is required.
-

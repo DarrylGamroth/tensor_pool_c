@@ -19,6 +19,9 @@
 #include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/frameProgress.h"
 #include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/metaBlobAnnounce.h"
+#include "wire/tensor_pool/metaBlobChunk.h"
+#include "wire/tensor_pool/metaBlobComplete.h"
 #include "wire/tensor_pool/mode.h"
 #include "wire/tensor_pool/qosConsumer.h"
 
@@ -35,7 +38,11 @@ typedef struct tp_poll_state_stct
     int saw_qos;
     int saw_announce;
     int saw_meta;
+    int saw_meta_blob_announce;
+    int saw_meta_blob_chunk;
+    int saw_meta_blob_complete;
     int saw_progress;
+    int progress_count;
     int saw_descriptor;
 }
 tp_poll_state_t;
@@ -173,12 +180,40 @@ static void tp_on_meta_begin(const tp_data_source_meta_view_t *view, void *clien
     }
 }
 
+static void tp_on_meta_blob_announce(const tp_meta_blob_announce_view_t *view, void *clientd)
+{
+    tp_poll_state_t *state = (tp_poll_state_t *)clientd;
+    if (view)
+    {
+        state->saw_meta_blob_announce = 1;
+    }
+}
+
+static void tp_on_meta_blob_chunk(const tp_meta_blob_chunk_view_t *view, void *clientd)
+{
+    tp_poll_state_t *state = (tp_poll_state_t *)clientd;
+    if (view)
+    {
+        state->saw_meta_blob_chunk = 1;
+    }
+}
+
+static void tp_on_meta_blob_complete(const tp_meta_blob_complete_view_t *view, void *clientd)
+{
+    tp_poll_state_t *state = (tp_poll_state_t *)clientd;
+    if (view)
+    {
+        state->saw_meta_blob_complete = 1;
+    }
+}
+
 static void tp_on_progress(void *clientd, const tp_frame_progress_t *progress)
 {
     tp_poll_state_t *state = (tp_poll_state_t *)clientd;
     if (progress)
     {
         state->saw_progress = 1;
+        state->progress_count++;
     }
 }
 
@@ -289,6 +324,9 @@ void tp_test_pollers(void)
 
     meta_handlers.on_data_source_announce = tp_on_announce;
     meta_handlers.on_data_source_meta_begin = tp_on_meta_begin;
+    meta_handlers.on_meta_blob_announce = tp_on_meta_blob_announce;
+    meta_handlers.on_meta_blob_chunk = tp_on_meta_blob_chunk;
+    meta_handlers.on_meta_blob_complete = tp_on_meta_blob_complete;
     meta_handlers.clientd = &state;
     if (tp_metadata_poller_init(&meta_poller, &client, &meta_handlers) < 0)
     {
@@ -427,6 +465,79 @@ void tp_test_pollers(void)
 
     {
         struct tensor_pool_messageHeader header;
+        struct tensor_pool_metaBlobAnnounce announce;
+        size_t header_len = tensor_pool_messageHeader_encoded_length();
+        size_t body_len = tensor_pool_metaBlobAnnounce_sbe_block_length();
+
+        tensor_pool_messageHeader_wrap(&header, (char *)buffer, 0, tensor_pool_messageHeader_sbe_schema_version(), sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, (uint16_t)body_len);
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobAnnounce_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobAnnounce_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobAnnounce_sbe_schema_version());
+
+        tensor_pool_metaBlobAnnounce_wrap_for_encode(&announce, (char *)buffer, header_len, sizeof(buffer));
+        tensor_pool_metaBlobAnnounce_set_streamId(&announce, 9);
+        tensor_pool_metaBlobAnnounce_set_metaVersion(&announce, 1);
+        tensor_pool_metaBlobAnnounce_set_blobType(&announce, 7);
+        tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 3);
+        tensor_pool_metaBlobAnnounce_set_checksum(&announce, 123);
+
+        if (tp_test_offer(&client, meta_pub, buffer, header_len + body_len) < 0)
+        {
+            goto cleanup;
+        }
+    }
+
+    {
+        struct tensor_pool_messageHeader header;
+        struct tensor_pool_metaBlobChunk chunk;
+        size_t header_len = tensor_pool_messageHeader_encoded_length();
+        size_t body_len = tensor_pool_metaBlobChunk_sbe_block_length();
+        const char bytes[] = "abc";
+
+        tensor_pool_messageHeader_wrap(&header, (char *)buffer, 0, tensor_pool_messageHeader_sbe_schema_version(), sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, (uint16_t)body_len);
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobChunk_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobChunk_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobChunk_sbe_schema_version());
+
+        tensor_pool_metaBlobChunk_wrap_for_encode(&chunk, (char *)buffer, header_len, sizeof(buffer));
+        tensor_pool_metaBlobChunk_set_streamId(&chunk, 9);
+        tensor_pool_metaBlobChunk_set_metaVersion(&chunk, 1);
+        tensor_pool_metaBlobChunk_set_chunkOffset(&chunk, 0);
+        tensor_pool_metaBlobChunk_put_bytes(&chunk, bytes, sizeof(bytes) - 1);
+
+        if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
+        {
+            goto cleanup;
+        }
+    }
+
+    {
+        struct tensor_pool_messageHeader header;
+        struct tensor_pool_metaBlobComplete complete;
+        size_t header_len = tensor_pool_messageHeader_encoded_length();
+        size_t body_len = tensor_pool_metaBlobComplete_sbe_block_length();
+
+        tensor_pool_messageHeader_wrap(&header, (char *)buffer, 0, tensor_pool_messageHeader_sbe_schema_version(), sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, (uint16_t)body_len);
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_metaBlobComplete_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_metaBlobComplete_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_metaBlobComplete_sbe_schema_version());
+
+        tensor_pool_metaBlobComplete_wrap_for_encode(&complete, (char *)buffer, header_len, sizeof(buffer));
+        tensor_pool_metaBlobComplete_set_streamId(&complete, 9);
+        tensor_pool_metaBlobComplete_set_metaVersion(&complete, 1);
+        tensor_pool_metaBlobComplete_set_checksum(&complete, 123);
+
+        if (tp_test_offer(&client, meta_pub, buffer, header_len + body_len) < 0)
+        {
+            goto cleanup;
+        }
+    }
+
+    {
+        struct tensor_pool_messageHeader header;
         struct tensor_pool_frameProgress progress;
         size_t header_len = tensor_pool_messageHeader_encoded_length();
         size_t body_len = tensor_pool_frameProgress_sbe_block_length();
@@ -448,6 +559,13 @@ void tp_test_pollers(void)
         {
             goto cleanup;
         }
+
+        tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 64);
+        tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
+        if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+        {
+            goto cleanup;
+        }
     }
 
     if (tp_consumer_context_init(&consumer_ctx) < 0)
@@ -459,6 +577,10 @@ void tp_test_pollers(void)
     {
         goto cleanup;
     }
+
+    consumer.state = TP_CONSUMER_STATE_MAPPED;
+    consumer.shm_mapped = true;
+    consumer.mapped_epoch = 1;
 
     tp_consumer_set_descriptor_handler(&consumer, tp_on_descriptor, &state);
 
@@ -498,7 +620,9 @@ void tp_test_pollers(void)
         tp_consumer_poll_descriptors(&consumer, 10);
         tp_client_do_work(&client);
 
-        if (state.saw_hello && state.saw_qos && state.saw_announce && state.saw_meta && state.saw_progress && state.saw_descriptor)
+        if (state.saw_hello && state.saw_qos && state.saw_announce && state.saw_meta &&
+            state.saw_meta_blob_announce && state.saw_meta_blob_chunk && state.saw_meta_blob_complete &&
+            state.saw_progress && state.saw_descriptor)
         {
             result = 0;
             break;
@@ -560,14 +684,18 @@ cleanup:
     if (result != 0)
     {
         fprintf(stderr,
-            "pollers: hello=%d qos=%d announce=%d meta=%d progress=%d desc=%d\n",
+            "pollers: hello=%d qos=%d announce=%d meta=%d blob_announce=%d blob_chunk=%d blob_complete=%d progress=%d desc=%d\n",
             state.saw_hello,
             state.saw_qos,
             state.saw_announce,
             state.saw_meta,
+            state.saw_meta_blob_announce,
+            state.saw_meta_blob_chunk,
+            state.saw_meta_blob_complete,
             state.saw_progress,
             state.saw_descriptor);
     }
 
     assert(result == 0);
+    assert(state.progress_count == 1);
 }

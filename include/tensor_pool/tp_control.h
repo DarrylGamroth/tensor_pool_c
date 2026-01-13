@@ -76,10 +76,50 @@ typedef struct tp_data_source_meta_stct
 }
 tp_data_source_meta_t;
 
+typedef struct tp_meta_blob_announce_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint32_t blob_type;
+    uint64_t total_len;
+    uint64_t checksum;
+}
+tp_meta_blob_announce_t;
+
+typedef struct tp_meta_blob_chunk_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint64_t offset;
+    const uint8_t *bytes;
+    uint32_t bytes_length;
+}
+tp_meta_blob_chunk_t;
+
+typedef struct tp_meta_blob_complete_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint64_t checksum;
+}
+tp_meta_blob_complete_t;
+
+typedef struct tp_control_response_stct
+{
+    int64_t correlation_id;
+    tp_response_code_t code;
+    const char *error_message;
+}
+tp_control_response_t;
+
 int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *hello);
 int tp_producer_send_consumer_config(tp_producer_t *producer, const tp_consumer_config_msg_t *config);
 int tp_producer_send_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
 int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);
+int tp_producer_send_meta_blob_announce(tp_producer_t *producer, const tp_meta_blob_announce_t *announce);
+int tp_producer_send_meta_blob_chunk(tp_producer_t *producer, const tp_meta_blob_chunk_t *chunk);
+int tp_producer_send_meta_blob_complete(tp_producer_t *producer, const tp_meta_blob_complete_t *complete);
+int tp_producer_send_control_response(tp_producer_t *producer, const tp_control_response_t *response);
 
 #ifdef __cplusplus
 }

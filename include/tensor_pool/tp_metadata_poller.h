@@ -16,6 +16,9 @@ typedef struct tp_metadata_handlers_stct
     tp_on_data_source_meta_begin_t on_data_source_meta_begin;
     tp_on_data_source_meta_attr_t on_data_source_meta_attr;
     tp_on_data_source_meta_end_t on_data_source_meta_end;
+    tp_on_meta_blob_announce_t on_meta_blob_announce;
+    tp_on_meta_blob_chunk_t on_meta_blob_chunk;
+    tp_on_meta_blob_complete_t on_meta_blob_complete;
     void *clientd;
 }
 tp_metadata_handlers_t;

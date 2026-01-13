@@ -81,6 +81,41 @@ typedef struct tp_data_source_meta_attr_view_stct
 }
 tp_data_source_meta_attr_view_t;
 
+typedef struct tp_meta_blob_announce_view_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint32_t blob_type;
+    uint64_t total_len;
+    uint64_t checksum;
+}
+tp_meta_blob_announce_view_t;
+
+typedef struct tp_meta_blob_chunk_view_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint64_t offset;
+    tp_string_view_t bytes;
+}
+tp_meta_blob_chunk_view_t;
+
+typedef struct tp_meta_blob_complete_view_stct
+{
+    uint32_t stream_id;
+    uint32_t meta_version;
+    uint64_t checksum;
+}
+tp_meta_blob_complete_view_t;
+
+typedef struct tp_control_response_view_stct
+{
+    int64_t correlation_id;
+    tp_response_code_t code;
+    tp_string_view_t error_message;
+}
+tp_control_response_view_t;
+
 typedef struct tp_shm_pool_desc_stct
 {
     uint16_t pool_id;
@@ -112,6 +147,10 @@ typedef void (*tp_on_data_source_announce_t)(const tp_data_source_announce_view_
 typedef void (*tp_on_data_source_meta_begin_t)(const tp_data_source_meta_view_t *view, void *clientd);
 typedef void (*tp_on_data_source_meta_attr_t)(const tp_data_source_meta_attr_view_t *attr, void *clientd);
 typedef void (*tp_on_data_source_meta_end_t)(const tp_data_source_meta_view_t *view, void *clientd);
+typedef void (*tp_on_meta_blob_announce_t)(const tp_meta_blob_announce_view_t *view, void *clientd);
+typedef void (*tp_on_meta_blob_chunk_t)(const tp_meta_blob_chunk_view_t *view, void *clientd);
+typedef void (*tp_on_meta_blob_complete_t)(const tp_meta_blob_complete_view_t *view, void *clientd);
+typedef void (*tp_on_control_response_t)(const tp_control_response_view_t *view, void *clientd);
 typedef void (*tp_on_shm_pool_announce_t)(const tp_shm_pool_announce_view_t *view, void *clientd);
 
 typedef struct tp_control_adapter_stct
@@ -123,6 +162,7 @@ typedef struct tp_control_adapter_stct
     tp_on_data_source_meta_begin_t on_data_source_meta_begin;
     tp_on_data_source_meta_attr_t on_data_source_meta_attr;
     tp_on_data_source_meta_end_t on_data_source_meta_end;
+    tp_on_control_response_t on_control_response;
     void *clientd;
 }
 tp_control_adapter_t;
@@ -148,7 +188,11 @@ int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_co
 int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_consumer_config_view_t *out);
 int tp_control_decode_data_source_announce(const uint8_t *buffer, size_t length, tp_data_source_announce_view_t *out);
 int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp_shm_pool_announce_view_t *out);
+int tp_control_decode_control_response(const uint8_t *buffer, size_t length, tp_control_response_view_t *out);
 void tp_control_shm_pool_announce_close(tp_shm_pool_announce_view_t *view);
+int tp_control_decode_meta_blob_announce(const uint8_t *buffer, size_t length, tp_meta_blob_announce_view_t *out);
+int tp_control_decode_meta_blob_chunk(const uint8_t *buffer, size_t length, tp_meta_blob_chunk_view_t *out);
+int tp_control_decode_meta_blob_complete(const uint8_t *buffer, size_t length, tp_meta_blob_complete_view_t *out);
 int tp_control_decode_data_source_meta(
     const uint8_t *buffer,
     size_t length,

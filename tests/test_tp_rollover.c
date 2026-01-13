@@ -160,7 +160,7 @@ void tp_test_rollover(void)
     const uint32_t stream_id = 10000;
     const uint16_t pool_id = 1;
     const uint32_t header_nslots = 4;
-    const uint32_t pool_stride = 64;
+    const uint32_t pool_stride = 4096;
     const uint32_t frame_count = 32;
     const uint64_t epoch = 1;
     const uint32_t layout_version = 1;
