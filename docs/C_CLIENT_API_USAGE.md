@@ -184,6 +184,19 @@ tp_tracelink_set_t link = {
 tp_producer_send_tracelink_set(&producer, &link);
 ```
 
+TraceLinkSet validation defaults to checking the most recently published descriptor for the slot. You can override or disable validation:
+
+```c
+static int tracelink_validator(const tp_tracelink_set_t *set, void *clientd)
+{
+    (void)clientd;
+    // Return 0 to accept, <0 to reject.
+    return 0;
+}
+
+tp_producer_set_tracelink_validator(&producer, tracelink_validator, NULL);
+```
+
 Control-plane listeners can subscribe to TraceLinkSet events:
 
 ```c

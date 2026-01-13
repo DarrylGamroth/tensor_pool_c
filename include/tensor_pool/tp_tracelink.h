@@ -23,6 +23,8 @@ typedef struct tp_tracelink_set_stct
 }
 tp_tracelink_set_t;
 
+typedef int (*tp_tracelink_validate_t)(const tp_tracelink_set_t *set, void *clientd);
+
 int tp_tracelink_set_encode(
     uint8_t *buffer,
     size_t length,

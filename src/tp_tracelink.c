@@ -267,6 +267,14 @@ int tp_producer_send_tracelink_set(tp_producer_t *producer, const tp_tracelink_s
         return -1;
     }
 
+    if (producer->tracelink_validator)
+    {
+        if (producer->tracelink_validator(set, producer->tracelink_validator_clientd) < 0)
+        {
+            return -1;
+        }
+    }
+
     if (tp_tracelink_set_encode(buffer, sizeof(buffer), set, &encoded_len) < 0)
     {
         return -1;

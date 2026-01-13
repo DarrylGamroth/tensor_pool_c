@@ -27,6 +27,13 @@
 #include "wire/tensor_pool/tensorHeader.h"
 #include "wire/tensor_pool/regionType.h"
 
+typedef struct tp_tracelink_entry_stct
+{
+    uint64_t seq;
+    uint64_t trace_id;
+}
+tp_tracelink_entry_t;
+
 static tp_payload_pool_t *tp_find_pool(tp_producer_t *producer, uint16_t pool_id)
 {
     size_t i;
@@ -82,6 +89,82 @@ static void tp_producer_clear_cached_meta(tp_producer_t *producer)
     producer->cached_meta.attributes = NULL;
     producer->cached_meta.attribute_count = 0;
     producer->has_meta = false;
+}
+
+static int tp_producer_init_tracelink_entries(tp_producer_t *producer)
+{
+    size_t i;
+
+    if (NULL == producer || producer->header_nslots == 0)
+    {
+        return 0;
+    }
+
+    if (producer->tracelink_entries)
+    {
+        aeron_free(producer->tracelink_entries);
+        producer->tracelink_entries = NULL;
+        producer->tracelink_entry_count = 0;
+    }
+
+    if (aeron_alloc(
+        (void **)&producer->tracelink_entries,
+        sizeof(tp_tracelink_entry_t) * producer->header_nslots) < 0)
+    {
+        return -1;
+    }
+
+    producer->tracelink_entry_count = producer->header_nslots;
+    for (i = 0; i < producer->tracelink_entry_count; i++)
+    {
+        producer->tracelink_entries[i].seq = TP_NULL_U64;
+        producer->tracelink_entries[i].trace_id = 0;
+    }
+
+    return 0;
+}
+
+static void tp_producer_record_tracelink_descriptor(tp_producer_t *producer, uint64_t seq, uint64_t trace_id)
+{
+    size_t index;
+
+    if (NULL == producer || NULL == producer->tracelink_entries || producer->header_nslots == 0)
+    {
+        return;
+    }
+
+    index = (size_t)(seq & (producer->header_nslots - 1));
+    producer->tracelink_entries[index].seq = seq;
+    producer->tracelink_entries[index].trace_id = trace_id;
+}
+
+static int tp_producer_default_tracelink_validator(const tp_tracelink_set_t *set, void *clientd)
+{
+    tp_producer_t *producer = (tp_producer_t *)clientd;
+    size_t index;
+    tp_tracelink_entry_t *entry;
+
+    if (NULL == producer || NULL == set)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_tracelink_validate: invalid input");
+        return -1;
+    }
+
+    if (NULL == producer->tracelink_entries || producer->header_nslots == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_tracelink_validate: trace history unavailable");
+        return -1;
+    }
+
+    index = (size_t)(set->seq & (producer->header_nslots - 1));
+    entry = &producer->tracelink_entries[index];
+    if (entry->seq != set->seq || entry->trace_id != set->trace_id)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_tracelink_validate: descriptor mismatch");
+        return -1;
+    }
+
+    return 0;
 }
 
 static int tp_producer_resolve_trace_id(
@@ -252,6 +335,7 @@ static int tp_producer_publish_descriptor(
 {
     int result = 0;
     int published = 0;
+    int published_ok = 0;
     uint64_t now_ns = (uint64_t)tp_clock_now_ns();
 
     if (producer->consumer_manager)
@@ -285,6 +369,10 @@ static int tp_producer_publish_descriptor(
             {
                 result = -1;
             }
+            else
+            {
+                published_ok = 1;
+            }
             published = 1;
         }
     }
@@ -301,6 +389,10 @@ static int tp_producer_publish_descriptor(
         {
             result = -1;
         }
+        else
+        {
+            published_ok = 1;
+        }
         published = 1;
     }
 
@@ -308,6 +400,11 @@ static int tp_producer_publish_descriptor(
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_descriptor: descriptor publication unavailable");
         return -1;
+    }
+
+    if (published_ok)
+    {
+        tp_producer_record_tracelink_descriptor(producer, seq, trace_id);
     }
 
     return result;
@@ -376,6 +473,17 @@ void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_gen
     }
 
     producer->trace_id_generator = generator;
+}
+
+void tp_producer_set_tracelink_validator(tp_producer_t *producer, tp_tracelink_validate_t validator, void *clientd)
+{
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    producer->tracelink_validator = validator;
+    producer->tracelink_validator_clientd = clientd;
 }
 
 static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
@@ -451,6 +559,8 @@ int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_prod
     memset(producer, 0, sizeof(*producer));
     producer->client = client;
     producer->context = *context;
+    producer->tracelink_validator = tp_producer_default_tracelink_validator;
+    producer->tracelink_validator_clientd = producer;
 
     if (client->context.base.descriptor_channel[0] != '\0' && client->context.base.descriptor_stream_id >= 0)
     {
@@ -533,6 +643,11 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
     if (!tp_is_power_of_two(config->header_nslots))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_config: header_nslots must be power of two");
+        return -1;
+    }
+
+    if (tp_producer_init_tracelink_entries(producer) < 0)
+    {
         return -1;
     }
 
@@ -632,6 +747,13 @@ cleanup:
     {
         aeron_free(producer->pools);
         producer->pools = NULL;
+    }
+
+    if (producer->tracelink_entries)
+    {
+        aeron_free(producer->tracelink_entries);
+        producer->tracelink_entries = NULL;
+        producer->tracelink_entry_count = 0;
     }
 
     return result;
@@ -1454,6 +1576,13 @@ int tp_producer_close(tp_producer_t *producer)
 
     tp_producer_clear_data_source_meta(producer);
     tp_producer_clear_data_source_announce(producer);
+
+    if (producer->tracelink_entries)
+    {
+        aeron_free(producer->tracelink_entries);
+        producer->tracelink_entries = NULL;
+        producer->tracelink_entry_count = 0;
+    }
 
     if (producer->driver_attached)
     {

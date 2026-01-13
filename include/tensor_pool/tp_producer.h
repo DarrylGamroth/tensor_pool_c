@@ -11,6 +11,7 @@
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_trace.h"
+#include "tensor_pool/tp_tracelink.h"
 #include "tensor_pool/tp_types.h"
 
 #ifdef __cplusplus
@@ -18,6 +19,7 @@ extern "C" {
 #endif
 
 typedef struct tp_consumer_manager_stct tp_consumer_manager_t;
+typedef struct tp_tracelink_entry_stct tp_tracelink_entry_t;
 
 typedef struct tp_payload_pool_config_stct
 {
@@ -139,6 +141,10 @@ typedef struct tp_producer_stct
     size_t cached_attr_count;
     bool has_meta;
     tp_trace_id_generator_t *trace_id_generator;
+    tp_tracelink_entry_t *tracelink_entries;
+    size_t tracelink_entry_count;
+    tp_tracelink_validate_t tracelink_validator;
+    void *tracelink_validator_clientd;
 }
 tp_producer_t;
 
@@ -153,6 +159,7 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_generator_t *generator);
+void tp_producer_set_tracelink_validator(tp_producer_t *producer, tp_tracelink_validate_t validator, void *clientd);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
 int tp_producer_set_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);
