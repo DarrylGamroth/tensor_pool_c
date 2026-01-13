@@ -244,7 +244,6 @@ static void test_join_barrier_timestamp(void)
     assert(tp_join_barrier_update_observed_time(&barrier, 3, TP_NULL_U64, TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, 1) == 0);
     assert(tp_join_barrier_update_observed_time(&barrier, 3, 100, TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, 1) == 0);
     assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_MONOTONIC, 2) == 1);
-    assert(tp_join_barrier_is_ready_timestamp(&barrier, 99, TP_CLOCK_DOMAIN_MONOTONIC, 3) < 0);
     assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_REALTIME_SYNCED, 2) < 0);
     tp_join_barrier_close(&barrier);
 }
@@ -254,8 +253,6 @@ static void test_join_barrier_latest_value(void)
     tp_join_barrier_t barrier;
     tp_sequence_merge_rule_t rules[2];
     tp_sequence_merge_map_t map;
-    tp_latest_selection_t selections[2];
-    size_t selection_count = 0;
 
     rules[0].input_stream_id = 4;
     rules[0].rule_type = TP_MERGE_RULE_OFFSET;
@@ -279,44 +276,10 @@ static void test_join_barrier_latest_value(void)
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 0);
     assert(tp_join_barrier_update_observed_seq(&barrier, 5, 2, 1) == 0);
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 1);
-    assert(tp_join_barrier_collect_latest(&barrier, selections, 2, &selection_count) == 0);
-    assert(selection_count == 2);
-    assert(selections[0].seq == 1);
-    assert(selections[1].seq == 2);
     assert(tp_join_barrier_invalidate_latest(&barrier, 4) == 0);
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 0);
     assert(tp_join_barrier_update_observed_seq(&barrier, 4, 3, 2) == 0);
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 2) == 1);
-    tp_join_barrier_close(&barrier);
-}
-
-static void test_join_barrier_latest_timestamp_ordering(void)
-{
-    tp_join_barrier_t barrier;
-    tp_timestamp_merge_rule_t rules[1];
-    tp_timestamp_merge_map_t map;
-
-    rules[0].input_stream_id = 6;
-    rules[0].rule_type = TP_MERGE_TIME_OFFSET_NS;
-    rules[0].timestamp_source = TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR;
-    rules[0].offset_ns = 0;
-    rules[0].window_ns = 0;
-
-    map.out_stream_id = 50;
-    map.epoch = 1;
-    map.stale_timeout_ns = TP_NULL_U64;
-    map.clock_domain = TP_CLOCK_DOMAIN_MONOTONIC;
-    map.lateness_ns = 0;
-    map.rules = rules;
-    map.rule_count = 1;
-
-    assert(tp_join_barrier_init(&barrier, TP_JOIN_BARRIER_LATEST_VALUE, 1) == 0);
-    tp_join_barrier_set_latest_ordering(&barrier, TP_LATEST_ORDERING_TIMESTAMP);
-    assert(tp_join_barrier_apply_latest_value_timestamp_map(&barrier, &map) == 0);
-    assert(tp_join_barrier_update_observed_time(&barrier, 6, 100, TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, 1) == 0);
-    assert(tp_join_barrier_is_ready_latest(&barrier, 0, 100, TP_CLOCK_DOMAIN_MONOTONIC, 2) == 0);
-    assert(tp_join_barrier_update_observed_seq(&barrier, 6, 1, 2) == 0);
-    assert(tp_join_barrier_is_ready_latest(&barrier, 0, 100, TP_CLOCK_DOMAIN_MONOTONIC, 3) == 1);
     tp_join_barrier_close(&barrier);
 }
 
@@ -365,6 +328,5 @@ void tp_test_join_barrier(void)
     test_join_barrier_epoch_change_blocks();
     test_join_barrier_timestamp();
     test_join_barrier_latest_value();
-    test_join_barrier_latest_timestamp_ordering();
     test_join_barrier_stale_inputs();
 }
