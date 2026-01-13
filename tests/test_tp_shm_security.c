@@ -186,6 +186,12 @@ void tp_test_shm_security(void)
         goto cleanup;
     }
 
+    step = 16;
+    if (tp_shm_map(&region, "shm:file?path=relative/path", 0, &ctx.allowed_paths, NULL) == 0)
+    {
+        goto cleanup;
+    }
+
     close(fd);
     fd = -1;
     unlink(file_path);
