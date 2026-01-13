@@ -102,5 +102,5 @@ Legend:
 | 6. MergeMap | Compliant | Encode/decode helpers and rule validation in `src/tp_merge_map.c`. |
 | 6.4 Stability and Epoch Handling | Compliant | MergeMap registry invalidates prior epochs in `src/tp_merge_map.c`. |
 | 7. SequenceJoinBarrier | Compliant | Readiness, staleness handling, and observed/processed cursor checks in `src/tp_join_barrier.c`. |
-| 8. TimestampJoinBarrier | Compliant | Clock domain enforcement and lateness handling in `src/tp_join_barrier.c`. |
-| 9. LatestValueJoinBarrier | Compliant | Best-effort readiness in `src/tp_join_barrier.c`. |
+| 8. TimestampJoinBarrier | Compliant | Clock domain and monotonic out_time enforcement in `src/tp_join_barrier.c`. |
+| 9. LatestValueJoinBarrier | Compliant | Selection collection + invalidation and epoch gating in `src/tp_join_barrier.c`. |
