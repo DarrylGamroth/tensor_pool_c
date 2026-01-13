@@ -621,6 +621,7 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx)
     ctx->hello.progress_interval_us = TP_NULL_U32;
     ctx->hello.progress_bytes_delta = TP_NULL_U32;
     ctx->hello.progress_major_delta_units = TP_NULL_U32;
+    ctx->driver_request.desired_node_id = TP_NULL_U32;
     return 0;
 }
 

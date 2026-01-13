@@ -62,6 +62,8 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_seqlock.h
     include/tensor_pool/tp_shm.h
     include/tensor_pool/tp_slot.h
+    include/tensor_pool/tp_trace.h
+    include/tensor_pool/tp_tracelink.h
     include/tensor_pool/tp_tensor.h
     include/tensor_pool/tp_types.h
     include/tensor_pool/tp_uri.h
@@ -91,6 +93,8 @@ set(TP_SOURCES
     src/tp_qos.c
     src/tp_shm.c
     src/tp_slot.c
+    src/tp_trace.c
+    src/tp_tracelink.c
     src/tp_tensor.c
     src/tp_uri.c
     src/tp_version.c
@@ -120,6 +124,7 @@ if (TP_ENABLE_SBE_CODEGEN)
     set(SBE_OUTPUT_DISCOVERY "${SBE_OUTPUT_DIR}/discovery")
     set(SBE_OUTPUT_BRIDGE "${SBE_OUTPUT_DIR}/bridge")
     set(SBE_OUTPUT_MERGE "${SBE_OUTPUT_DIR}/merge")
+    set(SBE_OUTPUT_TRACE "${SBE_OUTPUT_DIR}/trace")
     set(SBE_SCHEMA_DIR "${CMAKE_CURRENT_LIST_DIR}/schemas")
     set(SBE_JAVA_OPTS "--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED")
 
@@ -130,6 +135,7 @@ if (TP_ENABLE_SBE_CODEGEN)
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_DISCOVERY}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_BRIDGE}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_MERGE}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_TRACE}"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
             -Dsbe.output.dir="${SBE_OUTPUT_WIRE}"
@@ -165,6 +171,13 @@ if (TP_ENABLE_SBE_CODEGEN)
             -Dsbe.generate.ir=true
             -jar "${SBE_TOOL_JAR}"
             "${SBE_SCHEMA_DIR}/merge-schema.xml"
+        COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
+            -Dsbe.target.language=C
+            -Dsbe.output.dir="${SBE_OUTPUT_TRACE}"
+            -Dsbe.target.namespace=tensor_pool
+            -Dsbe.generate.ir=true
+            -jar "${SBE_TOOL_JAR}"
+            "${SBE_SCHEMA_DIR}/tracelink-schema.xml"
         COMMAND "${CMAKE_COMMAND}" -E touch "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
         DEPENDS
             "${SBE_SCHEMA_DIR}/wire-schema.xml"
@@ -172,6 +185,7 @@ if (TP_ENABLE_SBE_CODEGEN)
             "${SBE_SCHEMA_DIR}/discovery-schema.xml"
             "${SBE_SCHEMA_DIR}/bridge-schema.xml"
             "${SBE_SCHEMA_DIR}/merge-schema.xml"
+            "${SBE_SCHEMA_DIR}/tracelink-schema.xml"
         VERBATIM
     )
 
@@ -202,6 +216,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c
     tests/test_tp_join_barrier.c
+    tests/test_tp_tracelink.c
     tests/test_tp_client_conductor.c
     tests/test_tp_pollers.c
     tests/test_tp_rollover.c

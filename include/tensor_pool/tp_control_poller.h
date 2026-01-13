@@ -7,10 +7,13 @@
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_join_barrier.h"
+#include "tensor_pool/tp_tracelink.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef void (*tp_on_tracelink_set_t)(const tp_tracelink_set_t *set, void *clientd);
 
 typedef struct tp_control_handlers_stct
 {
@@ -22,6 +25,7 @@ typedef struct tp_control_handlers_stct
     tp_on_data_source_meta_begin_t on_data_source_meta_begin;
     tp_on_data_source_meta_attr_t on_data_source_meta_attr;
     tp_on_data_source_meta_end_t on_data_source_meta_end;
+    tp_on_tracelink_set_t on_tracelink_set;
     tp_on_driver_detach_response_t on_detach_response;
     tp_on_driver_lease_revoked_t on_lease_revoked;
     tp_on_driver_shutdown_t on_shutdown;

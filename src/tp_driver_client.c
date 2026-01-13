@@ -139,6 +139,11 @@ int tp_driver_decode_attach_response(
         out->header_nslots = tensor_pool_shmAttachResponse_headerNslots(&response);
         out->header_slot_bytes = tensor_pool_shmAttachResponse_headerSlotBytes(&response);
         out->max_dims = tensor_pool_shmAttachResponse_maxDims(&response);
+        out->node_id = tensor_pool_shmAttachResponse_nodeId(&response);
+        if (out->node_id == tensor_pool_shmAttachResponse_nodeId_null_value())
+        {
+            out->node_id = TP_NULL_U32;
+        }
 
         if (out->lease_id == tensor_pool_shmAttachResponse_leaseId_null_value() ||
             out->lease_expiry_timestamp_ns == tensor_pool_shmAttachResponse_leaseExpiryTimestampNs_null_value() ||
@@ -832,6 +837,16 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
     tensor_pool_shmAttachRequest_set_maxDims(&attach, 0);
     tensor_pool_shmAttachRequest_set_publishMode(&attach, request->publish_mode);
     tensor_pool_shmAttachRequest_set_requireHugepages(&attach, request->require_hugepages);
+    if (request->desired_node_id == TP_NULL_U32)
+    {
+        tensor_pool_shmAttachRequest_set_desiredNodeId(
+            &attach,
+            tensor_pool_shmAttachRequest_desiredNodeId_null_value());
+    }
+    else
+    {
+        tensor_pool_shmAttachRequest_set_desiredNodeId(&attach, request->desired_node_id);
+    }
 
     result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
     if (result < 0)

@@ -47,6 +47,8 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     tp_timestamp_merge_rule_t ts_rules[256];
     tp_sequence_merge_map_t seq_map;
     tp_timestamp_merge_map_t ts_map;
+    tp_tracelink_set_t tracelink;
+    uint64_t tracelink_parents[TP_TRACELINK_MAX_PARENTS];
 
     (void)header;
 
@@ -84,6 +86,13 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     if (poller->handlers.on_data_source_announce && tp_control_decode_data_source_announce(buffer, length, &announce) == 0)
     {
         poller->handlers.on_data_source_announce(&announce, poller->handlers.clientd);
+        return;
+    }
+
+    if (poller->handlers.on_tracelink_set &&
+        tp_tracelink_set_decode(buffer, length, &tracelink, tracelink_parents, TP_TRACELINK_MAX_PARENTS) == 0)
+    {
+        poller->handlers.on_tracelink_set(&tracelink, poller->handlers.clientd);
         return;
     }
 

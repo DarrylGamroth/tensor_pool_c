@@ -84,6 +84,37 @@ static void tp_producer_clear_cached_meta(tp_producer_t *producer)
     producer->has_meta = false;
 }
 
+static int tp_producer_resolve_trace_id(
+    tp_producer_t *producer,
+    const tp_frame_metadata_t *meta,
+    uint64_t *out_trace_id)
+{
+    uint64_t trace_id = 0;
+
+    if (NULL == producer || NULL == out_trace_id)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_resolve_trace_id: null input");
+        return -1;
+    }
+
+    if (meta)
+    {
+        trace_id = meta->trace_id;
+    }
+
+    if (trace_id == 0 && producer->trace_id_generator)
+    {
+        trace_id = tp_trace_id_generator_next(producer->trace_id_generator);
+        if (trace_id == 0)
+        {
+            return -1;
+        }
+    }
+
+    *out_trace_id = trace_id;
+    return 0;
+}
+
 static char *tp_dup_string(const char *value)
 {
     size_t len;
@@ -323,6 +354,7 @@ int tp_producer_context_init(tp_producer_context_t *ctx)
     }
 
     memset(ctx, 0, sizeof(*ctx));
+    ctx->driver_request.desired_node_id = TP_NULL_U32;
     return 0;
 }
 
@@ -334,6 +366,16 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
     }
 
     ctx->fixed_pool_mode = enabled;
+}
+
+void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_generator_t *generator)
+{
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    producer->trace_id_generator = generator;
 }
 
 static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
@@ -942,6 +984,8 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     uint64_t seq;
     uint64_t timestamp_ns = 0;
     uint32_t meta_version = 0;
+    uint64_t trace_id = 0;
+    bool update_meta_trace = false;
     int result;
 
     if (NULL == producer || NULL == frame || NULL == frame->tensor)
@@ -954,6 +998,17 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     {
         timestamp_ns = meta->timestamp_ns;
         meta_version = meta->meta_version;
+        update_meta_trace = (meta->trace_id == 0 && producer->trace_id_generator != NULL);
+    }
+
+    if (tp_producer_resolve_trace_id(producer, meta, &trace_id) < 0)
+    {
+        return -1;
+    }
+
+    if (update_meta_trace)
+    {
+        meta->trace_id = trace_id;
     }
 
     seq = producer->next_seq++;
@@ -967,7 +1022,7 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
         frame->pool_id,
         timestamp_ns,
         meta_version,
-        meta ? meta->trace_id : 0);
+        trace_id);
     if (result < 0)
     {
         return -1;
@@ -1034,6 +1089,7 @@ int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta)
 {
     tp_frame_metadata_t local_meta;
+    uint64_t trace_id = 0;
 
     if (NULL == producer || NULL == claim)
     {
@@ -1047,6 +1103,11 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
         meta = &local_meta;
     }
 
+    if (tp_producer_resolve_trace_id(producer, meta, &trace_id) < 0)
+    {
+        return -1;
+    }
+
     return tp_producer_publish_frame(
         producer,
         claim->seq,
@@ -1056,7 +1117,7 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
         claim->pool_id,
         meta->timestamp_ns,
         meta->meta_version,
-        meta->trace_id);
+        trace_id);
 }
 
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim)

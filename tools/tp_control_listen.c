@@ -6,6 +6,7 @@
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_merge_map.h"
+#include "tensor_pool/tp_tracelink.h"
 
 #include "aeron_fragment_assembler.h"
 
@@ -29,6 +30,7 @@
 #include <time.h>
 
 #define TP_MERGE_SCHEMA_ID 903
+#define TP_TRACELINK_SCHEMA_ID 904
 #define TP_MERGE_MAX_RULES 256
 
 static volatile sig_atomic_t tp_running = 1;
@@ -163,7 +165,9 @@ static void tp_on_control_fragment(
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
     version = tensor_pool_messageHeader_version(&msg_header);
 
-    if (schema_id != tensor_pool_messageHeader_sbe_schema_id() && schema_id != TP_MERGE_SCHEMA_ID)
+    if (schema_id != tensor_pool_messageHeader_sbe_schema_id() &&
+        schema_id != TP_MERGE_SCHEMA_ID &&
+        schema_id != TP_TRACELINK_SCHEMA_ID)
     {
         return;
     }
@@ -303,6 +307,53 @@ static void tp_on_control_fragment(
         if (tp_errcode() != 0)
         {
             fprintf(stderr, "MergeMap decode error: %s\n", tp_errmsg());
+        }
+        return;
+    }
+
+    if (schema_id == TP_TRACELINK_SCHEMA_ID)
+    {
+        tp_tracelink_set_t set;
+        uint64_t parents[TP_TRACELINK_MAX_PARENTS];
+        size_t i;
+
+        if (tp_tracelink_set_decode(buffer, length, &set, parents, TP_TRACELINK_MAX_PARENTS) == 0)
+        {
+            if (state && state->json)
+            {
+                printf("{\"type\":\"TraceLinkSet\",\"stream\":%u,\"epoch\":%" PRIu64 ",\"seq\":%" PRIu64 ",\"trace_id\":%" PRIu64 ",\"parents\":[",
+                    set.stream_id,
+                    set.epoch,
+                    set.seq,
+                    set.trace_id);
+                for (i = 0; i < set.parent_count; i++)
+                {
+                    if (i > 0)
+                    {
+                        printf(",");
+                    }
+                    printf("%" PRIu64, set.parents[i]);
+                }
+                printf("]}\n");
+            }
+            else
+            {
+                printf("TraceLinkSet stream=%u epoch=%" PRIu64 " seq=%" PRIu64 " trace_id=%" PRIu64 "\n",
+                    set.stream_id,
+                    set.epoch,
+                    set.seq,
+                    set.trace_id);
+                for (i = 0; i < set.parent_count; i++)
+                {
+                    printf("  parent_trace_id=%" PRIu64 "\n", set.parents[i]);
+                }
+            }
+            return;
+        }
+
+        if (tp_errcode() != 0)
+        {
+            fprintf(stderr, "TraceLink decode error: %s\n", tp_errmsg());
         }
         return;
     }

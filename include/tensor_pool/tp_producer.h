@@ -10,6 +10,7 @@
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
+#include "tensor_pool/tp_trace.h"
 #include "tensor_pool/tp_types.h"
 
 #ifdef __cplusplus
@@ -137,6 +138,7 @@ typedef struct tp_producer_stct
     tp_meta_attribute_owned_t *cached_attrs;
     size_t cached_attr_count;
     bool has_meta;
+    tp_trace_id_generator_t *trace_id_generator;
 }
 tp_producer_t;
 
@@ -150,6 +152,7 @@ int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_
 int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, const tp_frame_metadata_t *meta);
 int tp_producer_abort_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
 int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *claim);
+void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_generator_t *generator);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
 int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
 int tp_producer_set_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);

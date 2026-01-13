@@ -18,6 +18,8 @@
 #include "tensor_pool/tp_progress_poller.h"
 #include "tensor_pool/tp_qos.h"
 #include "tensor_pool/tp_shm.h"
+#include "tensor_pool/tp_trace.h"
+#include "tensor_pool/tp_tracelink.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_types.h"
 #include "tensor_pool/tp_uri.h"

@@ -34,6 +34,7 @@ typedef struct tp_driver_attach_info_stct
     uint32_t header_nslots;
     uint16_t header_slot_bytes;
     uint8_t max_dims;
+    uint32_t node_id;
     char header_region_uri[4096];
     tp_driver_pool_info_t *pools;
     size_t pool_count;
@@ -49,6 +50,7 @@ typedef struct tp_driver_attach_request_stct
     uint32_t expected_layout_version;
     uint8_t publish_mode;
     uint8_t require_hugepages;
+    uint32_t desired_node_id;
 }
 tp_driver_attach_request_t;
 
