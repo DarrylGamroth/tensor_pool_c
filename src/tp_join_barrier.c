@@ -15,12 +15,15 @@ typedef struct tp_join_input_state_stct
     uint64_t processed_seq;
     uint64_t observed_time_ns;
     uint64_t processed_time_ns;
+    uint64_t min_seq_in_epoch;
     uint64_t last_observed_update_ns;
     uint64_t last_processed_update_ns;
     bool has_observed_seq;
     bool has_processed_seq;
     bool has_observed_time;
     bool has_processed_time;
+    bool has_min_seq_in_epoch;
+    bool latest_valid;
 }
 tp_join_input_state_t;
 
@@ -139,6 +142,7 @@ static void tp_join_barrier_load_sequence_rules(tp_join_barrier_t *barrier, cons
     {
         barrier->sequence_rules[i] = map->rules[i];
         states[i].stream_id = map->rules[i].input_stream_id;
+        states[i].latest_valid = false;
     }
 }
 
@@ -152,6 +156,7 @@ static void tp_join_barrier_load_timestamp_rules(tp_join_barrier_t *barrier, con
         barrier->timestamp_rules[i] = map->rules[i];
         states[i].stream_id = map->rules[i].input_stream_id;
         states[i].timestamp_source = map->rules[i].timestamp_source;
+        states[i].latest_valid = false;
     }
 }
 
@@ -319,6 +324,12 @@ int tp_join_barrier_update_observed_seq(
 
     state->observed_seq = seq;
     state->has_observed_seq = true;
+    if (!state->has_min_seq_in_epoch)
+    {
+        state->min_seq_in_epoch = seq;
+        state->has_min_seq_in_epoch = true;
+    }
+    state->latest_valid = true;
     state->last_observed_update_ns = now_ns;
     return 0;
 }
@@ -393,8 +404,7 @@ int tp_join_barrier_update_observed_time(
 
     if (timestamp_ns == TP_NULL_U64)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_update_observed_time: timestamp missing");
-        return -1;
+        return 0;
     }
 
     if (state->has_observed_time && timestamp_ns < state->observed_time_ns)
@@ -405,6 +415,7 @@ int tp_join_barrier_update_observed_time(
 
     state->observed_time_ns = timestamp_ns;
     state->has_observed_time = true;
+    state->latest_valid = true;
     state->last_observed_update_ns = now_ns;
     return 0;
 }
@@ -432,8 +443,7 @@ int tp_join_barrier_update_processed_time(
 
     if (timestamp_ns == TP_NULL_U64)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_update_processed_time: timestamp missing");
-        return -1;
+        return 0;
     }
 
     if (state->has_processed_time && timestamp_ns < state->processed_time_ns)
@@ -748,12 +758,22 @@ int tp_join_barrier_is_ready_latest(
             return -1;
         }
 
+        if (!state->latest_valid)
+        {
+            return 0;
+        }
+
         if (!state->has_observed_seq && !state->has_observed_time)
         {
             return 0;
         }
 
         if (barrier->clock_domain != 0 && !state->has_observed_time)
+        {
+            return 0;
+        }
+
+        if (state->has_min_seq_in_epoch && state->has_observed_seq && state->observed_seq < state->min_seq_in_epoch)
         {
             return 0;
         }
@@ -765,4 +785,18 @@ int tp_join_barrier_is_ready_latest(
     }
 
     return 1;
+}
+
+int tp_join_barrier_invalidate_latest(tp_join_barrier_t *barrier, uint32_t stream_id)
+{
+    tp_join_input_state_t *state = tp_join_barrier_find_state(barrier, stream_id);
+
+    if (NULL == state)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_invalidate_latest: stream not tracked");
+        return -1;
+    }
+
+    state->latest_valid = false;
+    return 0;
 }

@@ -78,6 +78,7 @@ int tp_join_barrier_update_processed_time(
 int tp_join_barrier_is_ready_sequence(tp_join_barrier_t *barrier, uint64_t out_seq, uint64_t now_ns);
 int tp_join_barrier_is_ready_timestamp(tp_join_barrier_t *barrier, uint64_t out_time_ns, uint8_t clock_domain, uint64_t now_ns);
 int tp_join_barrier_is_ready_latest(tp_join_barrier_t *barrier, uint64_t out_seq, uint64_t out_time_ns, uint8_t clock_domain, uint64_t now_ns);
+int tp_join_barrier_invalidate_latest(tp_join_barrier_t *barrier, uint32_t stream_id);
 
 int tp_join_barrier_collect_stale_inputs(
     tp_join_barrier_t *barrier,

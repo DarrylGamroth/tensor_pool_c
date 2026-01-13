@@ -241,6 +241,7 @@ static void test_join_barrier_timestamp(void)
 
     assert(tp_join_barrier_init(&barrier, TP_JOIN_BARRIER_TIMESTAMP, 1) == 0);
     assert(tp_join_barrier_apply_timestamp_map(&barrier, &map) == 0);
+    assert(tp_join_barrier_update_observed_time(&barrier, 3, TP_NULL_U64, TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, 1) == 0);
     assert(tp_join_barrier_update_observed_time(&barrier, 3, 100, TP_TIMESTAMP_SOURCE_FRAME_DESCRIPTOR, TP_CLOCK_DOMAIN_MONOTONIC, 1) == 0);
     assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_MONOTONIC, 2) == 1);
     assert(tp_join_barrier_is_ready_timestamp(&barrier, 100, TP_CLOCK_DOMAIN_REALTIME_SYNCED, 2) < 0);
@@ -275,6 +276,10 @@ static void test_join_barrier_latest_value(void)
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 0);
     assert(tp_join_barrier_update_observed_seq(&barrier, 5, 2, 1) == 0);
     assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 1);
+    assert(tp_join_barrier_invalidate_latest(&barrier, 4) == 0);
+    assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 1) == 0);
+    assert(tp_join_barrier_update_observed_seq(&barrier, 4, 3, 2) == 0);
+    assert(tp_join_barrier_is_ready_latest(&barrier, 0, 0, 0, 2) == 1);
     tp_join_barrier_close(&barrier);
 }
 
