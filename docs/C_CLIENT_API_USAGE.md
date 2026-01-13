@@ -230,7 +230,50 @@ tp_progress_poll(&progress_poller, 10);
 
 If the consumer receives a per-consumer control stream in `ConsumerConfig`, use `tp_progress_poller_init_with_subscription` with the assigned subscription.
 
-## 10. Error Semantics
+## 10. MergeMap and JoinBarrier
+
+MergeMap announcements are control-plane messages. Decode them in your control fragment handler,
+apply them to a JoinBarrier, and then use JoinBarrier readiness to gate processing attempts.
+
+```c
+static void on_control_fragment(void *clientd, const uint8_t *buffer, size_t length)
+{
+    tp_join_barrier_t *barrier = (tp_join_barrier_t *)clientd;
+    tp_sequence_merge_rule_t rules[16];
+    tp_sequence_merge_map_t map;
+
+    if (tp_sequence_merge_map_decode(buffer, length, &map, rules, 16) == 0)
+    {
+        tp_join_barrier_apply_sequence_map(barrier, &map);
+    }
+}
+```
+
+```c
+tp_join_barrier_t barrier;
+tp_join_barrier_init(&barrier, TP_JOIN_BARRIER_SEQUENCE, 16);
+tp_join_barrier_set_allow_stale(&barrier, true);
+tp_join_barrier_set_require_processed(&barrier, false);
+
+// Update cursors from FrameDescriptor callbacks.
+tp_join_barrier_update_observed_seq(&barrier, input_stream_id, desc->seq, tp_clock_now_ns());
+
+if (tp_join_barrier_is_ready_sequence(&barrier, out_seq, tp_clock_now_ns()) == 1)
+{
+    // Proceed to attempt processing for out_seq.
+}
+
+// Optional: report stale inputs when staleness policy is enabled.
+uint32_t stale_inputs[16];
+size_t stale_count = 0;
+tp_join_barrier_collect_stale_inputs(&barrier, tp_clock_now_ns(), stale_inputs, 16, &stale_count);
+```
+
+Timestamp-based joins use `tp_timestamp_merge_map_decode`, `tp_join_barrier_apply_timestamp_map`,
+`tp_join_barrier_update_observed_time`, and `tp_join_barrier_is_ready_timestamp` with the declared
+clock domain and timestamp source.
+
+## 11. Error Semantics
 
 - `init/close/poll` APIs return `0` on success and `-1` on error.
 - Offer/claim/queue functions return `>= 0` on success (position/seq) or negative backpressure/admin codes (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`).

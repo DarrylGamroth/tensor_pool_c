@@ -93,3 +93,14 @@ Legend:
 | Section | Status | Evidence / Notes |
 | --- | --- | --- |
 | 16. Control-Plane SBE Schema | Compliant | Schemas and generated code used across control/QoS/descriptor/progress. |
+
+## JoinBarrier Spec v1.0 (Normative, Optional)
+
+| Section | Status | Evidence / Notes |
+| --- | --- | --- |
+| 5. Requirements and Constraints | Compliant | JoinBarrier hot path is allocation-free after init in `src/tp_join_barrier.c`. |
+| 6. MergeMap | Compliant | Encode/decode helpers and rule validation in `src/tp_merge_map.c`. |
+| 6.4 Stability and Epoch Handling | Compliant | MergeMap registry invalidates prior epochs in `src/tp_merge_map.c`. |
+| 7. SequenceJoinBarrier | Compliant | Readiness, staleness handling, and observed/processed cursor checks in `src/tp_join_barrier.c`. |
+| 8. TimestampJoinBarrier | Compliant | Clock domain enforcement and lateness handling in `src/tp_join_barrier.c`. |
+| 9. LatestValueJoinBarrier | Compliant | Best-effort readiness in `src/tp_join_barrier.c`. |

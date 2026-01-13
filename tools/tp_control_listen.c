@@ -5,6 +5,7 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_merge_map.h"
 
 #include "aeron_fragment_assembler.h"
 
@@ -26,6 +27,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
+#define TP_MERGE_SCHEMA_ID 903
+#define TP_MERGE_MAX_RULES 256
 
 static volatile sig_atomic_t tp_running = 1;
 
@@ -159,8 +163,147 @@ static void tp_on_control_fragment(
     block_length = tensor_pool_messageHeader_blockLength(&msg_header);
     version = tensor_pool_messageHeader_version(&msg_header);
 
-    if (schema_id != tensor_pool_messageHeader_sbe_schema_id())
+    if (schema_id != tensor_pool_messageHeader_sbe_schema_id() && schema_id != TP_MERGE_SCHEMA_ID)
     {
+        return;
+    }
+
+    if (schema_id == TP_MERGE_SCHEMA_ID)
+    {
+        tp_sequence_merge_rule_t seq_rules[TP_MERGE_MAX_RULES];
+        tp_timestamp_merge_rule_t ts_rules[TP_MERGE_MAX_RULES];
+        tp_sequence_merge_map_t seq_map;
+        tp_timestamp_merge_map_t ts_map;
+        uint32_t out_stream_id = 0;
+        uint64_t epoch = 0;
+
+        if (tp_sequence_merge_map_decode(buffer, length, &seq_map, seq_rules, TP_MERGE_MAX_RULES) == 0)
+        {
+            size_t i;
+            if (state && state->json)
+            {
+                printf("{\"type\":\"SequenceMergeMapAnnounce\",\"stream\":%u,\"epoch\":%" PRIu64 ",\"stale_ns\":%" PRIu64 ",\"rules\":[",
+                    seq_map.out_stream_id,
+                    seq_map.epoch,
+                    seq_map.stale_timeout_ns == TP_NULL_U64 ? 0 : seq_map.stale_timeout_ns);
+                for (i = 0; i < seq_map.rule_count; i++)
+                {
+                    const tp_sequence_merge_rule_t *rule = &seq_map.rules[i];
+                    if (i > 0)
+                    {
+                        printf(",");
+                    }
+                    printf("{\"input\":%u,\"type\":%u,\"offset\":%d,\"window\":%u}",
+                        rule->input_stream_id,
+                        rule->rule_type,
+                        rule->offset,
+                        rule->window_size);
+                }
+                printf("]}\n");
+            }
+            else
+            {
+                printf("SequenceMergeMapAnnounce stream=%u epoch=%" PRIu64 " stale_ns=%" PRIu64 "\n",
+                    seq_map.out_stream_id,
+                    seq_map.epoch,
+                    seq_map.stale_timeout_ns == TP_NULL_U64 ? 0 : seq_map.stale_timeout_ns);
+                for (i = 0; i < seq_map.rule_count; i++)
+                {
+                    const tp_sequence_merge_rule_t *rule = &seq_map.rules[i];
+                    printf("  input=%u type=%u offset=%d window=%u\n",
+                        rule->input_stream_id,
+                        rule->rule_type,
+                        rule->offset,
+                        rule->window_size);
+                }
+            }
+            return;
+        }
+
+        if (tp_sequence_merge_map_request_decode(buffer, length, &out_stream_id, &epoch) == 0)
+        {
+            if (state && state->json)
+            {
+                printf("{\"type\":\"SequenceMergeMapRequest\",\"stream\":%u,\"epoch\":%" PRIu64 "}\n",
+                    out_stream_id,
+                    epoch);
+            }
+            else
+            {
+                printf("SequenceMergeMapRequest stream=%u epoch=%" PRIu64 "\n", out_stream_id, epoch);
+            }
+            return;
+        }
+
+        if (tp_timestamp_merge_map_decode(buffer, length, &ts_map, ts_rules, TP_MERGE_MAX_RULES) == 0)
+        {
+            size_t i;
+            if (state && state->json)
+            {
+                printf("{\"type\":\"TimestampMergeMapAnnounce\",\"stream\":%u,\"epoch\":%" PRIu64 ",\"stale_ns\":%" PRIu64 ",",
+                    ts_map.out_stream_id,
+                    ts_map.epoch,
+                    ts_map.stale_timeout_ns == TP_NULL_U64 ? 0 : ts_map.stale_timeout_ns);
+                printf("\"clock_domain\":%u,\"lateness_ns\":%" PRIu64 ",\"rules\":[",
+                    ts_map.clock_domain,
+                    ts_map.lateness_ns == TP_NULL_U64 ? 0 : ts_map.lateness_ns);
+                for (i = 0; i < ts_map.rule_count; i++)
+                {
+                    const tp_timestamp_merge_rule_t *rule = &ts_map.rules[i];
+                    if (i > 0)
+                    {
+                        printf(",");
+                    }
+                    printf("{\"input\":%u,\"type\":%u,\"source\":%u,\"offset\":%" PRIi64 ",\"window\":%" PRIu64 "}",
+                        rule->input_stream_id,
+                        rule->rule_type,
+                        rule->timestamp_source,
+                        rule->offset_ns,
+                        rule->window_ns);
+                }
+                printf("]}\n");
+            }
+            else
+            {
+                printf("TimestampMergeMapAnnounce stream=%u epoch=%" PRIu64 " stale_ns=%" PRIu64 " clock=%u lateness_ns=%" PRIu64 "\n",
+                    ts_map.out_stream_id,
+                    ts_map.epoch,
+                    ts_map.stale_timeout_ns == TP_NULL_U64 ? 0 : ts_map.stale_timeout_ns,
+                    ts_map.clock_domain,
+                    ts_map.lateness_ns == TP_NULL_U64 ? 0 : ts_map.lateness_ns);
+                for (i = 0; i < ts_map.rule_count; i++)
+                {
+                    const tp_timestamp_merge_rule_t *rule = &ts_map.rules[i];
+                    printf("  input=%u type=%u source=%u offset=%" PRIi64 " window=%" PRIu64 "\n",
+                        rule->input_stream_id,
+                        rule->rule_type,
+                        rule->timestamp_source,
+                        rule->offset_ns,
+                        rule->window_ns);
+                }
+            }
+            return;
+        }
+
+        if (tp_timestamp_merge_map_request_decode(buffer, length, &out_stream_id, &epoch) == 0)
+        {
+            if (state && state->json)
+            {
+                printf("{\"type\":\"TimestampMergeMapRequest\",\"stream\":%u,\"epoch\":%" PRIu64 "}\n",
+                    out_stream_id,
+                    epoch);
+            }
+            else
+            {
+                printf("TimestampMergeMapRequest stream=%u epoch=%" PRIu64 "\n", out_stream_id, epoch);
+            }
+            return;
+        }
+
+        if (tp_errcode() != 0)
+        {
+            fprintf(stderr, "MergeMap decode error: %s\n", tp_errmsg());
+        }
         return;
     }
 
