@@ -259,6 +259,14 @@ Timestamp-based joins use `tp_timestamp_merge_map_decode`, `tp_join_barrier_appl
 `tp_join_barrier_update_observed_time`, and `tp_join_barrier_is_ready_timestamp` with the declared
 clock domain and timestamp source.
 
+For LatestValueJoinBarrier, set ordering explicitly. Timestamp ordering requires an active
+Timestamp MergeMap so the clock domain and timestamp source are defined:
+
+```c
+tp_join_barrier_set_latest_ordering(&latest_barrier, TP_LATEST_ORDERING_TIMESTAMP);
+tp_join_barrier_apply_latest_value_timestamp_map(&latest_barrier, &ts_map);
+```
+
 When using LatestValueJoinBarrier, invalidate inputs whose selected frame fails validation:
 
 ```c

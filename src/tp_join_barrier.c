@@ -722,6 +722,9 @@ int tp_join_barrier_is_ready_timestamp(tp_join_barrier_t *barrier, uint64_t out_
         return -1;
     }
 
+    barrier->last_out_time_ns = out_time_ns;
+    barrier->has_last_out_time = true;
+
     states = (tp_join_input_state_t *)barrier->state;
 
     for (i = 0; i < barrier->rule_count; i++)
@@ -742,8 +745,6 @@ int tp_join_barrier_is_ready_timestamp(tp_join_barrier_t *barrier, uint64_t out_
         }
     }
 
-    barrier->last_out_time_ns = out_time_ns;
-    barrier->has_last_out_time = true;
     return 1;
 }
 
@@ -772,11 +773,20 @@ int tp_join_barrier_is_ready_latest(
 
     if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP)
     {
+        if (barrier->clock_domain == 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_latest: timestamp ordering requires clock domain");
+            return -1;
+        }
+
         if (barrier->has_last_out_time && out_time_ns < barrier->last_out_time_ns)
         {
             TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_latest: out_time regression");
             return -1;
         }
+
+        barrier->last_out_time_ns = out_time_ns;
+        barrier->has_last_out_time = true;
     }
 
     states = (tp_join_input_state_t *)barrier->state;
@@ -803,6 +813,12 @@ int tp_join_barrier_is_ready_latest(
         if (barrier->clock_domain != 0 && clock_domain != barrier->clock_domain)
         {
             TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_latest: clock domain mismatch");
+            return -1;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && state->timestamp_source == 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_is_ready_latest: timestamp source missing");
             return -1;
         }
 
@@ -835,12 +851,6 @@ int tp_join_barrier_is_ready_latest(
         {
             return 0;
         }
-    }
-
-    if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP)
-    {
-        barrier->last_out_time_ns = out_time_ns;
-        barrier->has_last_out_time = true;
     }
 
     return 1;
@@ -888,6 +898,12 @@ int tp_join_barrier_collect_latest(
         return -1;
     }
 
+    if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && barrier->clock_domain == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: timestamp ordering requires clock domain");
+        return -1;
+    }
+
     states = (tp_join_input_state_t *)barrier->state;
     for (i = 0; i < barrier->rule_count; i++)
     {
@@ -908,6 +924,12 @@ int tp_join_barrier_collect_latest(
         if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && !state->has_observed_time)
         {
             TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: missing timestamp");
+            return -1;
+        }
+
+        if (barrier->latest_ordering == TP_LATEST_ORDERING_TIMESTAMP && state->timestamp_source == 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_join_barrier_collect_latest: timestamp source missing");
             return -1;
         }
 
