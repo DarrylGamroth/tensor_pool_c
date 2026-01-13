@@ -1,4 +1,4 @@
-# Spec Compliance Gaps (v1.2) — Ranked Plan
+# Spec Compliance Gaps (v1.2) — Ranked Plan (Full List)
 
 Authoritative reference: `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`.
 
@@ -11,72 +11,106 @@ Legend:
 - [ ] **ShmPoolAnnounce handling (consumer path)** — Status: Pending  
   **Spec:** §10.1.1, §15.18, §15.21  
   **Gap:** No decoding/handling of `ShmPoolAnnounce`; no epoch/freshness gating or state machine.  
-  **Impact:** Consumers cannot remap or validate regions; core protocol state is missing.  
-  **Targets:** `src/tp_control_adapter.c`, `src/tp_control_poller.c`, `src/tp_consumer.c`, add new state storage.
+  **Impact:** Core protocol state missing.
 
 - [ ] **Epoch mismatch drop on FrameDescriptor** — Status: Pending  
   **Spec:** §10.2.1  
   **Gap:** Descriptor handler does not drop mismatched epochs.  
-  **Impact:** Consumers may accept frames from stale mappings.  
-  **Targets:** `src/tp_consumer.c`.
+  **Impact:** Consumers may accept stale frames.
 
 - [ ] **Strict symlink-safe open across full path** — Status: Pending  
   **Spec:** §15.21a.5 step 6  
   **Gap:** `O_NOFOLLOW` only protects final component; intermediate symlinks remain possible.  
-  **Impact:** TOCTOU hardening incomplete.  
-  **Targets:** `src/tp_shm.c` (add `openat2` with `RESOLVE_NO_SYMLINKS`, or component-by-component `openat` fallback).
+  **Impact:** TOCTOU hardening incomplete.
 
 ## High
 
 - [ ] **Stride alignment and power-of-two validation** — Status: Pending  
   **Spec:** §15.22  
-  **Gap:** `stride_bytes` power-of-two and page-size alignment are not enforced.  
-  **Impact:** Invalid regions may be mapped.  
-  **Targets:** `src/tp_shm.c`.
+  **Gap:** `stride_bytes` power-of-two and page/hugepage alignment not enforced.  
+  **Impact:** Invalid regions may be mapped.
 
 - [ ] **FrameProgress validation rules** — Status: Pending  
   **Spec:** §10.2.2  
   **Gap:** No monotonic or bounds checks for `payload_bytes_filled`.  
-  **Impact:** Consumers may accept invalid progress updates.  
-  **Targets:** `src/tp_progress_poller.c` or consumer-side validation.
+  **Impact:** Consumers may accept invalid progress updates.
 
 - [ ] **Per-consumer descriptor rate cap (`max_rate_hz`)** — Status: Pending  
   **Spec:** §5  
   **Gap:** `max_rate_hz` stored but not enforced.  
-  **Impact:** Producer may overwhelm consumers requesting throttling.  
-  **Targets:** `src/tp_consumer_manager.c`.
+  **Impact:** Consumers can be overwhelmed.
+
+- [ ] **Superblock validation vs ShmPoolAnnounce** — Status: Pending  
+  **Spec:** §15.1, §15.5  
+  **Gap:** No cross-validation between superblock and announce fields.  
+  **Impact:** Mismatched layouts may be consumed.
+
+- [ ] **FrameDescriptor publish ordering / epoch checks** — Status: Pending  
+  **Spec:** §10.2.1, §8.3  
+  **Gap:** No explicit enforcement that descriptors are published only after commit + visibility.  
+  **Impact:** Consumers may read uncommitted payloads on weakly-ordered systems.
 
 ## Medium
+
+- [ ] **ShmPoolAnnounce freshness rules** — Status: Pending  
+  **Spec:** §10.1.1, §15.2, §15.18  
+  **Gap:** No freshness window or join-time logic.  
+  **Impact:** Stale announces may be accepted.
 
 - [ ] **Metadata blob support** — Status: Pending  
   **Spec:** §10.3.3, §15.9  
   **Gap:** No chunked blob handling beyond `DataSourceMeta`.  
-  **Impact:** Large metadata unsupported.  
-  **Targets:** new blob encoder/decoder, control adapter/poller.
+  **Impact:** Large metadata unsupported.
 
-- [ ] **ShmPoolAnnounce freshness rules** — Status: Pending  
-  **Spec:** §10.1.1, §15.2, §15.18  
-  **Gap:** No announce freshness window or join-time logic.  
-  **Impact:** Stale announces may be accepted.  
-  **Targets:** consumer mapping state, announce tracking.
+- [ ] **Consumer state machine implementation** — Status: Pending  
+  **Spec:** §15.12, §15.21  
+  **Gap:** No explicit M0/M1 mapping state tracking.  
+  **Impact:** Harder to enforce remap boundaries.
 
-- [ ] **Superblock validation vs announce** — Status: Pending  
-  **Spec:** §15.1, §15.5  
-  **Gap:** No cross-validation between superblock fields and `ShmPoolAnnounce`.  
-  **Impact:** Mismatched layouts could be consumed.  
-  **Targets:** mapping/attach flow.
+- [ ] **Drop accounting** — Status: Pending  
+  **Spec:** §15.4  
+  **Gap:** No drop metrics or accounting path.  
+  **Impact:** QoS observability incomplete.
+
+- [ ] **Timebase / clock-domain handling** — Status: Pending  
+  **Spec:** §15.7, §10.1.1  
+  **Gap:** No validation of announce clock domain and join-time logic.  
+  **Impact:** Stale data acceptance under replay.
+
+- [ ] **Enum registry versioning / unknown enum handling** — Status: Pending  
+  **Spec:** §15.8  
+  **Gap:** Enums validated, but no explicit registry/versioning guard.  
+  **Impact:** Future compatibility risk.
+
+- [ ] **File-backed SHM region guidance** — Status: Pending  
+  **Spec:** §15.16a  
+  **Gap:** No fsync/prefault/mlock policy enforcement.  
+  **Impact:** Durability/perf assumptions may break.
+
+- [ ] **ControlResponse error codes (control-plane)** — Status: Pending  
+  **Spec:** §15.17  
+  **Gap:** No full ControlResponse error surface on wire control path.  
+  **Impact:** Limited error reporting.
+
+- [ ] **Compatibility matrix enforcement** — Status: Pending  
+  **Spec:** §15.20  
+  **Gap:** No runtime enforcement against compatibility matrix.  
+  **Impact:** Incompatible versions may be accepted.
 
 ## Low
 
 - [ ] **QoS/metadata cadence enforcement** — Status: Pending  
   **Spec:** §10.4, §15.14  
-  **Gap:** Periodic publishing cadence not enforced; only APIs provided.  
-  **Impact:** Liveness/telemetry may be absent unless user drives it.  
-  **Targets:** client conductor or producer helper utilities.
+  **Gap:** Periodic publish cadence not enforced (API only).  
+  **Impact:** Liveness telemetry optional.
 
-- [ ] **Consumer state machine instrumentation** — Status: Pending  
-  **Spec:** §15.12  
-  **Gap:** No explicit M0/M1 state machine tracking.  
-  **Impact:** Harder to reason about mapping behavior; not strictly required if logic is implemented.  
-  **Targets:** consumer mapping subsystem.
+- [ ] **Producer padding/zero-fill guidance** — Status: Pending  
+  **Spec:** §8.2  
+  **Gap:** Producer does not explicitly zero reserved fields.  
+  **Impact:** Cosmetic; consumers ignore.
+
+- [ ] **Bridge service compliance** — Status: Pending  
+  **Spec:** §12  
+  **Gap:** Bridge not implemented in this repo.  
+  **Impact:** Out of scope unless bridge is required.
 
