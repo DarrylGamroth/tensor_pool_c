@@ -273,6 +273,19 @@ Timestamp-based joins use `tp_timestamp_merge_map_decode`, `tp_join_barrier_appl
 `tp_join_barrier_update_observed_time`, and `tp_join_barrier_is_ready_timestamp` with the declared
 clock domain and timestamp source.
 
+You can also wire merge-map application into the control poller:
+
+```c
+tp_control_handlers_t handlers = {
+    .sequence_join_barrier = &barrier,
+    .latest_join_barrier = NULL,
+    .timestamp_join_barrier = NULL,
+    .clientd = NULL
+};
+tp_control_poller_t control_poller;
+tp_control_poller_init(&control_poller, &client, &handlers);
+```
+
 ## 11. Error Semantics
 
 - `init/close/poll` APIs return `0` on success and `-1` on error.

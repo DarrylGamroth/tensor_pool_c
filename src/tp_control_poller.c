@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/tp_merge_map.h"
 #include "tensor_pool/tp_error.h"
 
 static void tp_control_poller_handle_meta(
@@ -42,6 +43,10 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     tp_driver_lease_revoked_t revoked;
     tp_driver_shutdown_t shutdown_event;
     tp_driver_detach_info_t detach_info;
+    tp_sequence_merge_rule_t seq_rules[256];
+    tp_timestamp_merge_rule_t ts_rules[256];
+    tp_sequence_merge_map_t seq_map;
+    tp_timestamp_merge_map_t ts_map;
 
     (void)header;
 
@@ -80,6 +85,35 @@ static void tp_control_poller_handler(void *clientd, const uint8_t *buffer, size
     {
         poller->handlers.on_data_source_announce(&announce, poller->handlers.clientd);
         return;
+    }
+
+    if (poller->handlers.sequence_join_barrier || poller->handlers.timestamp_join_barrier || poller->handlers.latest_join_barrier)
+    {
+        if (tp_sequence_merge_map_decode(buffer, length, &seq_map, seq_rules, 256) == 0)
+        {
+            if (poller->handlers.sequence_join_barrier)
+            {
+                (void)tp_join_barrier_apply_sequence_map(poller->handlers.sequence_join_barrier, &seq_map);
+            }
+            if (poller->handlers.latest_join_barrier)
+            {
+                (void)tp_join_barrier_apply_latest_value_sequence_map(poller->handlers.latest_join_barrier, &seq_map);
+            }
+            return;
+        }
+
+        if (tp_timestamp_merge_map_decode(buffer, length, &ts_map, ts_rules, 256) == 0)
+        {
+            if (poller->handlers.timestamp_join_barrier)
+            {
+                (void)tp_join_barrier_apply_timestamp_map(poller->handlers.timestamp_join_barrier, &ts_map);
+            }
+            if (poller->handlers.latest_join_barrier)
+            {
+                (void)tp_join_barrier_apply_latest_value_timestamp_map(poller->handlers.latest_join_barrier, &ts_map);
+            }
+            return;
+        }
     }
 
     if (poller->handlers.on_data_source_meta_begin || poller->handlers.on_data_source_meta_attr || poller->handlers.on_data_source_meta_end)

@@ -6,6 +6,7 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/tp_join_barrier.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,6 +25,9 @@ typedef struct tp_control_handlers_stct
     tp_on_driver_detach_response_t on_detach_response;
     tp_on_driver_lease_revoked_t on_lease_revoked;
     tp_on_driver_shutdown_t on_shutdown;
+    tp_join_barrier_t *sequence_join_barrier;
+    tp_join_barrier_t *timestamp_join_barrier;
+    tp_join_barrier_t *latest_join_barrier;
     void *clientd;
 }
 tp_control_handlers_t;
