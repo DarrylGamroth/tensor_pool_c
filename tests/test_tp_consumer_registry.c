@@ -176,10 +176,34 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_consumer_manager_force_no_shm(void)
+{
+    tp_consumer_manager_t manager;
+    tp_producer_t producer;
+    int result = -1;
+
+    memset(&producer, 0, sizeof(producer));
+    if (tp_consumer_manager_init(&manager, &producer, 1) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_consumer_manager_set_force_no_shm(&manager, true);
+    assert(manager.force_no_shm == true);
+    tp_consumer_manager_set_force_no_shm(&manager, false);
+    assert(manager.force_no_shm == false);
+    result = 0;
+
+cleanup:
+    tp_consumer_manager_close(&manager);
+    assert(result == 0);
+}
+
 void tp_test_consumer_registry(void)
 {
     test_consumer_request_validation();
     test_consumer_progress_aggregation();
     test_consumer_registry_sweep();
     test_progress_throttle_should_publish();
+    test_consumer_manager_force_no_shm();
 }

@@ -344,6 +344,13 @@ if (!tp_consumer_uses_shm(consumer))
 }
 ```
 
+Producers can force fallback for specific deployments by configuring the consumer manager before handling hellos:
+
+```c
+tp_consumer_manager_set_payload_fallback_uri(&manager, "aeron:udp?endpoint=10.0.0.2:40125");
+tp_consumer_manager_set_force_no_shm(&manager, true);
+```
+
 ## 10. MergeMap and JoinBarrier
 
 MergeMap announcements are control-plane messages. Apply them to a JoinBarrier and use

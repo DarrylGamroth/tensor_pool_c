@@ -85,6 +85,7 @@ int tp_consumer_manager_init(tp_consumer_manager_t *manager, tp_producer_t *prod
     memset(manager, 0, sizeof(*manager));
     manager->producer = producer;
     manager->payload_fallback_uri[0] = '\0';
+    manager->force_no_shm = false;
     manager->progress_policy.interval_us = TP_PROGRESS_INTERVAL_DEFAULT_US;
     manager->progress_policy.bytes_delta = TP_PROGRESS_BYTES_DELTA_DEFAULT;
     manager->progress_policy.major_delta_units = 0;
@@ -124,6 +125,16 @@ void tp_consumer_manager_set_payload_fallback_uri(tp_consumer_manager_t *manager
 
     strncpy(manager->payload_fallback_uri, uri, sizeof(manager->payload_fallback_uri) - 1);
     manager->payload_fallback_uri[sizeof(manager->payload_fallback_uri) - 1] = '\0';
+}
+
+void tp_consumer_manager_set_force_no_shm(tp_consumer_manager_t *manager, bool enabled)
+{
+    if (NULL == manager)
+    {
+        return;
+    }
+
+    manager->force_no_shm = enabled;
 }
 
 int tp_consumer_manager_handle_hello(
@@ -210,7 +221,7 @@ int tp_consumer_manager_handle_hello(
     memset(&config, 0, sizeof(config));
     config.stream_id = hello->stream_id;
     config.consumer_id = hello->consumer_id;
-    config.use_shm = hello->supports_shm;
+    config.use_shm = (manager->force_no_shm ? 0 : hello->supports_shm);
     config.mode = hello->mode;
     config.descriptor_stream_id = descriptor_stream_id;
     config.control_stream_id = control_stream_id;
