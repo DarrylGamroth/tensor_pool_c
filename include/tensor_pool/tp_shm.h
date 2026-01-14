@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #include "tensor_pool/tp_log.h"
 #include "tensor_pool/tp_types.h"
@@ -18,6 +19,10 @@ typedef struct tp_allowed_paths_stct
     size_t length;
     char **canonical_paths;
     size_t canonical_length;
+    int enforce_permissions;
+    uint32_t expected_uid;
+    uint32_t expected_gid;
+    uint32_t forbidden_mode;
 }
 tp_allowed_paths_t;
 

@@ -46,6 +46,10 @@ int tp_context_init(tp_context_t *context)
     context->qos_stream_id = -1;
     context->metadata_stream_id = -1;
     context->announce_period_ns = TP_ANNOUNCE_PERIOD_DEFAULT_NS;
+    context->allowed_paths.enforce_permissions = 1;
+    context->allowed_paths.expected_uid = TP_NULL_U32;
+    context->allowed_paths.expected_gid = TP_NULL_U32;
+    context->allowed_paths.forbidden_mode = 0007;
 
     return 0;
 }
@@ -115,6 +119,24 @@ void tp_context_set_announce_period_ns(tp_context_t *context, uint64_t period_ns
     }
 
     context->announce_period_ns = period_ns;
+}
+
+void tp_context_set_shm_permissions(
+    tp_context_t *context,
+    bool enforce,
+    uint32_t expected_uid,
+    uint32_t expected_gid,
+    uint32_t forbidden_mode)
+{
+    if (NULL == context)
+    {
+        return;
+    }
+
+    context->allowed_paths.enforce_permissions = enforce ? 1 : 0;
+    context->allowed_paths.expected_uid = expected_uid;
+    context->allowed_paths.expected_gid = expected_gid;
+    context->allowed_paths.forbidden_mode = forbidden_mode;
 }
 
 int tp_context_finalize_allowed_paths(tp_context_t *context)

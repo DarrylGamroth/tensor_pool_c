@@ -306,6 +306,40 @@ static int tp_shm_open_canonical(const char *path, const tp_allowed_paths_t *all
     return 0;
 }
 
+static int tp_shm_validate_permissions(const struct stat *st, const tp_allowed_paths_t *allowed, const char *path)
+{
+    if (NULL == st || NULL == allowed)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_permissions: invalid input");
+        return -1;
+    }
+
+    if (!allowed->enforce_permissions)
+    {
+        return 0;
+    }
+
+    if (allowed->forbidden_mode != 0 && ((uint32_t)st->st_mode & allowed->forbidden_mode) != 0)
+    {
+        TP_SET_ERR(EACCES, "tp_shm_map: insecure permissions for %s", path);
+        return -1;
+    }
+
+    if (allowed->expected_uid != TP_NULL_U32 && (uint32_t)st->st_uid != allowed->expected_uid)
+    {
+        TP_SET_ERR(EACCES, "tp_shm_map: unexpected uid for %s", path);
+        return -1;
+    }
+
+    if (allowed->expected_gid != TP_NULL_U32 && (uint32_t)st->st_gid != allowed->expected_gid)
+    {
+        TP_SET_ERR(EACCES, "tp_shm_map: unexpected gid for %s", path);
+        return -1;
+    }
+
+    return 0;
+}
+
 int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_allowed_paths_t *allowed, tp_log_t *log)
 {
     struct stat st;
@@ -363,6 +397,13 @@ int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_
     if (fstat(region->fd, &st) < 0)
     {
         TP_SET_ERR(errno, "tp_shm_map: fstat failed for %s", region->uri.path);
+        close(region->fd);
+        region->fd = -1;
+        return -1;
+    }
+
+    if (tp_shm_validate_permissions(&st, allowed, region->uri.path) < 0)
+    {
         close(region->fd);
         region->fd = -1;
         return -1;
