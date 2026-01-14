@@ -36,9 +36,9 @@ Scope: Address review findings related to path containment, single-writer PID va
 - [x] Add tests for best-fit selection and no-fit drop behavior.
 
 ### Phase 5: Canonical layout tooling (15.21a.3)
-- [ ] Make `tp_shm_create` default to canonical layout only.
-- [ ] Gate noncanonical path creation behind an explicit `--allow-noncompliant` flag with a warning.
-- [ ] Add a short doc note that noncanonical output is test-only.
+- [x] Make `tp_shm_create` default to canonical layout only.
+- [x] Gate noncanonical path creation behind an explicit `--allow-noncompliant` flag with a warning.
+- [x] Add a short doc note that noncanonical output is test-only.
 
 ### Phase 6: Compliance update
 - [ ] Update compliance matrix and relevant plan tracking docs after fixes land.

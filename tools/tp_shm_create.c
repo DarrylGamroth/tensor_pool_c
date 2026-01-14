@@ -27,8 +27,8 @@ static void usage(const char *name)
         "    %s --shm-base-dir <dir> --namespace <ns> --region <header|pool> \\\n"
         "       --stream-id <id> --epoch <epoch> --pool-id <pool_id> --nslots <nslots> \\\n"
         "       --stride-bytes <stride_bytes> --layout-version <layout_version>\n"
-        "  Explicit path (non-canonical):\n"
-        "    %s --noncanonical <path> <region> <stream_id> <epoch> <pool_id> <nslots> <stride_bytes> <layout_version>\n",
+        "  Explicit path (non-canonical, test-only):\n"
+        "    %s --allow-noncompliant --noncanonical <path> <region> <stream_id> <epoch> <pool_id> <nslots> <stride_bytes> <layout_version>\n",
         name);
 }
 
@@ -158,6 +158,7 @@ int main(int argc, char **argv)
     int fd;
     int use_noncanonical = 0;
     int use_canonical = 0;
+    int allow_noncompliant = 0;
     const char *shm_base_dir = NULL;
     const char *namespace = NULL;
     const char *region_str = NULL;
@@ -177,27 +178,50 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (0 == strcmp(argv[1], "--noncanonical"))
+    if (0 == strcmp(argv[1], "--allow-noncompliant"))
+    {
+        allow_noncompliant = 1;
+        if (argc < 3)
+        {
+            usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (0 == strcmp(argv[allow_noncompliant ? 2 : 1], "--noncanonical"))
     {
         use_noncanonical = 1;
-        if (argc != 10)
+        if (!allow_noncompliant)
+        {
+            fprintf(stderr, "Noncanonical layout requires --allow-noncompliant\n");
+            usage(argv[0]);
+            return 1;
+        }
+        if (argc != (allow_noncompliant ? 11 : 10))
         {
             usage(argv[0]);
             return 1;
         }
 
-        path = argv[2];
-        region_str = argv[3];
-        stream_id_str = argv[4];
-        epoch_str = argv[5];
-        pool_id_str = argv[6];
-        nslots_str = argv[7];
-        stride_str = argv[8];
-        layout_str = argv[9];
+        fprintf(stderr, "Warning: using noncanonical SHM paths (test-only)\n");
+        path = argv[allow_noncompliant ? 3 : 2];
+        region_str = argv[allow_noncompliant ? 4 : 3];
+        stream_id_str = argv[allow_noncompliant ? 5 : 4];
+        epoch_str = argv[allow_noncompliant ? 6 : 5];
+        pool_id_str = argv[allow_noncompliant ? 7 : 6];
+        nslots_str = argv[allow_noncompliant ? 8 : 7];
+        stride_str = argv[allow_noncompliant ? 9 : 8];
+        layout_str = argv[allow_noncompliant ? 10 : 9];
     }
-    else if (0 == strncmp(argv[1], "--", 2))
+    else if (0 == strncmp(argv[allow_noncompliant ? 2 : 1], "--", 2))
     {
         int i;
+
+        if (allow_noncompliant)
+        {
+            fprintf(stderr, "--allow-noncompliant is only valid with --noncanonical\n");
+            return 1;
+        }
         use_canonical = 1;
         for (i = 1; i + 1 < argc; i += 2)
         {

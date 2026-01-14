@@ -35,6 +35,8 @@ tp_client_start(&client);
 
 Shared-memory mappings require an allowlist of base directories (`allowed_paths`) to satisfy the containment rules in the wire spec. If no allowlist is configured, SHM mappings are rejected.
 
+Noncanonical SHM paths from `tools/tp_shm_create --noncanonical` are test-only and require `--allow-noncompliant`; production deployments should use the canonical directory layout.
+
 Call `tp_client_do_work(&client)` in your poll loop to drive keepalives and conductor work.
 
 ## 2. Discovery → Consumer (Driver Model)
