@@ -102,6 +102,14 @@ while (running)
 Notes:
 - `tp_consumer_init` auto-attaches when `use_driver` is true.
 - `tp_consumer_attach` (direct SHM) sends `ConsumerHello` on success.
+- On `ShmLeaseRevoked`, `tp_consumer_reattach_due` can be used to retry attach with backoff.
+
+```c
+if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
+{
+    tp_consumer_attach(&consumer, NULL);
+}
+```
 
 ## 4. Producer: Driver Model
 
@@ -123,6 +131,14 @@ while (running)
 {
     tp_producer_poll_control(&producer, 10);
     (void)tp_producer_offer_frame(&producer, &frame, &meta);
+}
+```
+
+Lease revoked handling (driver model):
+```c
+if (tp_producer_reattach_due(&producer, (uint64_t)tp_clock_now_ns()))
+{
+    tp_producer_attach(&producer, NULL);
 }
 ```
 

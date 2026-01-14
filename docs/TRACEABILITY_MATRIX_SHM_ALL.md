@@ -81,7 +81,7 @@ Columns:
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.6-1 | 4.6 | Response code validation | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
-| D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Partial | No auto-reattach/backoff |
+| D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/tp_consumer.c`, `src/tp_producer.c`, `src/tp_driver_client.c` | `tests/test_tp_lease_revoked.c` | Compliant | Revoke clears mappings and schedules reattach |
 | D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | n/a | n/a | External | Driver responsibility |
 | D-4.9-1 | 4.9 | Detach request/response encode/decode | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 

@@ -40,7 +40,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Node ID negotiation | Partial | `desiredNodeId` and `nodeId` supported; allocation is driver-owned. |
 | Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
 | Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
-| Lease revoked / shutdown handling | Compliant | Decode validates enums and rejects invalid values; schema version/block length gated. |
+| Lease revoked / shutdown handling | Compliant | Decode validates enums; revoke clears mappings and schedules reattach. |
 | Schema version compatibility | Compliant | `schemaId`/`templateId`/`version`/`blockLength` gated in driver client decoders. |
 | Control-plane transport | Compliant | Driver control uses Aeron publication/subscription via client. |
 
