@@ -42,8 +42,9 @@ Authoritative references:
 
 ### Phase 4: Missing optional components (Low)
 - [x] Aeron UDP Bridge is external; no in-repo implementation planned.
-- [ ] Decide scope for Supervisor/Unified Management (implement or document as external).
+- [x] Supervisor/Unified Management is external; no in-repo implementation planned.
 
 ## Progress Log
 - 2025-01-14: Plan created.
 - 2025-01-14: UDP Bridge marked external by request.
+- 2025-01-14: Supervisor marked external by request.
