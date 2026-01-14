@@ -16,23 +16,28 @@ Authoritative reference:
 ## Plan
 
 ### Phase 1: ConsumerConfig validation (Medium)
-- [ ] Validate ConsumerConfig per spec on receive:
-  - [ ] Reject (fail closed) when only one of channel/stream_id is provided.
-  - [ ] Accept empty channel + stream_id=0 as "not assigned".
-- [ ] Add unit tests for invalid ConsumerConfig combinations.
+- [x] Validate ConsumerConfig per spec on receive:
+  - [x] Reject (fail closed) when only one of channel/stream_id is provided.
+  - [x] Accept empty channel + stream_id=0 as "not assigned".
+- [x] Add unit tests for invalid ConsumerConfig combinations.
 
 ### Phase 2: Fallback policy hooks (Medium)
-- [ ] Add a producer/consumer‑manager policy hook to force `use_shm=false` and attach a fallback URI.
-- [ ] Document the policy behavior in `docs/C_CLIENT_API_USAGE.md`.
-- [ ] Add unit tests to verify forced fallback is reflected in ConsumerConfig.
+- [x] Add a producer/consumer‑manager policy hook to force `use_shm=false` and attach a fallback URI.
+- [x] Document the policy behavior in `docs/C_CLIENT_API_USAGE.md`.
+- [x] Add unit tests to verify forced fallback is reflected in ConsumerConfig.
 
 ### Phase 3: Fallback URI scheme validation (Medium)
-- [ ] Validate `payload_fallback_uri` scheme on the consumer side (accept `aeron:` or `bridge://`, reject others).
-- [ ] Add unit tests for unsupported schemes.
+- [x] Validate `payload_fallback_uri` scheme on the consumer side (accept `aeron:` or `bridge://`, reject others).
+- [x] Add unit tests for unsupported schemes.
 
 ### Phase 4: ConsumerConfig schema gating (Low)
-- [ ] Gate `schemaId`/`version`/`blockLength` in `tp_control_decode_consumer_config`.
-- [ ] Add unit tests for unsupported schema versions and block length mismatch.
+- [x] Gate `schemaId`/`version`/`blockLength` in `tp_control_decode_consumer_config`.
+- [x] Add unit tests for unsupported schema versions and block length mismatch.
 
 ## Progress Log
 - 2025-01-14: Plan created.
+- 2025-01-14: Phase 1 in progress (ConsumerConfig validation).
+- 2025-01-14: Phase 1 complete (ConsumerConfig validation).
+- 2025-01-14: Phase 2 complete (fallback policy hooks).
+- 2025-01-14: Phase 3 complete (fallback URI scheme validation).
+- 2025-01-14: Phase 4 complete (ConsumerConfig schema gating).
