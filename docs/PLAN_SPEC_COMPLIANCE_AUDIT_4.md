@@ -57,9 +57,9 @@ Authoritative reference:
 - [x] Add tests for stale activity timestamps (including negative case when missing driver).
 
 ### Phase 7: Consumer fallback state (Low)
-- [ ] Add explicit FALLBACK state in consumer state machine.
-- [ ] Ensure unmap on `use_shm=false` transitions into FALLBACK with fallback URI retained.
-- [ ] Add tests for state transitions.
+- [x] Add explicit FALLBACK state in consumer state machine.
+- [x] Ensure unmap on `use_shm=false` transitions into FALLBACK with fallback URI retained.
+- [x] Add tests for state transitions.
 
 ## Progress Log
 - 2025-01-14: Plan created.
@@ -69,3 +69,4 @@ Authoritative reference:
 - 2025-01-14: Phase 4 complete (epoch mismatch unmap + tests).
 - 2025-01-14: Phase 5 complete (metadata blob ordering enforcement + tests).
 - 2025-01-14: Phase 6 complete (activity timestamp liveness + tests).
+- 2025-01-14: Phase 7 complete (fallback state handling + tests).

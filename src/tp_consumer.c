@@ -81,6 +81,17 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
     consumer->last_qos_ns = 0;
 }
 
+static void tp_consumer_enter_fallback(tp_consumer_t *consumer)
+{
+    if (NULL == consumer)
+    {
+        return;
+    }
+
+    tp_consumer_unmap_regions(consumer);
+    consumer->state = TP_CONSUMER_STATE_FALLBACK;
+}
+
 static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_t now_ns)
 {
     uint64_t activity_ns = 0;
@@ -531,7 +542,11 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         tp_consumer_set_payload_fallback(consumer, view.payload_fallback_uri);
         if (!consumer->use_shm)
         {
-            tp_consumer_unmap_regions(consumer);
+            tp_consumer_enter_fallback(consumer);
+        }
+        else if (consumer->state == TP_CONSUMER_STATE_FALLBACK)
+        {
+            consumer->state = TP_CONSUMER_STATE_UNMAPPED;
         }
 
         if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)

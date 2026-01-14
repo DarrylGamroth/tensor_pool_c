@@ -63,7 +63,8 @@ tp_consumer_context_t;
 typedef enum tp_consumer_state_enum
 {
     TP_CONSUMER_STATE_UNMAPPED = 0,
-    TP_CONSUMER_STATE_MAPPED = 1
+    TP_CONSUMER_STATE_MAPPED = 1,
+    TP_CONSUMER_STATE_FALLBACK = 2
 }
 tp_consumer_state_t;
 
