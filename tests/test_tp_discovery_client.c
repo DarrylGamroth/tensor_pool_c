@@ -236,6 +236,56 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_decode_discovery_response_version_mismatch(void)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_discoveryResponse response;
+    tp_discovery_response_t out;
+    int result = -1;
+
+    memset(&out, 0, sizeof(out));
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_discoveryResponse_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_discoveryResponse_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_discoveryResponse_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_discoveryResponse_sbe_schema_version() + 1);
+
+    tensor_pool_discoveryResponse_wrap_for_encode(&response, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_discoveryResponse_set_requestId(&response, 77);
+    tensor_pool_discoveryResponse_set_status(&response, tensor_pool_discoveryStatus_OK);
+
+    assert(tp_discovery_decode_response(buffer, sizeof(buffer), 77, &out) < 0);
+    result = 0;
+
+    tp_discovery_response_close(&out);
+    assert(result == 0);
+}
+
+static void test_discovery_request_requires_response_channel(void)
+{
+    tp_discovery_client_t client;
+    tp_discovery_request_t request;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    request.response_channel = "";
+    request.response_stream_id = 100;
+
+    assert(tp_discovery_request(&client, &request) < 0);
+    result = 0;
+
+    assert(result == 0);
+}
+
 static void test_decode_discovery_response_pool_nslots_mismatch(void)
 {
     uint8_t buffer[1024];
@@ -415,6 +465,8 @@ void tp_test_discovery_client_decoders(void)
 {
     test_decode_discovery_response_with_tags();
     test_decode_discovery_response_invalid_dims();
+    test_decode_discovery_response_version_mismatch();
     test_decode_discovery_response_pool_nslots_mismatch();
     test_decode_discovery_response_missing_driver_control();
+    test_discovery_request_requires_response_channel();
 }

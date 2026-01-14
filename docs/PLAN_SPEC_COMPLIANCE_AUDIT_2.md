@@ -24,9 +24,9 @@ Authoritative references:
 ## Plan
 
 ### Phase 1: Discovery strictness (High)
-- [ ] Add `schemaId`/`version` gating in `tp_discovery_decode_response`.
-- [ ] Reject empty `response_channel` in `tp_discovery_request` (already checks NULL).
-- [ ] Add unit tests for unsupported discovery schema versions and empty response channel.
+- [x] Add `schemaId`/`version` gating in `tp_discovery_decode_response`.
+- [x] Reject empty `response_channel` in `tp_discovery_request` (already checks NULL).
+- [x] Add unit tests for unsupported discovery schema versions and empty response channel.
 
 ### Phase 2: Driver enum validation (Medium)
 - [ ] Fail closed on unknown `responseCode` in `tp_driver_decode_attach_response`.
@@ -48,3 +48,4 @@ Authoritative references:
 - 2025-01-14: Plan created.
 - 2025-01-14: UDP Bridge marked external by request.
 - 2025-01-14: Supervisor marked external by request.
+- 2025-01-14: Phase 1 complete (discovery strictness).

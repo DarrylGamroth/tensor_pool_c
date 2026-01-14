@@ -126,6 +126,18 @@ int tp_discovery_decode_response(
         return 1;
     }
 
+    if (version > tensor_pool_discoveryResponse_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_decode_response: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_discoveryResponse_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_discovery_decode_response: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_discoveryResponse_wrap_for_decode(
         &response,
         (char *)buffer,
@@ -531,7 +543,8 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
         return -1;
     }
 
-    if (NULL == request->response_channel || request->response_stream_id == 0)
+    if (NULL == request->response_channel || request->response_channel[0] == '\0' ||
+        request->response_stream_id == 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_discovery_request: response channel required");
         return -1;
