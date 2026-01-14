@@ -266,6 +266,14 @@ int tp_discovery_decode_response(
                 pool->nslots = tensor_pool_discoveryResponse_results_payloadPools_poolNslots(&pools);
                 pool->stride_bytes = tensor_pool_discoveryResponse_results_payloadPools_strideBytes(&pools);
 
+                if (pool->nslots != result->header_nslots)
+                {
+                    out->status = tensor_pool_discoveryStatus_ERROR;
+                    strncpy(out->error_message, "discovery response pool nslots mismatch", sizeof(out->error_message) - 1);
+                    out->error_message[sizeof(out->error_message) - 1] = '\0';
+                    return 0;
+                }
+
                 len = tensor_pool_discoveryResponse_results_payloadPools_regionUri_length(&pools);
                 uri = tensor_pool_discoveryResponse_results_payloadPools_regionUri(&pools);
                 tp_discovery_copy_ascii(pool->region_uri, sizeof(pool->region_uri), uri, len);

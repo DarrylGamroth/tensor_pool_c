@@ -51,8 +51,8 @@ Authoritative references:
 - [x] Add unit tests for version/block-length mismatch handling.
 
 ### Phase 3: Discovery response validation (Medium)
-- [ ] Enforce `pool_nslots == header_nslots` in discovery results.
-- [ ] Add unit tests for discovery response validation.
+- [x] Enforce `pool_nslots == header_nslots` in discovery results.
+- [x] Add unit tests for discovery response validation.
 
 ### Phase 4: Documentation gaps (Low)
 - [ ] Add missing example files:
@@ -64,3 +64,4 @@ Authoritative references:
 - 2025-01-14: Plan created.
 - 2025-01-14: Phase 1 in progress (driver attach/lease semantics).
 - 2025-01-14: Phase 2 complete (driver control-plane strictness).
+- 2025-01-14: Phase 3 complete (discovery response validation).
