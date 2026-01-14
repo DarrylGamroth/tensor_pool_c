@@ -41,8 +41,9 @@ Authoritative references:
 - [ ] Add tests for fallback URI handling and mapping validation.
 
 ### Phase 4: Missing optional components (Low)
-- [ ] Decide scope for Aeron UDP Bridge (implement minimal sender/receiver or mark as external).
+- [x] Aeron UDP Bridge is external; no in-repo implementation planned.
 - [ ] Decide scope for Supervisor/Unified Management (implement or document as external).
 
 ## Progress Log
 - 2025-01-14: Plan created.
+- 2025-01-14: UDP Bridge marked external by request.
