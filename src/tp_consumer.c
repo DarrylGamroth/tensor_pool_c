@@ -350,8 +350,14 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
     view.meta_version = tensor_pool_frameDescriptor_metaVersion(&descriptor);
     view.trace_id = tensor_pool_frameDescriptor_traceId(&descriptor);
 
-    if (!consumer->shm_mapped || consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
+    if (!consumer->shm_mapped)
     {
+        return;
+    }
+
+    if (consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
+    {
+        tp_consumer_unmap_regions(consumer);
         return;
     }
 
@@ -442,8 +448,18 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             return;
         }
 
-        if ((consumer->shm_mapped && announce.epoch < consumer->mapped_epoch) ||
-            (consumer->last_announce_epoch != 0 && announce.epoch < consumer->last_announce_epoch))
+        if (consumer->shm_mapped && announce.epoch != consumer->mapped_epoch)
+        {
+            if (announce.epoch < consumer->mapped_epoch)
+            {
+                tp_consumer_unmap_regions(consumer);
+                tp_control_shm_pool_announce_close(&announce);
+                return;
+            }
+            tp_consumer_unmap_regions(consumer);
+        }
+
+        if (consumer->last_announce_epoch != 0 && announce.epoch < consumer->last_announce_epoch)
         {
             tp_control_shm_pool_announce_close(&announce);
             return;
@@ -931,6 +947,7 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     consumer->state = TP_CONSUMER_STATE_MAPPED;
     consumer->shm_mapped = true;
     consumer->mapped_epoch = config->epoch;
+    consumer->last_announce_epoch = config->epoch;
     consumer->last_seq_seen = 0;
     consumer->drops_gap = 0;
     consumer->drops_late = 0;

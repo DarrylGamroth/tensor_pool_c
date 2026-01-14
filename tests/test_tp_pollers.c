@@ -702,7 +702,11 @@ void tp_test_shm_announce_freshness(void)
     snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
 
-    now_ns = (uint64_t)tp_clock_now_ns();
+    now_ns = (uint64_t)tp_clock_now_realtime_ns();
+    if (now_ns == 0)
+    {
+        goto cleanup;
+    }
     freshness_ns = client.context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
 
     tensor_pool_messageHeader_wrap(
@@ -723,8 +727,15 @@ void tp_test_shm_announce_freshness(void)
     tensor_pool_shmPoolAnnounce_set_layoutVersion(&announce, 1);
     tensor_pool_shmPoolAnnounce_set_headerNslots(&announce, 4);
     tensor_pool_shmPoolAnnounce_set_headerSlotBytes(&announce, TP_HEADER_SLOT_BYTES);
-    tensor_pool_shmPoolAnnounce_set_announceClockDomain(&announce, tensor_pool_clockDomain_MONOTONIC);
-    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns - (freshness_ns / 2));
+    tensor_pool_shmPoolAnnounce_set_announceClockDomain(&announce, tensor_pool_clockDomain_REALTIME_SYNCED);
+    if (freshness_ns > 0 && now_ns > freshness_ns * 2)
+    {
+        tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns - (freshness_ns * 2));
+    }
+    else
+    {
+        tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, 0);
+    }
 
     tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_encode(
         &pools,
@@ -759,8 +770,12 @@ void tp_test_shm_announce_freshness(void)
         assert(!consumer.shm_mapped);
     }
 
-    now_ns = (uint64_t)tp_clock_now_ns();
-    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns);
+    now_ns = (uint64_t)tp_clock_now_realtime_ns();
+    if (now_ns == 0)
+    {
+        goto cleanup;
+    }
+    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns + 1000000ULL);
     if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
@@ -1224,6 +1239,184 @@ cleanup:
     if (producer.client)
     {
         tp_producer_close(&producer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_epoch_regression(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_consumer_context_t consumer_ctx;
+    tp_consumer_t consumer;
+    aeron_publication_t *descriptor_pub = NULL;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_epoch_headerXXXXXX";
+    char pool_path[] = "/tmp/tp_epoch_poolXXXXXX";
+    char header_uri[256];
+    char pool_uri[256];
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t pool_cfg;
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    int result = -1;
+    int step = 0;
+    int64_t deadline;
+
+    memset(&client, 0, sizeof(client));
+    memset(&consumer, 0, sizeof(consumer));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    if (tp_consumer_context_init(&consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    consumer_ctx.stream_id = 73001;
+    consumer_ctx.consumer_id = 4;
+
+    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_add_publication(&client, "aeron:ipc", 1100, &descriptor_pub) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_publication(&client, descriptor_pub) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4) != 0 ||
+        ftruncate(pool_fd, TP_SUPERBLOCK_SIZE_BYTES + 64 * 4) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 73001, 2, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 73001, 2, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    memset(&pool_cfg, 0, sizeof(pool_cfg));
+    pool_cfg.pool_id = 1;
+    pool_cfg.nslots = 4;
+    pool_cfg.stride_bytes = 64;
+    pool_cfg.uri = pool_uri;
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = 73001;
+    config.epoch = 2;
+    config.layout_version = 1;
+    config.header_nslots = 4;
+    config.header_uri = header_uri;
+    config.pools = &pool_cfg;
+    config.pool_count = 1;
+
+    if (tp_consumer_attach(&consumer, &config) < 0)
+    {
+        step = 1;
+        goto cleanup;
+    }
+
+    assert(consumer.shm_mapped);
+    assert(consumer.mapped_epoch == 2);
+
+    {
+        struct tensor_pool_frameDescriptor descriptor;
+        size_t header_len = tensor_pool_messageHeader_encoded_length();
+        size_t body_len = tensor_pool_frameDescriptor_sbe_block_length();
+
+        tensor_pool_messageHeader_wrap(
+            &header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            sizeof(buffer));
+        tensor_pool_messageHeader_set_blockLength(&header, (uint16_t)body_len);
+        tensor_pool_messageHeader_set_templateId(&header, tensor_pool_frameDescriptor_sbe_template_id());
+        tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_frameDescriptor_sbe_schema_id());
+        tensor_pool_messageHeader_set_version(&header, tensor_pool_frameDescriptor_sbe_schema_version());
+
+        tensor_pool_frameDescriptor_wrap_for_encode(&descriptor, (char *)buffer, header_len, sizeof(buffer));
+        tensor_pool_frameDescriptor_set_streamId(&descriptor, 73001);
+        tensor_pool_frameDescriptor_set_epoch(&descriptor, 1);
+        tensor_pool_frameDescriptor_set_seq(&descriptor, 7);
+        tensor_pool_frameDescriptor_set_timestampNs(&descriptor, 1);
+        tensor_pool_frameDescriptor_set_metaVersion(&descriptor, 1);
+        tensor_pool_frameDescriptor_set_traceId(&descriptor, 0);
+
+        if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
+        {
+            step = 2;
+            goto cleanup;
+        }
+    }
+
+    deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+    while (tp_clock_now_ns() < deadline)
+    {
+        tp_consumer_poll_descriptors(&consumer, 10);
+        tp_client_do_work(&client);
+        if (!consumer.shm_mapped)
+        {
+            result = 0;
+            break;
+        }
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+cleanup:
+    if (result != 0)
+    {
+        fprintf(
+            stderr,
+            "tp_test_epoch_regression failed at step %d shm=%d mapped_epoch=%llu: %s\n",
+            step,
+            consumer.shm_mapped ? 1 : 0,
+            (unsigned long long)consumer.mapped_epoch,
+            tp_errmsg());
+    }
+    if (descriptor_pub)
+    {
+        aeron_publication_close(descriptor_pub, NULL, NULL);
+    }
+    if (consumer.client)
+    {
+        tp_consumer_close(&consumer);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {

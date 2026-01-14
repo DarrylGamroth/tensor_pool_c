@@ -44,8 +44,8 @@ Authoritative reference:
 - [x] Add tests to confirm QoS keeps a consumer alive.
 
 ### Phase 4: Epoch regression handling (Medium)
-- [ ] On epoch regression in ShmPoolAnnounce, force unmap/remap and drop stale frames.
-- [ ] Add tests for epoch regression handling.
+- [x] On epoch regression in ShmPoolAnnounce, force unmap/remap and drop stale frames.
+- [x] Add tests for epoch regression handling.
 
 ### Phase 5: Metadata blob ordering enforcement (Medium)
 - [ ] Track blob chunk offset monotonicity and coverage per blob; reject gaps/overlaps.
@@ -66,3 +66,4 @@ Authoritative reference:
 - 2025-01-14: Phase 1 complete (per-consumer control stream progress polling + tests).
 - 2025-01-14: Phase 2 complete (producer TensorHeader validation + zero-fill + tests).
 - 2025-01-14: Phase 3 complete (QoS consumer liveness updates + tests).
+- 2025-01-14: Phase 4 complete (epoch mismatch unmap + tests).
