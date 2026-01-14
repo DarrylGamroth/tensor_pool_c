@@ -15,10 +15,10 @@ Legend:
 
 ## Medium Priority
 
-- [ ] W-15.10-1: Enforce permissions/ownership policy for SHM paths (uid/gid/mode checks) or document explicit opt-out.
-- [ ] W-11-1: Expand consumer fallback modes and document behavior in API usage.
-- [ ] TL-6.3-1: Add helper(s) to enforce TraceLink propagation rules for N->1 flows (auto-emit TraceLinkSet or documented hook).
-- [ ] DS-3-1: Ensure discovery advisory semantics are clear in API docs and examples.
+- [x] W-15.10-1: Enforce permissions/ownership policy for SHM paths (uid/gid/mode checks) or document explicit opt-out.
+- [x] W-11-1: Expand consumer fallback modes and document behavior in API usage.
+- [x] TL-6.3-1: Add helper(s) to enforce TraceLink propagation rules for N->1 flows (auto-emit TraceLinkSet or documented hook).
+- [x] DS-3-1: Ensure discovery advisory semantics are clear in API docs and examples.
 
 ## Low Priority
 

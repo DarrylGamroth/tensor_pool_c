@@ -26,8 +26,8 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
 | Supervisor/unified management | Missing | Not implemented in this repo. |
-| Consumer modes and fallback | Partial | Per-consumer descriptor/control mode supported with decline behavior; fallback URI handled for `use_shm=0`. |
-| SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks enforced in `src/tp_shm.c`. |
+| Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
+| SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |
 
 ## SHM_Driver_Model_Spec_v1.0
@@ -61,6 +61,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Trace ID generator | Compliant | Agrona-style generator in `src/tp_trace.c`. |
 | FrameDescriptor trace_id | Compliant | `trace_id` in `tp_frame_descriptor_t` and publish paths. |
 | TraceLinkSet encode/decode | Compliant | `src/tp_tracelink.c` enforces schema, uniqueness, non-zero parents. |
+| TraceLink propagation helpers | Compliant | `tp_tracelink_resolve_trace_id` enforces root/1→1/N→1 rules. |
 | Node ID allocation | External | Driver/discovery-owned; client uses `nodeId` when provided. |
 | Best-effort semantics | Compliant | TraceLink emission is non-blocking. |
 

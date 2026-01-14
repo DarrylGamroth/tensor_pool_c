@@ -73,7 +73,7 @@ Legend:
 | 15.7a NUMA Policy | N/A | Deployment-driven. |
 | 15.8 Enum and Type Registry | Partial | DType/major_order validated; no explicit registry versioning. |
 | 15.9 Metadata Blobs | Compliant | MetaBlob announce/chunk/complete implemented. |
-| 15.10 Security and Permissions | Partial | Path containment checks implemented and fail closed without an allowlist; permissions policy not enforced in code. |
+| 15.10 Security and Permissions | Compliant | Path containment plus permission checks enforced with opt-out in context. |
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
 | 15.12 Consumer State Machine | Compliant | Mapped/unmapped tracking with fallback entry/exit in `src/tp_consumer.c`. |
 | 15.13 Test and Validation Checklist | Partial | Some tests added; not full checklist coverage. |

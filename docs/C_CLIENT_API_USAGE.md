@@ -35,6 +35,12 @@ tp_client_start(&client);
 
 Shared-memory mappings require an allowlist of base directories (`allowed_paths`) to satisfy the containment rules in the wire spec. If no allowlist is configured, SHM mappings are rejected.
 
+By default, SHM mappings enforce restrictive permissions (no group/other write). Use `tp_context_set_shm_permissions` to relax or customize the checks:
+
+```c
+tp_context_set_shm_permissions(&ctx.base, false, TP_NULL_U32, TP_NULL_U32, 0);
+```
+
 Noncanonical SHM paths from `tools/tp_shm_create --noncanonical` are test-only and require `--allow-noncompliant`; production deployments should use the canonical directory layout.
 
 Call `tp_client_do_work(&client)` in your poll loop to drive keepalives and conductor work.
@@ -61,6 +67,8 @@ tp_discovery_poll(&discovery, request.request_id, &response, 5 * 1000 * 1000 * 1
 // Pick a stream id.
 const tp_discovery_result_t *result = response.result_count ? &response.results[0] : NULL;
 ```
+
+Discovery results are advisory; clients must still attach via the driver and handle rejections or stream reassignments.
 
 ## 3. Consumer: Descriptor Callback Path (12.1)
 
@@ -103,6 +111,7 @@ Notes:
 - `tp_consumer_init` auto-attaches when `use_driver` is true.
 - `tp_consumer_attach` (direct SHM) sends `ConsumerHello` on success.
 - On `ShmLeaseRevoked`, `tp_consumer_reattach_due` can be used to retry attach with backoff.
+- Invalid `ShmPoolAnnounce` or SHM mapping failures transition to fallback when `payload_fallback_uri` is configured.
 
 ```c
 if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
@@ -211,7 +220,12 @@ N→1 stages mint a new trace id and emit TraceLinkSet:
 
 ```c
 uint64_t parent_ids[2] = { left_trace_id, right_trace_id };
-uint64_t out_trace_id = tp_trace_id_generator_next(&trace_gen);
+uint64_t out_trace_id = 0;
+int emit_tracelink = 0;
+if (tp_tracelink_resolve_trace_id(&trace_gen, parent_ids, 2, &out_trace_id, &emit_tracelink) < 0)
+{
+    // handle error
+}
 frame.trace_id = out_trace_id;
 tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0 };
 int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
@@ -227,7 +241,10 @@ tp_tracelink_set_t link = {
     .parents = parent_ids,
     .parent_count = 2
 };
-tp_producer_send_tracelink_set(&producer, &link);
+if (emit_tracelink)
+{
+    tp_producer_send_tracelink_set(&producer, &link);
+}
 ```
 
 Convenience form (fills stream/epoch automatically):

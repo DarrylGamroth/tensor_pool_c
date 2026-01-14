@@ -45,7 +45,7 @@ Columns:
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
 | W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | Missing | External supervisor not implemented |
-| W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/tp_consumer_registry.c`, `src/tp_consumer.c` | `tests/test_tp_consumer_registry.c` | Partial | Fallback modes limited |
+| W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/tp_consumer_registry.c`, `src/tp_consumer.c` | `tests/test_tp_consumer_registry.c`, `tests/test_tp_pollers.c` | Compliant | Fallback entered on invalid announce or mapping failure when configured. |
 | W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c` | Partial | Compatibility matrix not enforced |
 | W-15.2-1 | 15.2 | Epoch lifecycle: drop on mismatch, remap on announce | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-15.3-1 | 15.3 | Commit protocol edge cases | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | Drops on instability or seq mismatch |
@@ -53,7 +53,7 @@ Columns:
 | W-15.5-1 | 15.5 | `payload_slot` equals header index; pool_nslots alignment | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | |
 | W-15.7-1 | 15.7 | Timebase/clock-domain consistency | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-15.8-1 | 15.8 | Enum/type registry versioning | `src/tp_tensor.c` | `tests/test_tp_smoke.c` | Compliant | Unknown enums rejected |
-| W-15.10-1 | 15.10 | Path containment and fail-closed validation | `src/tp_shm.c`, `src/tp_context.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Partial | Ownership/permission policy not enforced |
+| W-15.10-1 | 15.10 | Path containment and fail-closed validation | `src/tp_shm.c`, `src/tp_context.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | Permission checks enforced with opt-out in context. |
 | W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
 | W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/` | n/a | Partial | Checklist not fully enumerated |
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/tp_consumer.c`, `src/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
@@ -89,7 +89,7 @@ Columns:
 
 | Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| DS-3-1 | 3 | Discovery is advisory; attach via driver | `docs/C_CLIENT_API_USAGE.md` | n/a | Partial | Documented, not enforced in code |
+| DS-3-1 | 3 | Discovery is advisory; attach via driver | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Discovery guidance clarified in API usage. |
 | DS-4.2-1 | 4.2 | Gate decode by `schemaId`/`templateId` on shared streams | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-4.3-1 | 4.3 | Request must include response channel and non-zero stream ID | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-5.0-1 | 5.0 | Optional fields use nullValue or zero-length strings | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Partial | Decode assumes SBE defaults |
@@ -104,7 +104,7 @@ Columns:
 | TL-5-1 | 5 | TraceLink is best-effort and non-blocking | `src/tp_tracelink.c`, `src/tp_producer.c` | `tests/test_tp_tracelink.c` | Compliant | No flow-control coupling |
 | TL-6.1-1 | 6.1 | 64-bit Snowflake-style trace IDs | `src/tp_trace.c` | `tests/test_tp_tracelink.c` | Compliant | Agrona-style generator |
 | TL-6.2-1 | 6.2 | Node ID unique per deployment | n/a | n/a | External | Driver/discovery responsibility |
-| TL-6.3-1 | 6.3 | Propagation rules for root/derived frames | `src/tp_producer.c`, `src/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Partial | API exposes hooks; caller must apply |
+| TL-6.3-1 | 6.3 | Propagation rules for root/derived frames | `src/tp_producer.c`, `src/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | Helper enforces root/1→1/N→1 rules and flags when to emit TraceLinkSet. |
 | TL-8.1-1 | 8.1 | FrameDescriptor `trace_id` field (null sentinel 0) | `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_tracelink.c` | Compliant | |
 | TL-9-1 | 9 | TraceLinkSet encode/decode, parent uniqueness, schema gating | `src/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | |
 
