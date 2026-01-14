@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "tensor_pool/tp_trace.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,6 +39,12 @@ int tp_tracelink_set_decode(
     tp_tracelink_set_t *out,
     uint64_t *parents,
     size_t max_parents);
+int tp_tracelink_resolve_trace_id(
+    tp_trace_id_generator_t *generator,
+    const uint64_t *parents,
+    size_t parent_count,
+    uint64_t *out_trace_id,
+    int *out_emit);
 
 int tp_producer_send_tracelink_set(struct tp_producer_stct *producer, const tp_tracelink_set_t *set);
 int tp_producer_send_tracelink_set_ex(

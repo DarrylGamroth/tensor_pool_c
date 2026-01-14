@@ -75,6 +75,121 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_tracelink_resolve_root(void)
+{
+    tp_trace_id_generator_t generator;
+    test_trace_clock_t clock;
+    uint64_t trace_id = 0;
+    int emit = -1;
+    int result = -1;
+
+    memset(&generator, 0, sizeof(generator));
+    clock.now_ms = 55;
+
+    if (tp_trace_id_generator_init(&generator, 2, 2, 3, 0, test_trace_clock_ms, &clock) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_resolve_trace_id(&generator, NULL, 0, &trace_id, &emit) < 0)
+    {
+        goto cleanup;
+    }
+
+    assert(trace_id != 0);
+    assert(emit == 0);
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_tracelink_resolve_single_parent(void)
+{
+    uint64_t parent = 1234;
+    uint64_t trace_id = 0;
+    int emit = -1;
+    int result = -1;
+
+    if (tp_tracelink_resolve_trace_id(NULL, &parent, 1, &trace_id, &emit) < 0)
+    {
+        goto cleanup;
+    }
+
+    assert(trace_id == parent);
+    assert(emit == 0);
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_tracelink_resolve_multi_parent(void)
+{
+    tp_trace_id_generator_t generator;
+    test_trace_clock_t clock;
+    uint64_t parents[2] = { 77, 88 };
+    uint64_t trace_id = 0;
+    int emit = -1;
+    int result = -1;
+
+    memset(&generator, 0, sizeof(generator));
+    clock.now_ms = 57;
+
+    if (tp_trace_id_generator_init(&generator, 2, 2, 2, 0, test_trace_clock_ms, &clock) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_resolve_trace_id(&generator, parents, 2, &trace_id, &emit) < 0)
+    {
+        goto cleanup;
+    }
+
+    assert(trace_id != 0);
+    assert(emit == 1);
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_tracelink_resolve_rejects_invalid(void)
+{
+    tp_trace_id_generator_t generator;
+    test_trace_clock_t clock;
+    uint64_t parents[2] = { 5, 5 };
+    uint64_t trace_id = 0;
+    int emit = -1;
+    int result = -1;
+
+    memset(&generator, 0, sizeof(generator));
+    clock.now_ms = 60;
+
+    if (tp_trace_id_generator_init(&generator, 2, 2, 3, 0, test_trace_clock_ms, &clock) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_resolve_trace_id(&generator, parents, 2, &trace_id, &emit) == 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_resolve_trace_id(NULL, NULL, 0, &trace_id, &emit) == 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
 static void test_tracelink_encode_decode(void)
 {
     uint8_t buffer[256];
@@ -351,6 +466,10 @@ void tp_test_tracelink(void)
 {
     test_trace_id_generator_basic();
     test_trace_id_generator_invalid_node();
+    test_tracelink_resolve_root();
+    test_tracelink_resolve_single_parent();
+    test_tracelink_resolve_multi_parent();
+    test_tracelink_resolve_rejects_invalid();
     test_tracelink_encode_decode();
     test_tracelink_encode_rejects_duplicate();
     test_tracelink_encode_rejects_empty();

@@ -40,6 +40,70 @@ static int tp_tracelink_validate_parents(const uint64_t *parents, size_t parent_
     return 0;
 }
 
+int tp_tracelink_resolve_trace_id(
+    tp_trace_id_generator_t *generator,
+    const uint64_t *parents,
+    size_t parent_count,
+    uint64_t *out_trace_id,
+    int *out_emit)
+{
+    uint64_t trace_id;
+
+    if (NULL == out_trace_id || NULL == out_emit)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: null output");
+        return -1;
+    }
+
+    if (parent_count > TP_TRACELINK_MAX_PARENTS)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: parent count invalid");
+        return -1;
+    }
+
+    if (parent_count > 0)
+    {
+        if (NULL == parents)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: parents required");
+            return -1;
+        }
+        if (tp_tracelink_validate_parents(parents, parent_count) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: invalid parent list");
+            return -1;
+        }
+    }
+
+    *out_emit = 0;
+    if (parent_count == 1)
+    {
+        *out_trace_id = parents[0];
+        return 0;
+    }
+
+    if (NULL == generator)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: generator required");
+        return -1;
+    }
+
+    trace_id = tp_trace_id_generator_next(generator);
+    if (trace_id == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_resolve_trace_id: generator returned 0");
+        return -1;
+    }
+
+    *out_trace_id = trace_id;
+    if (parent_count > 1)
+    {
+        *out_emit = 1;
+    }
+
+    return 0;
+}
+
 int tp_tracelink_set_encode(
     uint8_t *buffer,
     size_t length,
