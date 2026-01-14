@@ -56,7 +56,7 @@ static void tp_test_write_superblock(
     tensor_pool_shmRegionSuperblock_set_strideBytes(&block, stride_bytes);
     tensor_pool_shmRegionSuperblock_set_pid(&block, (uint64_t)getpid());
     tensor_pool_shmRegionSuperblock_set_startTimestampNs(&block, 1);
-    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&block, 1);
+    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&block, (uint64_t)tp_clock_now_ns());
 
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }

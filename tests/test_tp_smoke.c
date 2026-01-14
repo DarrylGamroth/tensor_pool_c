@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp_seqlock.h"
+#include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
@@ -45,6 +46,7 @@ void tp_test_rate_limit(void);
 void tp_test_qos_liveness(void);
 void tp_test_epoch_regression(void);
 void tp_test_meta_blob_ordering(void);
+void tp_test_activity_liveness(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
 void tp_test_producer_claim_lifecycle(void);
@@ -102,7 +104,7 @@ static void write_superblock(int fd, uint32_t stream_id, uint64_t epoch, int16_t
     tensor_pool_shmRegionSuperblock_set_strideBytes(&block, stride_bytes);
     tensor_pool_shmRegionSuperblock_set_pid(&block, (uint64_t)getpid());
     tensor_pool_shmRegionSuperblock_set_startTimestampNs(&block, 1);
-    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&block, 2);
+    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&block, (uint64_t)tp_clock_now_ns());
 
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }
@@ -267,6 +269,7 @@ int main(void)
     tp_test_qos_liveness();
     tp_test_epoch_regression();
     tp_test_meta_blob_ordering();
+    tp_test_activity_liveness();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
     tp_test_producer_claim_lifecycle();

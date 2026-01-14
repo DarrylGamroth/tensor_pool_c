@@ -565,6 +565,35 @@ static void tp_producer_qos_event_handler(void *clientd, const tp_qos_event_t *e
     tp_consumer_manager_touch(producer->consumer_manager, event->consumer_id, (uint64_t)tp_clock_now_ns());
 }
 
+static void tp_producer_update_activity(tp_producer_t *producer, uint64_t now_ns)
+{
+    size_t i;
+
+    if (NULL == producer || NULL == producer->client)
+    {
+        return;
+    }
+
+    if (producer->header_region.addr)
+    {
+        if (tp_shm_update_activity_timestamp(&producer->header_region, now_ns, &producer->client->context.base.log) < 0)
+        {
+            tp_log_emit(&producer->client->context.base.log, TP_LOG_WARN, "%s", tp_errmsg());
+        }
+    }
+
+    for (i = 0; i < producer->pool_count; i++)
+    {
+        if (producer->pools[i].region.addr)
+        {
+            if (tp_shm_update_activity_timestamp(&producer->pools[i].region, now_ns, &producer->client->context.base.log) < 0)
+            {
+                tp_log_emit(&producer->client->context.base.log, TP_LOG_WARN, "%s", tp_errmsg());
+            }
+        }
+    }
+}
+
 static int tp_producer_poll_qos(tp_producer_t *producer, int fragment_limit)
 {
     tp_qos_handlers_t handlers;
@@ -1489,6 +1518,15 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
         {
             tp_producer_send_data_source_meta(producer, &producer->cached_meta);
             producer->last_meta_ns = now_ns;
+        }
+    }
+
+    {
+        uint64_t period = producer->client->context.base.announce_period_ns;
+        if (period == 0 || producer->last_activity_ns == 0 || now_ns - producer->last_activity_ns >= period)
+        {
+            tp_producer_update_activity(producer, now_ns);
+            producer->last_activity_ns = now_ns;
         }
     }
 

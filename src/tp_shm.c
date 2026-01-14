@@ -564,6 +564,67 @@ int tp_shm_validate_superblock(const tp_shm_region_t *region, const tp_shm_expec
     return 0;
 }
 
+int tp_shm_update_activity_timestamp(tp_shm_region_t *region, uint64_t now_ns, tp_log_t *log)
+{
+    struct tensor_pool_shmRegionSuperblock superblock;
+
+    if (NULL == region)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_update_activity_timestamp: region is null");
+        return -1;
+    }
+
+    if (NULL == region->addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_update_activity_timestamp: region not mapped");
+        return -1;
+    }
+
+    tensor_pool_shmRegionSuperblock_wrap_for_encode(&superblock, (char *)region->addr, 0, TP_SUPERBLOCK_SIZE_BYTES);
+    tensor_pool_shmRegionSuperblock_set_activityTimestampNs(&superblock, now_ns);
+
+    if (NULL != log)
+    {
+        tp_log_emit(log, TP_LOG_DEBUG, "Updated activity timestamp stream=%u", tensor_pool_shmRegionSuperblock_streamId(&superblock));
+    }
+
+    return 0;
+}
+
+int tp_shm_read_activity_timestamp(const tp_shm_region_t *region, uint64_t *out, tp_log_t *log)
+{
+    struct tensor_pool_shmRegionSuperblock superblock;
+
+    if (NULL == region || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_read_activity_timestamp: invalid input");
+        return -1;
+    }
+
+    if (NULL == region->addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_read_activity_timestamp: region not mapped");
+        return -1;
+    }
+
+    tensor_pool_shmRegionSuperblock_wrap_for_decode(
+        &superblock,
+        (char *)region->addr,
+        0,
+        tensor_pool_shmRegionSuperblock_sbe_block_length(),
+        tensor_pool_shmRegionSuperblock_sbe_schema_version(),
+        TP_SUPERBLOCK_SIZE_BYTES);
+
+    *out = tensor_pool_shmRegionSuperblock_activityTimestampNs(&superblock);
+
+    if (NULL != log)
+    {
+        tp_log_emit(log, TP_LOG_DEBUG, "Read activity timestamp stream=%u", tensor_pool_shmRegionSuperblock_streamId(&superblock));
+    }
+
+    return 0;
+}
+
 int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_log_t *log)
 {
     tp_shm_uri_t parsed;

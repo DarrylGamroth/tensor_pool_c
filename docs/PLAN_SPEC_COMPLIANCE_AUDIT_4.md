@@ -52,9 +52,9 @@ Authoritative reference:
 - [x] Add tests for ordering violations.
 
 ### Phase 6: Activity timestamp liveness (Medium)
-- [ ] Update superblock `activity_timestamp_ns` on producer cadence.
-- [ ] Validate freshness on consumer side; drop/remap when stale.
-- [ ] Add tests for stale activity timestamps (including negative case when missing driver).
+- [x] Update superblock `activity_timestamp_ns` on producer cadence.
+- [x] Validate freshness on consumer side; drop/remap when stale.
+- [x] Add tests for stale activity timestamps (including negative case when missing driver).
 
 ### Phase 7: Consumer fallback state (Low)
 - [ ] Add explicit FALLBACK state in consumer state machine.
@@ -68,3 +68,4 @@ Authoritative reference:
 - 2025-01-14: Phase 3 complete (QoS consumer liveness updates + tests).
 - 2025-01-14: Phase 4 complete (epoch mismatch unmap + tests).
 - 2025-01-14: Phase 5 complete (metadata blob ordering enforcement + tests).
+- 2025-01-14: Phase 6 complete (activity timestamp liveness + tests).

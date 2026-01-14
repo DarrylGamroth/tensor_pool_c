@@ -47,6 +47,8 @@ int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_
 int tp_shm_unmap(tp_shm_region_t *region, tp_log_t *log);
 int tp_shm_validate_superblock(const tp_shm_region_t *region, const tp_shm_expected_t *expected, tp_log_t *log);
 int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_log_t *log);
+int tp_shm_update_activity_timestamp(tp_shm_region_t *region, uint64_t now_ns, tp_log_t *log);
+int tp_shm_read_activity_timestamp(const tp_shm_region_t *region, uint64_t *out, tp_log_t *log);
 
 #ifdef __cplusplus
 }

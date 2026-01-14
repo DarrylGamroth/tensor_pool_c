@@ -135,6 +135,7 @@ typedef struct tp_producer_stct
     tp_consumer_manager_t *consumer_manager;
     uint64_t last_consumer_sweep_ns;
     uint64_t last_qos_ns;
+    uint64_t last_activity_ns;
     uint64_t last_announce_ns;
     uint64_t last_meta_ns;
     tp_data_source_announce_t cached_announce;

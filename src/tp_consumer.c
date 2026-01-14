@@ -81,6 +81,35 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
     consumer->last_qos_ns = 0;
 }
 
+static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_t now_ns)
+{
+    uint64_t activity_ns = 0;
+    uint64_t period;
+    uint64_t stale_ns;
+
+    if (NULL == consumer || !consumer->shm_mapped || NULL == consumer->client)
+    {
+        return;
+    }
+
+    period = consumer->client->context.base.announce_period_ns;
+    if (period == 0)
+    {
+        return;
+    }
+
+    stale_ns = period * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    if (tp_shm_read_activity_timestamp(&consumer->header_region, &activity_ns, &consumer->client->context.base.log) < 0)
+    {
+        return;
+    }
+
+    if (activity_ns == 0 || (now_ns > activity_ns && now_ns - activity_ns > stale_ns))
+    {
+        tp_consumer_unmap_regions(consumer);
+    }
+}
+
 static void tp_consumer_set_payload_fallback(tp_consumer_t *consumer, tp_string_view_t view)
 {
     size_t copy_len;
@@ -1324,6 +1353,7 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
         return -1;
     }
 
+    tp_consumer_check_activity_liveness(consumer, (uint64_t)tp_clock_now_ns());
     tp_client_do_work(consumer->client);
     return fragments;
 }
@@ -1374,6 +1404,8 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
             consumer->last_qos_ns = now_ns;
         }
     }
+
+    tp_consumer_check_activity_liveness(consumer, now_ns);
 
     tp_client_do_work(consumer->client);
     return fragments;
