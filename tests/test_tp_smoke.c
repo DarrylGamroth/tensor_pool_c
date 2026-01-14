@@ -49,6 +49,7 @@ void tp_test_meta_blob_ordering(void);
 void tp_test_activity_liveness(void);
 void tp_test_pid_liveness(void);
 void tp_test_consumer_fallback_state(void);
+void tp_test_consumer_fallback_recover(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
 void tp_test_producer_claim_lifecycle(void);
@@ -274,6 +275,7 @@ int main(void)
     tp_test_activity_liveness();
     tp_test_pid_liveness();
     tp_test_consumer_fallback_state();
+    tp_test_consumer_fallback_recover();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
     tp_test_producer_claim_lifecycle();
