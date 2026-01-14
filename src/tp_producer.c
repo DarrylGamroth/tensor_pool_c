@@ -34,6 +34,8 @@ typedef struct tp_tracelink_entry_stct
 }
 tp_tracelink_entry_t;
 
+static tp_payload_pool_t *tp_find_pool_for_length(tp_producer_t *producer, size_t length);
+
 static tp_payload_pool_t *tp_find_pool(tp_producer_t *producer, uint16_t pool_id)
 {
     size_t i;

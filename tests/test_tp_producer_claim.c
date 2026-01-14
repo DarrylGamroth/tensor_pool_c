@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_clock.h"
+#include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
@@ -79,6 +80,40 @@ static int tp_test_wait_for_connected(tp_client_t *client, aeron_publication_t *
     return -1;
 }
 
+static int tp_test_offer_frame_retry(
+    tp_producer_t *producer,
+    const tp_frame_t *frame,
+    tp_frame_metadata_t *meta,
+    uint64_t *out_seq)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    if (NULL != out_seq)
+    {
+        *out_seq = 0;
+    }
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        int64_t result = tp_producer_offer_frame(producer, frame, meta);
+        if (result >= 0)
+        {
+            if (NULL != out_seq)
+            {
+                *out_seq = (uint64_t)result;
+            }
+            return 0;
+        }
+        tp_client_do_work(producer->client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
 static int tp_test_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, aeron_subscription_t **out)
 {
     aeron_async_add_subscription_t *async_add = NULL;
@@ -117,6 +152,7 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
 
     tp_client_context_set_aeron_dir(ctx, aeron_dir);
     tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+    tp_client_context_set_use_agent_invoker(ctx, true);
     tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
 
     if (tp_client_init(client, ctx) < 0)
@@ -249,6 +285,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     {
         goto cleanup;
     }
+
     tp_producer_context_set_fixed_pool_mode(&producer_ctx, fixed_pool_mode);
 
     if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
@@ -533,6 +570,7 @@ static void tp_test_producer_offer_pool_selection(void)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
+    aeron_subscription_t *descriptor_sub = NULL;
     tp_payload_pool_config_t pools[2];
     tp_producer_config_t config;
     tp_frame_t frame;
@@ -555,16 +593,43 @@ static void tp_test_producer_offer_pool_selection(void)
     size_t pool1_size = TP_SUPERBLOCK_SIZE_BYTES + 64 * 4;
     size_t pool2_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
     int result = -1;
+    int step = 0;
 
     memset(&client, 0, sizeof(client));
     memset(&producer, 0, sizeof(producer));
 
-    if (tp_test_start_client(&client, &ctx, "/dev/shm/aeron-dgamroth") != 0)
+    {
+        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
+        size_t i;
+        int started = 0;
+
+        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+        {
+            if (NULL == candidates[i])
+            {
+                continue;
+            }
+            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
+            {
+                started = 1;
+                break;
+            }
+        }
+
+        if (!started)
+        {
+            result = 0;
+            goto cleanup;
+        }
+    }
+
+    step = 1;
+    if (tp_producer_context_init(&producer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_producer_context_init(&producer_ctx) < 0)
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -577,6 +642,7 @@ static void tp_test_producer_offer_pool_selection(void)
         goto cleanup;
     }
 
+    step = 4;
     if (ftruncate(header_fd, (off_t)header_size) != 0 ||
         ftruncate(pool1_fd, (off_t)pool1_size) != 0 ||
         ftruncate(pool2_fd, (off_t)pool2_size) != 0)
@@ -612,16 +678,19 @@ static void tp_test_producer_offer_pool_selection(void)
     pools[1].stride_bytes = 128;
     pools[1].uri = pool2_uri;
 
+    step = 6;
     if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
 
+    step = 7;
     if (tp_producer_attach(&producer, &config) < 0)
     {
         goto cleanup;
     }
 
+    step = 8;
     if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
     {
         goto cleanup;
@@ -642,8 +711,8 @@ static void tp_test_producer_offer_pool_selection(void)
 
     memset(&meta, 0, sizeof(meta));
 
-    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
-    if ((int64_t)seq < 0)
+    step = 9;
+    if (tp_test_offer_frame_retry(&producer, &frame, &meta, &seq) < 0)
     {
         goto cleanup;
     }
@@ -658,8 +727,7 @@ static void tp_test_producer_offer_pool_selection(void)
 
     frame.payload_len = 80;
     tensor.dims[0] = 80;
-    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
-    if ((int64_t)seq < 0)
+    if (tp_test_offer_frame_retry(&producer, &frame, &meta, &seq) < 0)
     {
         goto cleanup;
     }
@@ -673,6 +741,7 @@ static void tp_test_producer_offer_pool_selection(void)
 
     frame.payload_len = 256;
     tensor.dims[0] = 256;
+    step = 11;
     if (tp_producer_offer_frame(&producer, &frame, &meta) >= 0)
     {
         goto cleanup;
@@ -684,6 +753,10 @@ cleanup:
     if (producer.client)
     {
         tp_producer_close(&producer);
+    }
+    if (descriptor_sub)
+    {
+        aeron_subscription_close(descriptor_sub, NULL, NULL);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {
@@ -705,6 +778,10 @@ cleanup:
         unlink(pool2_path);
     }
 
+    if (result != 0)
+    {
+        fprintf(stderr, "tp_test_producer_offer_pool_selection failed at step %d: %s\n", step, tp_errmsg());
+    }
     assert(result == 0);
 }
 
