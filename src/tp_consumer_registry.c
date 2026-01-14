@@ -32,6 +32,11 @@ static int tp_copy_string_view(char *dst, size_t dst_len, const tp_string_view_t
 
 int tp_consumer_request_validate(const tp_consumer_hello_view_t *hello, tp_consumer_request_t *out)
 {
+    bool descriptor_channel = false;
+    bool descriptor_stream = false;
+    bool control_channel = false;
+    bool control_stream = false;
+
     if (NULL == hello || NULL == out)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_request_validate: null input");
@@ -40,22 +45,21 @@ int tp_consumer_request_validate(const tp_consumer_hello_view_t *hello, tp_consu
 
     memset(out, 0, sizeof(*out));
 
-    if ((hello->descriptor_channel.length > 0 && hello->descriptor_stream_id == 0) ||
-        (hello->descriptor_channel.length == 0 && hello->descriptor_stream_id != 0))
+    descriptor_channel = (hello->descriptor_channel.length > 0 && NULL != hello->descriptor_channel.data);
+    descriptor_stream = (hello->descriptor_stream_id != 0);
+
+    control_channel = (hello->control_channel.length > 0 && NULL != hello->control_channel.data);
+    control_stream = (hello->control_stream_id != 0);
+
+    if (descriptor_channel && descriptor_stream)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_consumer_request_validate: invalid descriptor request");
-        return -1;
+        out->descriptor_requested = true;
     }
 
-    if ((hello->control_channel.length > 0 && hello->control_stream_id == 0) ||
-        (hello->control_channel.length == 0 && hello->control_stream_id != 0))
+    if (control_channel && control_stream)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_consumer_request_validate: invalid control request");
-        return -1;
+        out->control_requested = true;
     }
-
-    out->descriptor_requested = (hello->descriptor_channel.length > 0 && hello->descriptor_stream_id != 0);
-    out->control_requested = (hello->control_channel.length > 0 && hello->control_stream_id != 0);
 
     return 0;
 }
@@ -182,19 +186,25 @@ int tp_consumer_registry_update(
     entry->progress_bytes_delta = hello->progress_bytes_delta;
     entry->progress_major_delta_units = hello->progress_major_delta_units;
 
-    if (tp_copy_string_view(entry->descriptor_channel, sizeof(entry->descriptor_channel), &hello->descriptor_channel) < 0)
+    entry->descriptor_channel[0] = '\0';
+    entry->descriptor_stream_id = 0;
+    if (request.descriptor_requested)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_consumer_registry_update: descriptor channel too long");
-        return -1;
+        if (tp_copy_string_view(entry->descriptor_channel, sizeof(entry->descriptor_channel), &hello->descriptor_channel) == 0)
+        {
+            entry->descriptor_stream_id = hello->descriptor_stream_id;
+        }
     }
-    entry->descriptor_stream_id = hello->descriptor_stream_id;
 
-    if (tp_copy_string_view(entry->control_channel, sizeof(entry->control_channel), &hello->control_channel) < 0)
+    entry->control_channel[0] = '\0';
+    entry->control_stream_id = 0;
+    if (request.control_requested)
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_consumer_registry_update: control channel too long");
-        return -1;
+        if (tp_copy_string_view(entry->control_channel, sizeof(entry->control_channel), &hello->control_channel) == 0)
+        {
+            entry->control_stream_id = hello->control_stream_id;
+        }
     }
-    entry->control_stream_id = hello->control_stream_id;
 
     if (NULL != out_entry)
     {

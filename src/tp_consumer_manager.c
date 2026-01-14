@@ -166,6 +166,13 @@ int tp_consumer_manager_handle_hello(
         return -1;
     }
 
+    request.descriptor_requested = request.descriptor_requested &&
+        entry->descriptor_stream_id != 0 &&
+        entry->descriptor_channel[0] != '\0';
+    request.control_requested = request.control_requested &&
+        entry->control_stream_id != 0 &&
+        entry->control_channel[0] != '\0';
+
     if (request.descriptor_requested)
     {
         if (NULL == entry->descriptor_publication)

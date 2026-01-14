@@ -17,10 +17,11 @@ static void test_consumer_request_validation(void)
     hello.descriptor_channel.length = 9;
     hello.descriptor_stream_id = 0;
 
-    if (tp_consumer_request_validate(&hello, &request) == 0)
+    if (tp_consumer_request_validate(&hello, &request) != 0)
     {
         goto cleanup;
     }
+    assert(request.descriptor_requested == false);
 
     hello.descriptor_stream_id = 42;
     if (tp_consumer_request_validate(&hello, &request) != 0)
@@ -89,6 +90,49 @@ static void test_consumer_progress_aggregation(void)
     assert(policy.interval_us == 250);
     assert(policy.bytes_delta == 1024);
     assert(policy.major_delta_units == 2);
+
+    result = 0;
+
+cleanup:
+    tp_consumer_registry_close(&registry);
+    assert(result == 0);
+}
+
+static void test_consumer_registry_decline_invalid_channel(void)
+{
+    tp_consumer_registry_t registry;
+    tp_consumer_hello_view_t hello;
+    tp_consumer_entry_t *entry = NULL;
+    char long_channel[TP_URI_MAX_LENGTH + 8];
+    int result = -1;
+
+    if (tp_consumer_registry_init(&registry, 1) != 0)
+    {
+        goto cleanup;
+    }
+
+    memset(long_channel, 'a', sizeof(long_channel));
+    long_channel[sizeof(long_channel) - 1] = '\0';
+
+    memset(&hello, 0, sizeof(hello));
+    hello.consumer_id = 1;
+    hello.descriptor_channel.data = long_channel;
+    hello.descriptor_channel.length = (uint32_t)(sizeof(long_channel) - 1);
+    hello.descriptor_stream_id = 10;
+    hello.control_channel.data = long_channel;
+    hello.control_channel.length = (uint32_t)(sizeof(long_channel) - 1);
+    hello.control_stream_id = 11;
+
+    if (tp_consumer_registry_update(&registry, &hello, 10, &entry) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(entry != NULL);
+    assert(entry->descriptor_stream_id == 0);
+    assert(entry->descriptor_channel[0] == '\0');
+    assert(entry->control_stream_id == 0);
+    assert(entry->control_channel[0] == '\0');
 
     result = 0;
 
@@ -203,6 +247,7 @@ void tp_test_consumer_registry(void)
 {
     test_consumer_request_validation();
     test_consumer_progress_aggregation();
+    test_consumer_registry_decline_invalid_channel();
     test_consumer_registry_sweep();
     test_progress_throttle_should_publish();
     test_consumer_manager_force_no_shm();

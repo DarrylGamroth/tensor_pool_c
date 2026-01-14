@@ -27,8 +27,8 @@ Scope: Address review findings related to path containment, single-writer PID va
 - [x] Add unit test to simulate `pid` changes and validate unmap behavior.
 
 ### Phase 3: Per-consumer stream decline behavior (10.1.3)
-- [ ] Change per-consumer channel validation to decline invalid/unsupported requests by returning empty channel and stream ID 0 in `ConsumerConfig`.
-- [ ] Add unit tests to confirm invalid channel requests do not error out but decline correctly.
+- [x] Change per-consumer channel validation to decline invalid/unsupported requests by returning empty channel and stream ID 0 in `ConsumerConfig`.
+- [x] Add unit tests to confirm invalid channel requests do not error out but decline correctly.
 
 ### Phase 4: Pool selection enforcement (15.3)
 - [ ] Enforce smallest-fit pool selection inside `tp_producer_offer_frame`.
