@@ -41,5 +41,5 @@ Scope: Address review findings related to path containment, single-writer PID va
 - [x] Add a short doc note that noncanonical output is test-only.
 
 ### Phase 6: Compliance update
-- [ ] Update compliance matrix and relevant plan tracking docs after fixes land.
-- [ ] Re-run tests (`ctest --test-dir build --output-on-failure`).
+- [x] Update compliance matrix and relevant plan tracking docs after fixes land.
+- [x] Re-run tests (`ctest --test-dir build --output-on-failure`).

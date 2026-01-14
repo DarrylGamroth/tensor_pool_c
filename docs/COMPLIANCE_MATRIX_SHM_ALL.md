@@ -21,13 +21,13 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| SHM region validation, headers, payload pools | Partial | Core validation in `src/tp_shm.c` and `src/tp_consumer.c`; producer-side padding/zero-fill rules and some header constraints remain unenforced. |
+| SHM region validation, headers, payload pools | Partial | Core validation in `src/tp_shm.c` and `src/tp_consumer.c`; allowlist containment and pid liveness enforced; some padding/flush requirements remain unenforced. |
 | Slot header / TensorHeader validation | Partial | `src/tp_slot.c` and `src/tp_tensor.c` validate on read; producer-side checks are limited. |
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | QoS messages | Partial | Encode/decode implemented; periodic publish policy not enforced. |
 | Supervisor/unified management | Missing | Not implemented in this repo. |
-| Consumer modes and fallback | Partial | Per-consumer descriptor mode supported; fallback URI handling not implemented. |
+| Consumer modes and fallback | Partial | Per-consumer descriptor/control mode supported with decline behavior; fallback URI handled for `use_shm=0`. |
 | SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks enforced in `src/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |
 

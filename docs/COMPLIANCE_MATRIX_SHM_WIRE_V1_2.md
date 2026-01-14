@@ -37,7 +37,7 @@ Legend:
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
 | 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`. |
 | 10.1.2 ConsumerHello | Compliant | Encode/decode and max_rate_hz throttling in `src/tp_producer.c`. |
-| 10.1.3 ConsumerConfig | Partial | Encode/decode implemented; consumers honor `use_shm` and expose `payload_fallback_uri` for external fallback. |
+| 10.1.3 ConsumerConfig | Compliant | Encode/decode implemented; per-consumer declines return empty channel/stream ID; consumers honor `use_shm` and expose `payload_fallback_uri`. |
 | 10.2 Data Availability | Compliant | FrameDescriptor/FrameProgress with epoch mismatch checks and seq_commit validation. |
 | 10.2.1 FrameDescriptor | Compliant | Published and consumed with trace_id support; consumer drops on epoch mismatch and seq_commit mismatch. |
 | 10.2.2 FrameProgress | Compliant | Published and polled with monotonic/<= validation in `src/tp_progress_poller.c`. |
@@ -73,11 +73,11 @@ Legend:
 | 15.7a NUMA Policy | N/A | Deployment-driven. |
 | 15.8 Enum and Type Registry | Partial | DType/major_order validated; no explicit registry versioning. |
 | 15.9 Metadata Blobs | Compliant | MetaBlob announce/chunk/complete implemented. |
-| 15.10 Security and Permissions | Partial | Path containment checks implemented; permissions policy not enforced in code. |
+| 15.10 Security and Permissions | Partial | Path containment checks implemented and fail closed without an allowlist; permissions policy not enforced in code. |
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
-| 15.12 Consumer State Machine | Partial | Mapped/unmapped tracking in `src/tp_consumer.c`; fallback state not implemented. |
+| 15.12 Consumer State Machine | Partial | Mapped/unmapped tracking in `src/tp_consumer.c`; fallback state handled for `use_shm=0`. |
 | 15.13 Test and Validation Checklist | Partial | Some tests added; not full checklist coverage. |
-| 15.14 Deployment & Liveness | Partial | ShmPoolAnnounce freshness/join-time enforced; no periodic publish policy in core. |
+| 15.14 Deployment & Liveness | Partial | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions; periodic publish policy not enforced in core. |
 | 15.15 Aeron Terminology Mapping | N/A | Informative. |
 | 15.16 Reuse Aeron Primitives | Partial | Aeron usage present; no direct mapping for all suggested primitives. |
 | 15.16a File-Backed SHM Regions | Partial | File-backed SHM supported with warning; no fsync/prefault/lock policy enforcement. |
@@ -85,7 +85,7 @@ Legend:
 | 15.18 Normative Algorithms | Partial | Seqlock/validation and ShmPoolAnnounce flow implemented; explicit DMA flush handling remains platform-specific. |
 | 15.20 Compatibility Matrix | Partial | Layout version checks in ShmPoolAnnounce path; full matrix not enforced. |
 | 15.21 Protocol State Machines | Partial | ShmPoolAnnounce-driven mapping state implemented; not all optional states (fallback) covered. |
-| 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool + symlink-safe open/containment checks in `src/tp_shm.c`. |
+| 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/tp_shm.c`. |
 | 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and stride power-of-two/64-byte multiple checks in `src/tp_shm.c`. |
 
 ## Section 16 (Normative)
