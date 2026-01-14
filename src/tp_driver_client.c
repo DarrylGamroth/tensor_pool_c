@@ -100,6 +100,18 @@ int tp_driver_decode_attach_response(
         return 1;
     }
 
+    if (version > tensor_pool_shmAttachResponse_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_attach_response: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_shmAttachResponse_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_attach_response: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_shmAttachResponse_wrap_for_decode(
         &response,
         (char *)buffer,
@@ -333,6 +345,18 @@ int tp_driver_decode_detach_response(
         return 1;
     }
 
+    if (version > tensor_pool_shmDetachResponse_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_detach_response: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_shmDetachResponse_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_detach_response: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_shmDetachResponse_wrap_for_decode(
         &response,
         (char *)buffer,
@@ -398,6 +422,18 @@ int tp_driver_decode_lease_revoked(
         return 1;
     }
 
+    if (version > tensor_pool_shmLeaseRevoked_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_lease_revoked: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_shmLeaseRevoked_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_lease_revoked: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_shmLeaseRevoked_wrap_for_decode(
         &revoked,
         (char *)buffer,
@@ -414,7 +450,8 @@ int tp_driver_decode_lease_revoked(
         enum tensor_pool_role role;
         if (!tensor_pool_shmLeaseRevoked_role(&revoked, &role))
         {
-            out->role = 0;
+            TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_lease_revoked: invalid role");
+            return -1;
         }
         else
         {
@@ -425,7 +462,8 @@ int tp_driver_decode_lease_revoked(
         enum tensor_pool_leaseRevokeReason reason;
         if (!tensor_pool_shmLeaseRevoked_reason(&revoked, &reason))
         {
-            out->reason = 0;
+            TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_lease_revoked: invalid reason");
+            return -1;
         }
         else
         {
@@ -474,6 +512,18 @@ int tp_driver_decode_shutdown(
         template_id != tensor_pool_shmDriverShutdown_sbe_template_id())
     {
         return 1;
+    }
+
+    if (version > tensor_pool_shmDriverShutdown_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_shutdown: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_shmDriverShutdown_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_shutdown: block length mismatch");
+        return -1;
     }
 
     tensor_pool_shmDriverShutdown_wrap_for_decode(

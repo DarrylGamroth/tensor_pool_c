@@ -42,13 +42,13 @@ Authoritative references:
   - [x] lease-expiry behavior with null expiry does not force detach
 
 ### Phase 2: Driver control-plane strictness (Medium)
-- [ ] Enforce `schemaId`, `templateId`, `version`, and `blockLength` gating on:
-  - [ ] `ShmAttachResponse`
-  - [ ] `ShmDetachResponse`
-  - [ ] `ShmLeaseRevoked`
-  - [ ] `ShmDriverShutdown`
-- [ ] Reject unknown enum values for `role` and `reason` in `ShmLeaseRevoked`.
-- [ ] Add unit tests for version/block-length mismatch handling.
+- [x] Enforce `schemaId`, `templateId`, `version`, and `blockLength` gating on:
+  - [x] `ShmAttachResponse`
+  - [x] `ShmDetachResponse`
+  - [x] `ShmLeaseRevoked`
+  - [x] `ShmDriverShutdown`
+- [x] Reject unknown enum values for `role` and `reason` in `ShmLeaseRevoked`.
+- [x] Add unit tests for version/block-length mismatch handling.
 
 ### Phase 3: Discovery response validation (Medium)
 - [ ] Enforce `pool_nslots == header_nslots` in discovery results.
@@ -63,3 +63,4 @@ Authoritative references:
 ## Progress Log
 - 2025-01-14: Plan created.
 - 2025-01-14: Phase 1 in progress (driver attach/lease semantics).
+- 2025-01-14: Phase 2 complete (driver control-plane strictness).
