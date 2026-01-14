@@ -8,7 +8,6 @@ Authoritative references:
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
 - `docs/SHM_TraceLink_Spec_v1.0.md`
 - `docs/SHM_Join_Barrier_Spec_v1.0.md`
-- `docs/SHM_Aeron_UDP_Bridge_Spec_v1.0.md`
 
 ## Goals
 - Resolve all **High** and **Medium** compliance gaps.

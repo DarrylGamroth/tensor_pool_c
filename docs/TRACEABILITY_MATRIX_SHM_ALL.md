@@ -6,7 +6,6 @@ Authoritative references:
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
 - `docs/SHM_TraceLink_Spec_v1.0.md`
 - `docs/SHM_Join_Barrier_Spec_v1.0.md`
-- `docs/SHM_Aeron_UDP_Bridge_Spec_v1.0.md`
 
 Legend:
 - **Compliant**: Implemented per spec.
@@ -118,10 +117,3 @@ Columns:
 | JB-8-1 | 8 | TimestampJoinBarrier readiness + clock domain rules | `src/tp_join_barrier.c` | `tests/test_tp_join_barrier.c` | Compliant | |
 | JB-9-1 | 9 | LatestValueJoinBarrier semantics | `src/tp_join_barrier.c` | `tests/test_tp_join_barrier.c` | Compliant | |
 | JB-10-1 | 10 | MergeMap control-plane request/announce | `src/tp_merge_map.c`, `src/tp_control_adapter.c` | `tests/test_tp_join_barrier.c` | Compliant | |
-
-## SHM_Aeron_UDP_Bridge_Spec_v1.0
-
-| Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| BR-1 | All | UDP bridge sender/receiver | n/a | n/a | External | Out of scope for this repo |
-| BR-2 | All | Bridge schemas | `schemas/bridge-schema.xml` | n/a | Compliant | Schema present; no runtime use |

@@ -6,7 +6,6 @@ Authoritative references:
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
 - `docs/SHM_TraceLink_Spec_v1.0.md`
 - `docs/SHM_Join_Barrier_Spec_v1.0.md`
-- `docs/SHM_Aeron_UDP_Bridge_Spec_v1.0.md`
 
 Legend:
 - **Compliant**: Implemented per spec.
@@ -72,12 +71,6 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Sequence/Timestamp/LatestValue JoinBarrier | Compliant | `src/tp_join_barrier.c` with MergeMap decode in `src/tp_merge_map.c`. |
 | Control-plane MergeMap decode | Compliant | MergeMap registry + control poller integration. |
 
-## SHM_Aeron_UDP_Bridge_Spec_v1.0
-
-| Area | Status | Evidence / Notes |
-| --- | --- | --- |
-| Bridge sender/receiver | Missing | No bridge implementation in this repo. |
-| Bridge schemas | Compliant | SBE schema present in `schemas/bridge-schema.xml`; no runtime use. |
 
 ## Spec Completeness Notes
 

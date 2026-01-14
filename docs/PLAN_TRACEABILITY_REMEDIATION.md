@@ -34,7 +34,6 @@ Legend:
 - [ ] W-10.5-1: Supervisor/unified management layer (external).
 - [ ] D-2.1, D-4.3-1, D-4.8-1: Driver-owned policies and enforcement (external).
 - [ ] DS-5.1-1, DS-6-1: Discovery provider/registry implementation (external).
-- [ ] BR-1: UDP bridge implementation (external).
 
 ## Open Questions / Uncertainties
 
