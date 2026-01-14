@@ -37,12 +37,12 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | --- | --- | --- |
 | Driver lifecycle, ownership, epoch management | External | Driver responsibilities are out of scope for this repo. |
 | Attach request encode | Compliant | `tp_driver_send_attach` in `src/tp_driver_client.c`. |
-| Attach response validation | Partial | Required fields validated, but optional `leaseExpiryTimestampNs` treated as required and schema version/block length checks are missing. |
+| Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
 | Node ID negotiation | Partial | `desiredNodeId` and `nodeId` supported; allocation is driver-owned. |
-| Keepalive send / tracking | Partial | `tp_driver_keepalive` implemented; lease expiry treats absent expiry as immediate. |
+| Keepalive send / tracking | Partial | `tp_driver_keepalive` implemented; lease expiry handling respects optional expiry. |
 | Detach request/response | Partial | Encode/decode implemented; schema version/block length checks missing. |
 | Lease revoked / shutdown handling | Partial | Decode implemented; enum validation and required rejection behavior missing. |
-| Schema version compatibility | Partial | `schemaId`/`templateId` checked; `version` and `blockLength` not gated. |
+| Schema version compatibility | Compliant | `schemaId`/`templateId`/`version`/`blockLength` gated in driver client decoders. |
 | Control-plane transport | Compliant | Driver control uses Aeron publication/subscription via client. |
 
 ## SHM_Discovery_Service_Spec_v_1.0
@@ -50,7 +50,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
 | DiscoveryRequest encode | Compliant | `tp_discovery_request` in `src/tp_discovery_client.c`. |
-| DiscoveryResponse decode | Partial | Required fields validated; pool `nslots` vs header `nslots` mismatch is not checked. |
+| DiscoveryResponse decode | Compliant | Required fields validated; pool `nslots` vs header `nslots` mismatch rejected. |
 | Client polling / async handling | Compliant | `tp_discovery_poll` and `tp_discovery_poller` implemented. |
 | Discovery provider / registry | Missing | No provider implementation in this repo. |
 | Authority rules | External | Driver/registry responsibilities. |
@@ -81,5 +81,4 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 ## Spec Completeness Notes
 
-- `docs/SHM_Aeron_UDP_Bridge_Spec_v1.0.md` references `docs/examples/bridge_config_example.toml`, which is missing.
-- `docs/SHM_Driver_Model_Spec_v1.0.md` references `docs/examples/driver_camera_example.toml`, which is missing.
+- Example configuration files are now present under `docs/examples/`.
