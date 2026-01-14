@@ -178,6 +178,7 @@ static void test_decode_consumer_config_stream_mismatch(void)
     tensor_pool_consumerConfig_set_mode(&cfg, tensor_pool_mode_STREAM);
     tensor_pool_consumerConfig_set_descriptorStreamId(&cfg, 1200);
     tensor_pool_consumerConfig_set_controlStreamId(&cfg, 0);
+    tensor_pool_consumerConfig_put_payloadFallbackUri(&cfg, "", 0);
     tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "aeron:ipc", 9);
     tensor_pool_consumerConfig_put_controlChannel(&cfg, "", 0);
 
