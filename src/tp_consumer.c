@@ -268,26 +268,26 @@ static int tp_consumer_apply_announce(tp_consumer_t *consumer, const tp_shm_pool
     if (announce->header_region_uri.length == 0 || NULL == announce->header_region_uri.data)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: missing header region uri");
-        return -1;
+        goto cleanup;
     }
 
     if (announce->header_slot_bytes != TP_HEADER_SLOT_BYTES)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: header slot bytes mismatch");
-        return -1;
+        goto cleanup;
     }
 
     if (announce->pool_count == 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_apply_announce: missing payload pools");
-        return -1;
+        goto cleanup;
     }
 
     header_uri = tp_string_view_dup(&announce->header_region_uri);
     if (NULL == header_uri)
     {
         TP_SET_ERR(ENOMEM, "%s", "tp_consumer_apply_announce: header uri allocation failed");
-        return -1;
+        goto cleanup;
     }
 
     pool_cfg = calloc(announce->pool_count, sizeof(*pool_cfg));
@@ -1118,6 +1118,11 @@ cleanup:
 
     consumer->state = TP_CONSUMER_STATE_UNMAPPED;
     consumer->shm_mapped = false;
+    if (result != 0 && consumer->payload_fallback_uri[0] != '\0')
+    {
+        tp_consumer_enter_fallback(consumer);
+        result = 0;
+    }
     return result;
 }
 
