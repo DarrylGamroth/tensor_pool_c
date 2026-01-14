@@ -1,6 +1,8 @@
 #ifndef TENSOR_POOL_TP_METADATA_POLLER_H
 #define TENSOR_POOL_TP_METADATA_POLLER_H
 
+#include <stdbool.h>
+
 #include "aeron_fragment_assembler.h"
 
 #include "tensor_pool/tp_client.h"
@@ -28,6 +30,13 @@ typedef struct tp_metadata_poller_stct
     tp_client_t *client;
     aeron_fragment_assembler_t *assembler;
     tp_metadata_handlers_t handlers;
+    bool blob_active;
+    uint32_t blob_stream_id;
+    uint32_t blob_meta_version;
+    uint32_t blob_type;
+    uint64_t blob_total_len;
+    uint64_t blob_checksum;
+    uint64_t blob_next_offset;
 }
 tp_metadata_poller_t;
 

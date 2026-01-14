@@ -48,8 +48,8 @@ Authoritative reference:
 - [x] Add tests for epoch regression handling.
 
 ### Phase 5: Metadata blob ordering enforcement (Medium)
-- [ ] Track blob chunk offset monotonicity and coverage per blob; reject gaps/overlaps.
-- [ ] Add tests for ordering violations.
+- [x] Track blob chunk offset monotonicity and coverage per blob; reject gaps/overlaps.
+- [x] Add tests for ordering violations.
 
 ### Phase 6: Activity timestamp liveness (Medium)
 - [ ] Update superblock `activity_timestamp_ns` on producer cadence.
@@ -67,3 +67,4 @@ Authoritative reference:
 - 2025-01-14: Phase 2 complete (producer TensorHeader validation + zero-fill + tests).
 - 2025-01-14: Phase 3 complete (QoS consumer liveness updates + tests).
 - 2025-01-14: Phase 4 complete (epoch mismatch unmap + tests).
+- 2025-01-14: Phase 5 complete (metadata blob ordering enforcement + tests).
