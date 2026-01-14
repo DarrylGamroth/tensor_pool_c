@@ -1,6 +1,7 @@
 #include "tensor_pool/tp_control_adapter.h"
 #include "tensor_pool/tp_types.h"
 
+#include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
 #include "wire/tensor_pool/controlResponse.h"
 #include "wire/tensor_pool/dataSourceMeta.h"
@@ -67,6 +68,49 @@ static void test_decode_consumer_hello(void)
     assert(view.control_stream_id == 1000);
     assert(view.descriptor_channel.length == 9);
     assert(view.control_channel.length == 9);
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_decode_consumer_config_payload_fallback(void)
+{
+    uint8_t buffer[512];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_consumerConfig cfg;
+    tp_consumer_config_view_t view;
+    int result = -1;
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_consumerConfig_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_consumerConfig_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_consumerConfig_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_consumerConfig_sbe_schema_version());
+
+    tensor_pool_consumerConfig_wrap_for_encode(&cfg, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_consumerConfig_set_streamId(&cfg, 10);
+    tensor_pool_consumerConfig_set_consumerId(&cfg, 7);
+    tensor_pool_consumerConfig_set_useShm(&cfg, 0);
+    tensor_pool_consumerConfig_set_mode(&cfg, tensor_pool_mode_STREAM);
+    tensor_pool_consumerConfig_set_descriptorStreamId(&cfg, 0);
+    tensor_pool_consumerConfig_set_controlStreamId(&cfg, 0);
+    tensor_pool_consumerConfig_put_payloadFallbackUri(&cfg, "aeron:udp?endpoint=10.0.0.2:40125", 39);
+
+    if (tp_control_decode_consumer_config(buffer, sizeof(buffer), &view) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(view.consumer_id == 7);
+    assert(view.use_shm == 0);
+    assert(view.payload_fallback_uri.length == 39);
 
     result = 0;
 
@@ -342,6 +386,11 @@ static void test_decode_shm_pool_announce_version_gate(void)
 void tp_test_decode_consumer_hello(void)
 {
     test_decode_consumer_hello();
+}
+
+void tp_test_decode_consumer_config(void)
+{
+    test_decode_consumer_config_payload_fallback();
 }
 
 void tp_test_decode_data_source_meta(void)

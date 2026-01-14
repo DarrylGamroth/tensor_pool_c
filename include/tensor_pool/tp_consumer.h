@@ -114,6 +114,8 @@ typedef struct tp_consumer_stct
     bool driver_initialized;
     bool driver_attached;
     tp_consumer_state_t state;
+    bool use_shm;
+    char payload_fallback_uri[TP_URI_MAX_LENGTH];
     bool shm_mapped;
     uint64_t mapped_epoch;
     uint64_t last_seq_seen;
@@ -137,6 +139,8 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
+const char *tp_consumer_payload_fallback_uri(const tp_consumer_t *consumer);
+bool tp_consumer_uses_shm(const tp_consumer_t *consumer);
 int tp_consumer_close(tp_consumer_t *consumer);
 
 #ifdef __cplusplus

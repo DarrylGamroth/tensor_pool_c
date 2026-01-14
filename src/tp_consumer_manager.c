@@ -84,6 +84,7 @@ int tp_consumer_manager_init(tp_consumer_manager_t *manager, tp_producer_t *prod
 
     memset(manager, 0, sizeof(*manager));
     manager->producer = producer;
+    manager->payload_fallback_uri[0] = '\0';
     manager->progress_policy.interval_us = TP_PROGRESS_INTERVAL_DEFAULT_US;
     manager->progress_policy.bytes_delta = TP_PROGRESS_BYTES_DELTA_DEFAULT;
     manager->progress_policy.major_delta_units = 0;
@@ -106,6 +107,23 @@ int tp_consumer_manager_close(tp_consumer_manager_t *manager)
     tp_consumer_registry_close(&manager->registry);
     manager->producer = NULL;
     return 0;
+}
+
+void tp_consumer_manager_set_payload_fallback_uri(tp_consumer_manager_t *manager, const char *uri)
+{
+    if (NULL == manager)
+    {
+        return;
+    }
+
+    if (NULL == uri || uri[0] == '\0')
+    {
+        manager->payload_fallback_uri[0] = '\0';
+        return;
+    }
+
+    strncpy(manager->payload_fallback_uri, uri, sizeof(manager->payload_fallback_uri) - 1);
+    manager->payload_fallback_uri[sizeof(manager->payload_fallback_uri) - 1] = '\0';
 }
 
 int tp_consumer_manager_handle_hello(
@@ -196,7 +214,9 @@ int tp_consumer_manager_handle_hello(
     config.mode = hello->mode;
     config.descriptor_stream_id = descriptor_stream_id;
     config.control_stream_id = control_stream_id;
-    config.payload_fallback_uri = "";
+    config.payload_fallback_uri = manager->payload_fallback_uri[0] != '\0'
+        ? manager->payload_fallback_uri
+        : "";
     config.descriptor_channel = descriptor_channel;
     config.control_channel = control_channel;
 

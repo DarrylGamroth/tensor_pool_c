@@ -35,10 +35,10 @@ Authoritative references:
 - [x] Add unit tests for invalid enum values in driver decoders.
 
 ### Phase 3: Payload fallback behavior (Medium)
-- [ ] Decide and document fallback behavior when `payload_fallback_uri` is supplied.
-- [ ] Implement consumer fallback mapping for payload pools (if used by spec).
-- [ ] Update producer to advertise configured fallback URI when applicable.
-- [ ] Add tests for fallback URI handling and mapping validation.
+- [x] Decide and document fallback behavior when `payload_fallback_uri` is supplied.
+- [x] Implement consumer fallback handling (disable SHM mapping and expose fallback URI).
+- [x] Update producer to advertise configured fallback URI when applicable.
+- [x] Add tests for fallback URI handling and mapping validation.
 
 ### Phase 4: Missing optional components (Low)
 - [x] Aeron UDP Bridge is external; no in-repo implementation planned.
@@ -50,3 +50,5 @@ Authoritative references:
 - 2025-01-14: Supervisor marked external by request.
 - 2025-01-14: Phase 1 complete (discovery strictness).
 - 2025-01-14: Phase 2 complete (driver enum validation).
+- 2025-01-14: Phase 3 complete (payload fallback behavior).
+- 2025-01-14: All phases complete.

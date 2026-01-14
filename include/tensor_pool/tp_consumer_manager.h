@@ -24,11 +24,13 @@ typedef struct tp_consumer_manager_stct
     tp_producer_t *producer;
     tp_consumer_registry_t registry;
     tp_progress_policy_t progress_policy;
+    char payload_fallback_uri[TP_URI_MAX_LENGTH];
 }
 tp_consumer_manager_t;
 
 int tp_consumer_manager_init(tp_consumer_manager_t *manager, tp_producer_t *producer, size_t capacity);
 int tp_consumer_manager_close(tp_consumer_manager_t *manager);
+void tp_consumer_manager_set_payload_fallback_uri(tp_consumer_manager_t *manager, const char *uri);
 
 int tp_consumer_manager_handle_hello(
     tp_consumer_manager_t *manager,

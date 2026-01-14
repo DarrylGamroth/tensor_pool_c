@@ -334,6 +334,16 @@ tp_progress_poll(&progress_poller, 10);
 
 If the consumer receives a per-consumer control stream in `ConsumerConfig`, use `tp_progress_poller_init_with_subscription` with the assigned subscription.
 
+When a `ConsumerConfig` sets `use_shm=0`, the consumer disables SHM mapping and exposes the configured fallback URI. Use this to switch to an external payload path (e.g., a bridge):
+
+```c
+if (!tp_consumer_uses_shm(consumer))
+{
+    const char *fallback = tp_consumer_payload_fallback_uri(consumer);
+    // Connect to fallback transport using fallback (may be empty if not provided).
+}
+```
+
 ## 10. MergeMap and JoinBarrier
 
 MergeMap announcements are control-plane messages. Apply them to a JoinBarrier and use

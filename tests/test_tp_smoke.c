@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 void tp_test_decode_consumer_hello(void);
+void tp_test_decode_consumer_config(void);
 void tp_test_decode_data_source_meta(void);
 void tp_test_decode_control_response(void);
 void tp_test_decode_meta_blobs(void);
@@ -244,6 +245,7 @@ int main(void)
     test_shm_superblock();
     test_tensor_header();
     tp_test_decode_consumer_hello();
+    tp_test_decode_consumer_config();
     tp_test_decode_data_source_meta();
     tp_test_decode_control_response();
     tp_test_decode_meta_blobs();

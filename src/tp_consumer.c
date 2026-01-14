@@ -80,6 +80,30 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
     consumer->last_qos_ns = 0;
 }
 
+static void tp_consumer_set_payload_fallback(tp_consumer_t *consumer, tp_string_view_t view)
+{
+    size_t copy_len;
+
+    if (NULL == consumer)
+    {
+        return;
+    }
+
+    if (view.length == 0 || NULL == view.data)
+    {
+        consumer->payload_fallback_uri[0] = '\0';
+        return;
+    }
+
+    copy_len = view.length;
+    if (copy_len >= sizeof(consumer->payload_fallback_uri))
+    {
+        copy_len = sizeof(consumer->payload_fallback_uri) - 1;
+    }
+    memcpy(consumer->payload_fallback_uri, view.data, copy_len);
+    consumer->payload_fallback_uri[copy_len] = '\0';
+}
+
 static char *tp_string_view_dup(const tp_string_view_t *view)
 {
     char *copy;
@@ -359,6 +383,12 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 
     if (tp_control_decode_shm_pool_announce(buffer, length, &announce) == 0)
     {
+        if (!consumer->use_shm)
+        {
+            tp_control_shm_pool_announce_close(&announce);
+            return;
+        }
+
         if (consumer->announce_join_time_ns == 0)
         {
             consumer->announce_join_time_ns = (uint64_t)tp_clock_now_ns();
@@ -429,6 +459,13 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         if (view.consumer_id != consumer->context.consumer_id)
         {
             return;
+        }
+
+        consumer->use_shm = view.use_shm != 0;
+        tp_consumer_set_payload_fallback(consumer, view.payload_fallback_uri);
+        if (!consumer->use_shm)
+        {
+            tp_consumer_unmap_regions(consumer);
         }
 
         if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)
@@ -636,6 +673,8 @@ int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_cons
     memset(consumer, 0, sizeof(*consumer));
     consumer->client = client;
     consumer->context = *context;
+    consumer->use_shm = true;
+    consumer->payload_fallback_uri[0] = '\0';
 
     if (client->context.base.descriptor_channel[0] != '\0' && client->context.base.descriptor_stream_id >= 0)
     {
@@ -955,6 +994,11 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
         return -1;
     }
 
+    if (!consumer->use_shm)
+    {
+        return 1;
+    }
+
     if (!consumer->shm_mapped)
     {
         return 1;
@@ -1235,6 +1279,26 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
 
     tp_client_do_work(consumer->client);
     return fragments;
+}
+
+const char *tp_consumer_payload_fallback_uri(const tp_consumer_t *consumer)
+{
+    if (NULL == consumer)
+    {
+        return NULL;
+    }
+
+    return consumer->payload_fallback_uri;
+}
+
+bool tp_consumer_uses_shm(const tp_consumer_t *consumer)
+{
+    if (NULL == consumer)
+    {
+        return false;
+    }
+
+    return consumer->use_shm;
 }
 
 int tp_consumer_close(tp_consumer_t *consumer)
