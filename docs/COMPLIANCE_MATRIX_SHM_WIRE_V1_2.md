@@ -37,7 +37,7 @@ Legend:
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
 | 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`. |
 | 10.1.2 ConsumerHello | Compliant | Encode/decode and max_rate_hz throttling in `src/tp_producer.c`. |
-| 10.1.3 ConsumerConfig | Partial | Encode/decode implemented; payload_fallback_uri not used. |
+| 10.1.3 ConsumerConfig | Partial | Encode/decode implemented; consumers honor `use_shm` and expose `payload_fallback_uri` for external fallback. |
 | 10.2 Data Availability | Compliant | FrameDescriptor/FrameProgress with epoch mismatch checks and seq_commit validation. |
 | 10.2.1 FrameDescriptor | Compliant | Published and consumed with trace_id support; consumer drops on epoch mismatch and seq_commit mismatch. |
 | 10.2.2 FrameProgress | Compliant | Published and polled with monotonic/<= validation in `src/tp_progress_poller.c`. |

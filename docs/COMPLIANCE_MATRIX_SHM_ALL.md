@@ -40,8 +40,8 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
 | Node ID negotiation | Partial | `desiredNodeId` and `nodeId` supported; allocation is driver-owned. |
 | Keepalive send / tracking | Partial | `tp_driver_keepalive` implemented; lease expiry handling respects optional expiry. |
-| Detach request/response | Partial | Encode/decode implemented; schema version/block length checks missing. |
-| Lease revoked / shutdown handling | Partial | Decode implemented; enum validation and required rejection behavior missing. |
+| Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
+| Lease revoked / shutdown handling | Compliant | Decode validates enums and rejects invalid values; schema version/block length gated. |
 | Schema version compatibility | Compliant | `schemaId`/`templateId`/`version`/`blockLength` gated in driver client decoders. |
 | Control-plane transport | Compliant | Driver control uses Aeron publication/subscription via client. |
 
@@ -49,8 +49,8 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| DiscoveryRequest encode | Compliant | `tp_discovery_request` in `src/tp_discovery_client.c`. |
-| DiscoveryResponse decode | Compliant | Required fields validated; pool `nslots` vs header `nslots` mismatch rejected. |
+| DiscoveryRequest encode | Compliant | `tp_discovery_request` validates non-empty response channel and stream ID. |
+| DiscoveryResponse decode | Compliant | Required fields validated; schema version/block length gated; pool `nslots` vs header `nslots` mismatch rejected. |
 | Client polling / async handling | Compliant | `tp_discovery_poll` and `tp_discovery_poller` implemented. |
 | Discovery provider / registry | Missing | No provider implementation in this repo. |
 | Authority rules | External | Driver/registry responsibilities. |
