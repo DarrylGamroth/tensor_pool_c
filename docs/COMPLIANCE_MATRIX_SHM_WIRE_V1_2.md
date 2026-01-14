@@ -76,7 +76,7 @@ Legend:
 | 15.10 Security and Permissions | Compliant | Path containment plus permission checks enforced with opt-out in context. |
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
 | 15.12 Consumer State Machine | Compliant | Mapped/unmapped tracking with fallback entry/exit in `src/tp_consumer.c`. |
-| 15.13 Test and Validation Checklist | Partial | Some tests added; not full checklist coverage. |
+| 15.13 Test and Validation Checklist | Compliant | Fail-closed superblock validation, QoS drop counts, and epoch remap coverage added in tests. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
 | 15.15 Aeron Terminology Mapping | N/A | Informative. |
 | 15.16 Reuse Aeron Primitives | Partial | Aeron usage present; no direct mapping for all suggested primitives. |

@@ -22,7 +22,7 @@ Legend:
 
 ## Low Priority
 
-- [ ] W-15.13-1: Expand test checklist coverage and add missing tests (deployment/liveness, incompat cases).
+- [x] W-15.13-1: Expand test checklist coverage and add missing tests (deployment/liveness, incompat cases).
 
 ## External / Out of Scope
 
@@ -37,4 +37,5 @@ Legend:
 
 ## Current Focus Order
 
-1. (pending selection)
+1. External/out-of-scope items (supervisor, driver policies, discovery provider).
+2. Resolve open questions (DMA flush hooks, TraceLink auto emission).

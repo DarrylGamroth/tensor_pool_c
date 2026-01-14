@@ -55,7 +55,7 @@ Columns:
 | W-15.8-1 | 15.8 | Enum/type registry versioning | `src/tp_tensor.c` | `tests/test_tp_smoke.c` | Compliant | Unknown enums rejected |
 | W-15.10-1 | 15.10 | Path containment and fail-closed validation | `src/tp_shm.c`, `src/tp_context.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | Permission checks enforced with opt-out in context. |
 | W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
-| W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/` | n/a | Partial | Checklist not fully enumerated |
+| W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/test_tp_smoke.c`, `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | n/a | Compliant | Added fail-closed superblock tests, QoS drop counts, and epoch remap coverage. |
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/tp_consumer.c`, `src/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
 | W-15.16a-1 | 15.16a | File-backed SHM prefault/lock/fsync policy | n/a | n/a | N/A | Informative guidance |
 | W-15.17-1 | 15.17 | ControlResponse error codes | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
