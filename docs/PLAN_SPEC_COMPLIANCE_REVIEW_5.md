@@ -31,9 +31,9 @@ Scope: Address review findings related to path containment, single-writer PID va
 - [x] Add unit tests to confirm invalid channel requests do not error out but decline correctly.
 
 ### Phase 4: Pool selection enforcement (15.3)
-- [ ] Enforce smallest-fit pool selection inside `tp_producer_offer_frame`.
-- [ ] If no pool fits, return error and drop (do not block).
-- [ ] Add tests for best-fit selection and no-fit drop behavior.
+- [x] Enforce smallest-fit pool selection inside `tp_producer_offer_frame`.
+- [x] If no pool fits, return error and drop (do not block).
+- [x] Add tests for best-fit selection and no-fit drop behavior.
 
 ### Phase 5: Canonical layout tooling (15.21a.3)
 - [ ] Make `tp_shm_create` default to canonical layout only.

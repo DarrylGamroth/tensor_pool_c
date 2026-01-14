@@ -527,9 +527,191 @@ cleanup:
     assert(result == 0);
 }
 
+static void tp_test_producer_offer_pool_selection(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_context_t producer_ctx;
+    tp_producer_t producer;
+    tp_payload_pool_config_t pools[2];
+    tp_producer_config_t config;
+    tp_frame_t frame;
+    tp_frame_metadata_t meta;
+    tp_tensor_header_t tensor;
+    uint8_t payload[128];
+    tp_slot_view_t slot_view;
+    uint32_t header_index;
+    uint64_t seq;
+    int header_fd = -1;
+    int pool1_fd = -1;
+    int pool2_fd = -1;
+    char header_path[] = "/tmp/tp_header_offerXXXXXX";
+    char pool1_path[] = "/tmp/tp_pool_offer1XXXXXX";
+    char pool2_path[] = "/tmp/tp_pool_offer2XXXXXX";
+    char header_uri[512];
+    char pool1_uri[512];
+    char pool2_uri[512];
+    size_t header_size = TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4;
+    size_t pool1_size = TP_SUPERBLOCK_SIZE_BYTES + 64 * 4;
+    size_t pool2_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+
+    if (tp_test_start_client(&client, &ctx, "/dev/shm/aeron-dgamroth") != 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_producer_context_init(&producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool1_fd = mkstemp(pool1_path);
+    pool2_fd = mkstemp(pool2_path);
+    if (header_fd < 0 || pool1_fd < 0 || pool2_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, (off_t)header_size) != 0 ||
+        ftruncate(pool1_fd, (off_t)pool1_size) != 0 ||
+        ftruncate(pool2_fd, (off_t)pool2_size) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 7, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool1_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+    tp_test_write_superblock(pool2_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 2, 4, TP_NULL_U32, 128);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool1_uri, sizeof(pool1_uri), "shm:file?path=%s", pool1_path);
+    snprintf(pool2_uri, sizeof(pool2_uri), "shm:file?path=%s", pool2_path);
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = 7;
+    config.producer_id = 9;
+    config.epoch = 1;
+    config.layout_version = 1;
+    config.header_nslots = 4;
+    config.header_uri = header_uri;
+    config.pools = pools;
+    config.pool_count = 2;
+
+    memset(pools, 0, sizeof(pools));
+    pools[0].pool_id = 1;
+    pools[0].nslots = 4;
+    pools[0].stride_bytes = 64;
+    pools[0].uri = pool1_uri;
+    pools[1].pool_id = 2;
+    pools[1].nslots = 4;
+    pools[1].stride_bytes = 128;
+    pools[1].uri = pool2_uri;
+
+    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_producer_attach(&producer, &config) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&tensor, 0, sizeof(tensor));
+    tensor.dtype = tensor_pool_dtype_UINT8;
+    tensor.major_order = tensor_pool_majorOrder_ROW;
+    tensor.ndims = 1;
+    tensor.progress_unit = tensor_pool_progressUnit_NONE;
+    tensor.dims[0] = 32;
+
+    memset(&frame, 0, sizeof(frame));
+    frame.tensor = &tensor;
+    frame.payload = payload;
+    frame.payload_len = 32;
+    frame.pool_id = 99;
+
+    memset(&meta, 0, sizeof(meta));
+
+    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
+    if ((int64_t)seq < 0)
+    {
+        goto cleanup;
+    }
+
+    header_index = (uint32_t)(seq & (config.header_nslots - 1));
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
+        TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+    {
+        goto cleanup;
+    }
+    assert(slot_view.pool_id == 1);
+
+    frame.payload_len = 80;
+    tensor.dims[0] = 80;
+    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
+    if ((int64_t)seq < 0)
+    {
+        goto cleanup;
+    }
+    header_index = (uint32_t)(seq & (config.header_nslots - 1));
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
+        TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+    {
+        goto cleanup;
+    }
+    assert(slot_view.pool_id == 2);
+
+    frame.payload_len = 256;
+    tensor.dims[0] = 256;
+    if (tp_producer_offer_frame(&producer, &frame, &meta) >= 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    if (producer.client)
+    {
+        tp_producer_close(&producer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool1_fd >= 0)
+    {
+        close(pool1_fd);
+        unlink(pool1_path);
+    }
+    if (pool2_fd >= 0)
+    {
+        close(pool2_fd);
+        unlink(pool2_path);
+    }
+
+    assert(result == 0);
+}
+
 void tp_test_producer_claim_lifecycle(void)
 {
     tp_test_claim_lifecycle(true);
     tp_test_claim_lifecycle(false);
     tp_test_producer_invalid_tensor_header();
+    tp_test_producer_offer_pool_selection();
 }

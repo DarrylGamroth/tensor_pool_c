@@ -166,7 +166,8 @@ tp_trace_id_generator_init_default(&trace_gen, node_id);
 tp_producer_set_trace_id_generator(&producer, &trace_gen);
 
 memset(&frame, 0, sizeof(frame));
-// Populate frame.tensor/frame.payload/frame.payload_len/frame.pool_id before publishing.
+// Populate frame.tensor/frame.payload/frame.payload_len before publishing.
+// pool_id is ignored by tp_producer_offer_frame (smallest-fit pool selection is automatic).
 frame.trace_id = 0;
 tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0 };
 tp_producer_offer_frame(&producer, &frame, &meta);

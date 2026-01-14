@@ -1230,6 +1230,7 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
     uint64_t timestamp_ns = 0;
     uint32_t meta_version = 0;
     uint64_t trace_id = 0;
+    tp_payload_pool_t *pool;
     int result;
 
     if (NULL == producer || NULL == frame || NULL == frame->tensor)
@@ -1249,6 +1250,13 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
         return -1;
     }
 
+    pool = tp_find_pool_for_length(producer, frame->payload_len);
+    if (NULL == pool)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_offer_frame: no pool for payload length");
+        return -1;
+    }
+
     seq = producer->next_seq++;
 
     result = tp_producer_publish_frame(
@@ -1257,7 +1265,7 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
         frame->tensor,
         frame->payload,
         frame->payload_len,
-        frame->pool_id,
+        pool->pool_id,
         timestamp_ns,
         meta_version,
         trace_id);
