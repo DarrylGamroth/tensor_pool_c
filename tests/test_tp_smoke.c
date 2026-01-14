@@ -47,6 +47,7 @@ void tp_test_qos_liveness(void);
 void tp_test_epoch_regression(void);
 void tp_test_meta_blob_ordering(void);
 void tp_test_activity_liveness(void);
+void tp_test_pid_liveness(void);
 void tp_test_consumer_fallback_state(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
@@ -271,6 +272,7 @@ int main(void)
     tp_test_epoch_regression();
     tp_test_meta_blob_ordering();
     tp_test_activity_liveness();
+    tp_test_pid_liveness();
     tp_test_consumer_fallback_state();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();

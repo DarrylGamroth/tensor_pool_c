@@ -318,6 +318,17 @@ static void tp_test_update_activity_timestamp(int fd, uint64_t activity_ns)
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }
 
+static void tp_test_update_pid(int fd, uint64_t pid)
+{
+    uint8_t buffer[TP_SUPERBLOCK_SIZE_BYTES];
+    struct tensor_pool_shmRegionSuperblock block;
+
+    assert(pread(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
+    tensor_pool_shmRegionSuperblock_wrap_for_encode(&block, (char *)buffer, 0, sizeof(buffer));
+    tensor_pool_shmRegionSuperblock_set_pid(&block, pid);
+    assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
+}
+
 static tp_consumer_entry_t *tp_test_find_consumer_entry(tp_consumer_manager_t *manager, uint32_t consumer_id)
 {
     size_t i;
@@ -1795,6 +1806,134 @@ void tp_test_activity_liveness(void)
     {
         tp_test_update_activity_timestamp(header_fd, 0);
     }
+
+    deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+    while (tp_clock_now_ns() < deadline)
+    {
+        tp_consumer_poll_control(&consumer, 10);
+        tp_client_do_work(&client);
+        if (!consumer.shm_mapped)
+        {
+            result = 0;
+            break;
+        }
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+cleanup:
+    if (consumer.client)
+    {
+        tp_consumer_close(&consumer);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_pid_liveness(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_consumer_context_t consumer_ctx;
+    tp_consumer_t consumer;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_pid_headerXXXXXX";
+    char pool_path[] = "/tmp/tp_pid_poolXXXXXX";
+    char header_uri[256];
+    char pool_uri[256];
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t pool_cfg;
+    uint64_t now_ns;
+    int result = -1;
+    int64_t deadline;
+
+    memset(&client, 0, sizeof(client));
+    memset(&consumer, 0, sizeof(consumer));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    if (tp_consumer_context_init(&consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+    consumer_ctx.stream_id = 74002;
+    consumer_ctx.consumer_id = 7;
+
+    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4) != 0 ||
+        ftruncate(pool_fd, TP_SUPERBLOCK_SIZE_BYTES + 64 * 4) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 74002, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 74002, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 64);
+
+    now_ns = (uint64_t)tp_clock_now_ns();
+    tp_test_update_activity_timestamp(header_fd, now_ns);
+    tp_test_update_activity_timestamp(pool_fd, now_ns);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    memset(&pool_cfg, 0, sizeof(pool_cfg));
+    pool_cfg.pool_id = 1;
+    pool_cfg.nslots = 4;
+    pool_cfg.stride_bytes = 64;
+    pool_cfg.uri = pool_uri;
+
+    memset(&config, 0, sizeof(config));
+    config.stream_id = 74002;
+    config.epoch = 1;
+    config.layout_version = 1;
+    config.header_nslots = 4;
+    config.header_uri = header_uri;
+    config.pools = &pool_cfg;
+    config.pool_count = 1;
+
+    if (tp_consumer_attach(&consumer, &config) < 0)
+    {
+        goto cleanup;
+    }
+
+    tp_consumer_poll_control(&consumer, 1);
+    if (!consumer.shm_mapped)
+    {
+        goto cleanup;
+    }
+
+    tp_test_update_pid(header_fd, (uint64_t)getpid() + 1);
 
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)

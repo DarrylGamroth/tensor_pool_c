@@ -121,6 +121,42 @@ static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_
     }
 }
 
+static void tp_consumer_check_pid_liveness(tp_consumer_t *consumer)
+{
+    uint64_t pid = 0;
+    size_t i;
+
+    if (NULL == consumer || !consumer->shm_mapped || NULL == consumer->client)
+    {
+        return;
+    }
+
+    if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context.base.log) < 0)
+    {
+        return;
+    }
+
+    if (pid != consumer->header_region.pid)
+    {
+        tp_consumer_unmap_regions(consumer);
+        return;
+    }
+
+    for (i = 0; i < consumer->pool_count; i++)
+    {
+        tp_consumer_pool_t *pool = &consumer->pools[i];
+        if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context.base.log) < 0)
+        {
+            return;
+        }
+        if (pid != pool->region.pid)
+        {
+            tp_consumer_unmap_regions(consumer);
+            return;
+        }
+    }
+}
+
 static void tp_consumer_set_payload_fallback(tp_consumer_t *consumer, tp_string_view_t view)
 {
     size_t copy_len;
@@ -931,6 +967,14 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     {
         goto cleanup;
     }
+    {
+        uint64_t pid = 0;
+        if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context.base.log) < 0)
+        {
+            goto cleanup;
+        }
+        consumer->header_region.pid = pid;
+    }
 
     for (i = 0; i < config->pool_count; i++)
     {
@@ -978,6 +1022,14 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         if (tp_shm_validate_superblock(&pool->region, &expected, &consumer->client->context.base.log) < 0)
         {
             goto cleanup;
+        }
+        {
+            uint64_t pid = 0;
+            if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context.base.log) < 0)
+            {
+                goto cleanup;
+            }
+            pool->region.pid = pid;
         }
     }
 
@@ -1369,6 +1421,7 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
     }
 
     tp_consumer_check_activity_liveness(consumer, (uint64_t)tp_clock_now_ns());
+    tp_consumer_check_pid_liveness(consumer);
     tp_client_do_work(consumer->client);
     return fragments;
 }
@@ -1421,6 +1474,7 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     }
 
     tp_consumer_check_activity_liveness(consumer, now_ns);
+    tp_consumer_check_pid_liveness(consumer);
 
     tp_client_do_work(consumer->client);
     return fragments;

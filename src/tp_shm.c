@@ -631,6 +631,40 @@ int tp_shm_read_activity_timestamp(const tp_shm_region_t *region, uint64_t *out,
     return 0;
 }
 
+int tp_shm_read_pid(const tp_shm_region_t *region, uint64_t *out, tp_log_t *log)
+{
+    struct tensor_pool_shmRegionSuperblock superblock;
+
+    if (NULL == region || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_read_pid: invalid input");
+        return -1;
+    }
+
+    if (NULL == region->addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_read_pid: region not mapped");
+        return -1;
+    }
+
+    tensor_pool_shmRegionSuperblock_wrap_for_decode(
+        &superblock,
+        (char *)region->addr,
+        0,
+        tensor_pool_shmRegionSuperblock_sbe_block_length(),
+        tensor_pool_shmRegionSuperblock_sbe_schema_version(),
+        TP_SUPERBLOCK_SIZE_BYTES);
+
+    *out = tensor_pool_shmRegionSuperblock_pid(&superblock);
+
+    if (NULL != log)
+    {
+        tp_log_emit(log, TP_LOG_DEBUG, "Read pid stream=%u", tensor_pool_shmRegionSuperblock_streamId(&superblock));
+    }
+
+    return 0;
+}
+
 int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_log_t *log)
 {
     tp_shm_uri_t parsed;
