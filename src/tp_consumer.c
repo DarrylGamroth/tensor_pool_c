@@ -755,6 +755,66 @@ void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descri
     consumer->descriptor_clientd = clientd;
 }
 
+int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_handler_t handler, void *clientd)
+{
+    tp_progress_handlers_t handlers;
+
+    if (NULL == consumer || NULL == consumer->client)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_set_progress_handler: invalid input");
+        return -1;
+    }
+
+    consumer->progress_handler = handler;
+    consumer->progress_clientd = clientd;
+
+    if (!consumer->progress_poller_initialized)
+    {
+        memset(&handlers, 0, sizeof(handlers));
+        handlers.on_progress = handler;
+        handlers.clientd = clientd;
+
+        if (tp_progress_poller_init(&consumer->progress_poller, consumer->client, &handlers) < 0)
+        {
+            return -1;
+        }
+
+        tp_progress_poller_set_consumer(&consumer->progress_poller, consumer);
+        consumer->progress_poller_initialized = true;
+        return 0;
+    }
+
+    consumer->progress_poller.handlers.on_progress = handler;
+    consumer->progress_poller.handlers.clientd = clientd;
+    tp_progress_poller_set_consumer(&consumer->progress_poller, consumer);
+    return 0;
+}
+
+int tp_consumer_poll_progress(tp_consumer_t *consumer, int fragment_limit)
+{
+    if (NULL == consumer)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_poll_progress: null consumer");
+        return -1;
+    }
+
+    if (!consumer->progress_poller_initialized)
+    {
+        return 0;
+    }
+
+    if (consumer->control_subscription)
+    {
+        consumer->progress_poller.subscription = consumer->control_subscription;
+    }
+    else
+    {
+        consumer->progress_poller.subscription = NULL;
+    }
+
+    return tp_progress_poll(&consumer->progress_poller, fragment_limit);
+}
+
 static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_config_t *config)
 {
     tp_shm_expected_t expected;
@@ -1363,6 +1423,13 @@ int tp_consumer_close(tp_consumer_t *consumer)
     {
         aeron_fragment_assembler_delete(consumer->control_assembler);
         consumer->control_assembler = NULL;
+    }
+
+    if (consumer->progress_poller_initialized && consumer->progress_poller.assembler)
+    {
+        aeron_fragment_assembler_delete(consumer->progress_poller.assembler);
+        consumer->progress_poller.assembler = NULL;
+        consumer->progress_poller_initialized = false;
     }
 
     tp_consumer_unmap_regions(consumer);

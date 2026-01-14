@@ -12,6 +12,7 @@
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/tp_progress_poller.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,6 +77,7 @@ typedef struct tp_frame_descriptor_stct
 tp_frame_descriptor_t;
 
 typedef void (*tp_frame_descriptor_handler_t)(void *clientd, const tp_frame_descriptor_t *desc);
+typedef void (*tp_frame_progress_handler_t)(void *clientd, const tp_frame_progress_t *progress);
 
 typedef struct tp_frame_view_stct
 {
@@ -99,8 +101,12 @@ typedef struct tp_consumer_stct
     aeron_publication_t *qos_publication;
     aeron_fragment_assembler_t *descriptor_assembler;
     aeron_fragment_assembler_t *control_assembler;
+    tp_progress_poller_t progress_poller;
+    bool progress_poller_initialized;
     tp_frame_descriptor_handler_t descriptor_handler;
     void *descriptor_clientd;
+    tp_frame_progress_handler_t progress_handler;
+    void *progress_clientd;
     tp_shm_region_t header_region;
     tp_consumer_pool_t *pools;
     size_t pool_count;
@@ -139,6 +145,8 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
+int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_handler_t handler, void *clientd);
+int tp_consumer_poll_progress(tp_consumer_t *consumer, int fragment_limit);
 const char *tp_consumer_payload_fallback_uri(const tp_consumer_t *consumer);
 bool tp_consumer_uses_shm(const tp_consumer_t *consumer);
 int tp_consumer_close(tp_consumer_t *consumer);
