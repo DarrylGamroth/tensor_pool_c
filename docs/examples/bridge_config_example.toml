@@ -1,0 +1,28 @@
+bridge.instance_id = "bridge-01"
+bridge.payload_channel = "aeron:udp?endpoint=10.0.0.2:40123"
+bridge.payload_stream_id = 5000
+bridge.control_channel = "aeron:udp?endpoint=10.0.0.2:40124"
+bridge.control_stream_id = 5001
+
+bridge.mtu_bytes = 1408
+bridge.chunk_bytes = 1200
+bridge.max_chunk_bytes = 65535
+bridge.max_payload_bytes = 1073741824
+bridge.dest_stream_id_range = "30000-30999"
+bridge.forward_metadata = true
+bridge.metadata_channel = "aeron:udp?endpoint=10.0.0.2:40125"
+bridge.metadata_stream_id = 5002
+bridge.source_metadata_stream_id = 1200
+bridge.forward_qos = false
+bridge.forward_progress = false
+bridge.assembly_timeout_ms = 250
+
+[[mappings]]
+source_stream_id = 100
+# dest_stream_id=0 lets the bridge allocate from bridge.dest_stream_id_range.
+dest_stream_id = 0
+profile = "default"
+metadata_stream_id = 200
+source_control_stream_id = 1000
+# Keep dest_control_stream_id = 0 when forward_qos/forward_progress is false.
+dest_control_stream_id = 0

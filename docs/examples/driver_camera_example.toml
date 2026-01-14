@@ -1,0 +1,47 @@
+# Driver instance and control-plane endpoints
+[driver]
+instance_id = "driver-camera-01"
+control_channel = "aeron:ipc?term-length=4m"
+control_stream_id = 1000
+announce_channel = "aeron:ipc?term-length=4m"
+announce_stream_id = 1000
+qos_channel = "aeron:ipc?term-length=4m"
+qos_stream_id = 1200
+stream_id_range = "20000-29999"
+descriptor_stream_id_range = "31000-31999"
+control_stream_id_range = "32000-32999"
+
+# Shared-memory layout defaults
+[shm]
+base_dir = "/dev/shm/tensorpool"
+namespace = "default"
+require_hugepages = false
+page_size_bytes = 4096
+permissions_mode = "660"
+allowed_base_dirs = ["/dev/shm/tensorpool"]
+
+# Operational policies
+[policies]
+allow_dynamic_streams = false
+announce_period_ms = 1000
+lease_keepalive_interval_ms = 1000
+lease_expiry_grace_intervals = 3
+prefault_shm = true
+mlock_shm = false
+epoch_gc_enabled = true
+epoch_gc_keep = 2
+epoch_gc_min_age_ns = 3000000000
+shutdown_timeout_ms = 2000
+
+# Profiles define SHM sizing and pool layout
+[profiles.default]
+header_nslots = 1024
+
+[[profiles.default.payload_pools]]
+pool_id = 1
+stride_bytes = 8388608
+
+# Static stream definitions
+[streams.camera]
+stream_id = 2001
+profile = "default"

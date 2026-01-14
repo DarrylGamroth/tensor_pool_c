@@ -55,13 +55,14 @@ Authoritative references:
 - [x] Add unit tests for discovery response validation.
 
 ### Phase 4: Documentation gaps (Low)
-- [ ] Add missing example files:
-  - [ ] `docs/examples/bridge_config_example.toml`
-  - [ ] `docs/examples/driver_camera_example.toml`
-- [ ] Cross-link examples from the respective specs.
+- [x] Add missing example files:
+  - [x] `docs/examples/bridge_config_example.toml`
+  - [x] `docs/examples/driver_camera_example.toml`
+- [x] Cross-link examples from the respective specs.
 
 ## Progress Log
 - 2025-01-14: Plan created.
 - 2025-01-14: Phase 1 in progress (driver attach/lease semantics).
 - 2025-01-14: Phase 2 complete (driver control-plane strictness).
 - 2025-01-14: Phase 3 complete (discovery response validation).
+- 2025-01-14: Phase 4 complete (documentation gaps).
