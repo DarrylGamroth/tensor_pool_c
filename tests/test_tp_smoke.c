@@ -50,6 +50,9 @@ void tp_test_activity_liveness(void);
 void tp_test_pid_liveness(void);
 void tp_test_consumer_fallback_state(void);
 void tp_test_consumer_fallback_recover(void);
+void tp_test_consumer_fallback_invalid_announce(void);
+void tp_test_qos_drop_counts(void);
+void tp_test_epoch_remap(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
 void tp_test_producer_claim_lifecycle(void);
@@ -126,6 +129,7 @@ static void test_shm_superblock(void)
     size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
     int result = -1;
 
+    region.fd = -1;
     if (fd < 0)
     {
         goto cleanup;
@@ -150,7 +154,7 @@ static void test_shm_superblock(void)
         goto cleanup;
     }
 
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) != 0)
+    if (tp_shm_map(&region, uri, 1, &ctx.allowed_paths, NULL) != 0)
     {
         goto cleanup;
     }
@@ -169,6 +173,115 @@ static void test_shm_superblock(void)
     {
         goto cleanup;
     }
+
+    result = 0;
+
+cleanup:
+    tp_context_clear_allowed_paths(&ctx);
+    if (fd >= 0)
+    {
+        tp_shm_unmap(&region, NULL);
+        close(fd);
+        unlink(path_template);
+    }
+
+    assert(result == 0);
+}
+
+static void test_shm_superblock_fail_closed(void)
+{
+    char path_template[] = "/tmp/tp_shm_badXXXXXX";
+    int fd = mkstemp(path_template);
+    tp_shm_region_t region = { 0 };
+    tp_shm_expected_t expected;
+    struct tensor_pool_shmRegionSuperblock block;
+    char uri[512];
+    const char *allowed_paths[1];
+    tp_context_t ctx;
+    size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
+    int result = -1;
+
+    region.fd = -1;
+    if (fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(fd, (off_t)file_size) != 0)
+    {
+        goto cleanup;
+    }
+
+    write_superblock(fd, 101, 7, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+
+    snprintf(uri, sizeof(uri), "shm:file?path=%s", path_template);
+    allowed_paths[0] = "/tmp";
+    if (tp_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_shm_map(&region, uri, 1, &ctx.allowed_paths, NULL) != 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&expected, 0, sizeof(expected));
+    expected.stream_id = 101;
+    expected.layout_version = 1;
+    expected.epoch = 7;
+    expected.region_type = tensor_pool_regionType_HEADER_RING;
+    expected.pool_id = 0;
+    expected.nslots = 4;
+    expected.slot_bytes = TP_HEADER_SLOT_BYTES;
+    expected.stride_bytes = TP_NULL_U32;
+
+    if (tp_shm_validate_superblock(&region, &expected, NULL) != 0)
+    {
+        goto cleanup;
+    }
+
+    tensor_pool_shmRegionSuperblock_wrap_for_encode(&block, (char *)region.addr, 0, TP_SUPERBLOCK_SIZE_BYTES);
+
+    tensor_pool_shmRegionSuperblock_set_magic(&block, 0);
+    if (tp_shm_validate_superblock(&region, &expected, NULL) == 0)
+    {
+        goto cleanup;
+    }
+    tensor_pool_shmRegionSuperblock_set_magic(&block, TP_MAGIC_U64);
+
+    expected.layout_version = 2;
+    if (tp_shm_validate_superblock(&region, &expected, NULL) == 0)
+    {
+        goto cleanup;
+    }
+    expected.layout_version = 1;
+
+    expected.region_type = tensor_pool_regionType_PAYLOAD_POOL;
+    if (tp_shm_validate_superblock(&region, &expected, NULL) == 0)
+    {
+        goto cleanup;
+    }
+    expected.region_type = tensor_pool_regionType_HEADER_RING;
+
+    expected.nslots = 8;
+    if (tp_shm_validate_superblock(&region, &expected, NULL) == 0)
+    {
+        goto cleanup;
+    }
+    expected.nslots = 4;
+
+    tensor_pool_shmRegionSuperblock_set_slotBytes(&block, TP_HEADER_SLOT_BYTES + 4);
+    if (tp_shm_validate_superblock(&region, &expected, NULL) == 0)
+    {
+        goto cleanup;
+    }
+    tensor_pool_shmRegionSuperblock_set_slotBytes(&block, TP_HEADER_SLOT_BYTES);
 
     result = 0;
 
@@ -254,6 +367,7 @@ int main(void)
     test_seqlock();
     test_uri_parse();
     test_shm_superblock();
+    test_shm_superblock_fail_closed();
     test_tensor_header();
     tp_test_decode_consumer_hello();
     tp_test_decode_consumer_config();
@@ -272,12 +386,15 @@ int main(void)
     tp_test_shm_announce_freshness();
     tp_test_rate_limit();
     tp_test_qos_liveness();
+    tp_test_qos_drop_counts();
     tp_test_epoch_regression();
+    tp_test_epoch_remap();
     tp_test_meta_blob_ordering();
     tp_test_activity_liveness();
     tp_test_pid_liveness();
     tp_test_consumer_fallback_state();
     tp_test_consumer_fallback_recover();
+    tp_test_consumer_fallback_invalid_announce();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
     tp_test_producer_claim_lifecycle();

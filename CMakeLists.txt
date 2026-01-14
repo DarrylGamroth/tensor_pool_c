@@ -222,7 +222,8 @@ add_executable(tensor_pool_tests
     tests/test_tp_lease_revoked.c
     tests/test_tp_rollover.c
     tests/test_tp_producer_claim.c
-    tests/test_tp_shm_security.c)
+    tests/test_tp_shm_security.c
+    tests/test_tp_consumer_apply.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool aeron)
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 

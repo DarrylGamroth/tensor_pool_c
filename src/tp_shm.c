@@ -453,7 +453,7 @@ int tp_shm_unmap(tp_shm_region_t *region, tp_log_t *log)
         }
     }
 
-    if (region->fd >= 0)
+    if (region->fd >= 0 && NULL != region->addr)
     {
         close(region->fd);
     }

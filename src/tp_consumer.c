@@ -337,6 +337,12 @@ static int tp_consumer_apply_announce(tp_consumer_t *consumer, const tp_shm_pool
         goto cleanup;
     }
 
+    if (consumer->state == TP_CONSUMER_STATE_FALLBACK)
+    {
+        result = 0;
+        goto cleanup;
+    }
+
     consumer->state = TP_CONSUMER_STATE_MAPPED;
     consumer->shm_mapped = true;
     consumer->mapped_epoch = announce->epoch;
@@ -990,6 +996,8 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     {
         if (aeron_alloc((void **)&consumer->pools, sizeof(tp_consumer_pool_t) * consumer->pool_count) < 0)
         {
+            consumer->pool_count = 0;
+            consumer->header_nslots = 0;
             return -1;
         }
     }
@@ -1103,9 +1111,12 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     return 0;
 
 cleanup:
-    for (i = 0; i < consumer->pool_count; i++)
+    if (consumer->pools)
     {
-        tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base.log);
+        for (i = 0; i < consumer->pool_count; i++)
+        {
+            tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base.log);
+        }
     }
 
     tp_shm_unmap(&consumer->header_region, &consumer->client->context.base.log);
@@ -1116,8 +1127,15 @@ cleanup:
         consumer->pools = NULL;
     }
 
+    consumer->pool_count = 0;
+    consumer->header_nslots = 0;
     consumer->state = TP_CONSUMER_STATE_UNMAPPED;
     consumer->shm_mapped = false;
+    consumer->mapped_epoch = 0;
+    consumer->last_seq_seen = 0;
+    consumer->drops_gap = 0;
+    consumer->drops_late = 0;
+    consumer->last_qos_ns = 0;
     if (result != 0 && consumer->payload_fallback_uri[0] != '\0')
     {
         tp_consumer_enter_fallback(consumer);
@@ -1629,4 +1647,9 @@ int tp_consumer_close(tp_consumer_t *consumer)
     }
 
     return 0;
+}
+
+int tp_consumer_apply_announce_for_test(tp_consumer_t *consumer, const tp_shm_pool_announce_view_t *announce)
+{
+    return tp_consumer_apply_announce(consumer, announce);
 }
