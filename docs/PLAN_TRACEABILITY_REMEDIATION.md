@@ -10,7 +10,7 @@ Legend:
 ## High Priority
 
 - [x] W-8.3-1b / W-15.18-1: Add payload visibility hook for non-coherent DMA; add targeted tests.
-- [ ] W-15.21-1 / W-15.12-1: Fill out protocol state machine coverage for remap/fallback states; add tests for transitions.
+- [x] W-15.21-1 / W-15.12-1: Fill out protocol state machine coverage for remap/fallback states; add tests for transitions.
 - [ ] D-4.7-1: Provide helper(s) for lease revoke handling (auto-reattach/backoff) or document required app behavior; add tests.
 
 ## Medium Priority
@@ -37,5 +37,4 @@ Legend:
 
 ## Current Focus Order
 
-1. W-15.21-1 / W-15.12-1 state machine coverage + tests.
-2. D-4.7-1 lease revoke handling helpers + tests.
+1. D-4.7-1 lease revoke handling helpers + tests.

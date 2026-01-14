@@ -75,7 +75,7 @@ Legend:
 | 15.9 Metadata Blobs | Compliant | MetaBlob announce/chunk/complete implemented. |
 | 15.10 Security and Permissions | Partial | Path containment checks implemented and fail closed without an allowlist; permissions policy not enforced in code. |
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
-| 15.12 Consumer State Machine | Partial | Mapped/unmapped tracking in `src/tp_consumer.c`; fallback state handled for `use_shm=0`. |
+| 15.12 Consumer State Machine | Compliant | Mapped/unmapped tracking with fallback entry/exit in `src/tp_consumer.c`. |
 | 15.13 Test and Validation Checklist | Partial | Some tests added; not full checklist coverage. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
 | 15.15 Aeron Terminology Mapping | N/A | Informative. |
@@ -84,7 +84,7 @@ Legend:
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 15.18 Normative Algorithms | Partial | Seqlock/validation and ShmPoolAnnounce flow implemented; explicit DMA flush handling remains platform-specific. |
 | 15.20 Compatibility Matrix | N/A | Spec evolution guidance. |
-| 15.21 Protocol State Machines | Partial | ShmPoolAnnounce-driven mapping state implemented; not all optional states (fallback) covered. |
+| 15.21 Protocol State Machines | Compliant | Mapping transitions and fallback recovery exercised in tests. |
 | 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/tp_shm.c`. |
 | 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and stride power-of-two/64-byte multiple checks in `src/tp_shm.c`. |
 

@@ -54,14 +54,14 @@ Columns:
 | W-15.7-1 | 15.7 | Timebase/clock-domain consistency | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-15.8-1 | 15.8 | Enum/type registry versioning | `src/tp_tensor.c` | `tests/test_tp_smoke.c` | Compliant | Unknown enums rejected |
 | W-15.10-1 | 15.10 | Path containment and fail-closed validation | `src/tp_shm.c`, `src/tp_context.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Partial | Ownership/permission policy not enforced |
-| W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Partial | Limited fallback coverage |
+| W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
 | W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/` | n/a | Partial | Checklist not fully enumerated |
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/tp_consumer.c`, `src/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
 | W-15.16a-1 | 15.16a | File-backed SHM prefault/lock/fsync policy | n/a | n/a | N/A | Informative guidance |
 | W-15.17-1 | 15.17 | ControlResponse error codes | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
 | W-15.18-1 | 15.18 | Normative algorithms (per role) | `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c` | Partial | DMA flush and some edge cases not covered |
 | W-15.20-1 | 15.20 | Compatibility matrix (layout/wire) | n/a | n/a | N/A | Spec evolution guidance |
-| W-15.21-1 | 15.21 | Protocol state machines | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Partial | Subset implemented |
+| W-15.21-1 | 15.21 | Protocol state machines | `src/tp_consumer.c` | `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | Compliant | Mapping transitions validated |
 | W-15.21a-1 | 15.21a | Canonical layout + path containment validation | `src/tp_shm.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | |
 | W-15.22-1 | 15.22 | SHM backend validation (hugepages/pow2/stride) | `src/tp_shm.c` | `tests/test_tp_smoke.c` | Compliant | |
 | W-16-1 | 16 | Control-plane SBE schema usage | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
