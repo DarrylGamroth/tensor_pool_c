@@ -183,6 +183,18 @@ int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_c
         return 1;
     }
 
+    if (version > tensor_pool_consumerConfig_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_consumerConfig_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_consumerConfig_wrap_for_decode(
         &cfg,
         (char *)buffer,

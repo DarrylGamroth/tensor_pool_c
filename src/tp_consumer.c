@@ -14,6 +14,7 @@
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/tp_uri.h"
 
 #include "driver/tensor_pool/hugepagesPolicy.h"
 #include "driver/tensor_pool/publishMode.h"
@@ -86,6 +87,12 @@ static void tp_consumer_set_payload_fallback(tp_consumer_t *consumer, tp_string_
 
     if (NULL == consumer)
     {
+        return;
+    }
+
+    if (!tp_payload_fallback_uri_supported(view.data, view.length))
+    {
+        consumer->payload_fallback_uri[0] = '\0';
         return;
     }
 
@@ -458,6 +465,20 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
     {
         if (view.consumer_id != consumer->context.consumer_id)
         {
+            return;
+        }
+
+        if ((view.descriptor_channel.length > 0 && view.descriptor_stream_id == 0) ||
+            (view.descriptor_channel.length == 0 && view.descriptor_stream_id != 0))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_consumer_control_handler: invalid descriptor assignment");
+            return;
+        }
+
+        if ((view.control_channel.length > 0 && view.control_stream_id == 0) ||
+            (view.control_channel.length == 0 && view.control_stream_id != 0))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_consumer_control_handler: invalid control assignment");
             return;
         }
 

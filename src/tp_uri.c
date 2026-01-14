@@ -138,3 +138,23 @@ int tp_shm_uri_parse(tp_shm_uri_t *out, const char *uri, tp_log_t *log)
 
     return 0;
 }
+
+bool tp_payload_fallback_uri_supported(const char *uri, size_t uri_len)
+{
+    if (0 == uri_len || NULL == uri)
+    {
+        return true;
+    }
+
+    if (uri_len >= 6 && strncmp(uri, "aeron:", 6) == 0)
+    {
+        return true;
+    }
+
+    if (uri_len >= 9 && strncmp(uri, "bridge://", 9) == 0)
+    {
+        return true;
+    }
+
+    return false;
+}
