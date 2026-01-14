@@ -59,15 +59,7 @@ void tp_test_shm_security(void)
         goto cleanup;
     }
 
-    allowed_paths[0] = "/tmp";
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
     step = 2;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
-    {
-        goto cleanup;
-    }
-
-    step = 3;
     strncpy(file_path, file_template, sizeof(file_path) - 1);
     file_path[sizeof(file_path) - 1] = '\0';
     fd = create_temp_file(file_path, TP_SUPERBLOCK_SIZE_BYTES);
@@ -77,7 +69,21 @@ void tp_test_shm_security(void)
     }
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", file_path);
+    step = 3;
+    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    {
+        goto cleanup;
+    }
+
+    allowed_paths[0] = "/tmp";
+    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
     step = 4;
+    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    step = 5;
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) != 0)
     {
         goto cleanup;
@@ -88,7 +94,7 @@ void tp_test_shm_security(void)
     unlink(file_path);
     tp_context_clear_allowed_paths(&ctx);
 
-    step = 5;
+    step = 6;
     strncpy(base_dir, base_template, sizeof(base_dir) - 1);
     base_dir[sizeof(base_dir) - 1] = '\0';
     if (NULL == mkdtemp(base_dir))
@@ -98,13 +104,13 @@ void tp_test_shm_security(void)
 
     allowed_paths[0] = base_dir;
     tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    step = 6;
+    step = 7;
     if (tp_context_finalize_allowed_paths(&ctx) < 0)
     {
         goto cleanup;
     }
 
-    step = 7;
+    step = 8;
     strncpy(file_path, file_template, sizeof(file_path) - 1);
     file_path[sizeof(file_path) - 1] = '\0';
     fd = create_temp_file(file_path, TP_SUPERBLOCK_SIZE_BYTES);
@@ -114,7 +120,7 @@ void tp_test_shm_security(void)
     }
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", file_path);
-    step = 8;
+    step = 9;
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
     {
         goto cleanup;
@@ -127,13 +133,13 @@ void tp_test_shm_security(void)
 
     allowed_paths[0] = "/tmp";
     tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    step = 9;
+    step = 10;
     if (tp_context_finalize_allowed_paths(&ctx) < 0)
     {
         goto cleanup;
     }
 
-    step = 10;
+    step = 11;
     strncpy(fifo_path, fifo_template, sizeof(fifo_path) - 1);
     fifo_path[sizeof(fifo_path) - 1] = '\0';
     if (mkstemp(fifo_path) >= 0)
@@ -146,7 +152,7 @@ void tp_test_shm_security(void)
     }
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", fifo_path);
-    step = 11;
+    step = 12;
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
     {
         goto cleanup;
@@ -156,13 +162,13 @@ void tp_test_shm_security(void)
 
     allowed_paths[0] = "/tmp";
     tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    step = 12;
+    step = 13;
     if (tp_context_finalize_allowed_paths(&ctx) < 0)
     {
         goto cleanup;
     }
 
-    step = 13;
+    step = 14;
     strncpy(file_path, file_template, sizeof(file_path) - 1);
     file_path[sizeof(file_path) - 1] = '\0';
     fd = create_temp_file(file_path, TP_SUPERBLOCK_SIZE_BYTES);
@@ -177,26 +183,26 @@ void tp_test_shm_security(void)
     {
         unlink(link_path);
     }
-    step = 14;
+    step = 15;
     if (symlink(file_path, link_path) != 0)
     {
         goto cleanup;
     }
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", link_path);
-    step = 15;
+    step = 16;
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
     {
         goto cleanup;
     }
 
-    step = 16;
+    step = 17;
     if (tp_shm_map(&region, "shm:file?path=relative/path", 0, &ctx.allowed_paths, NULL) == 0)
     {
         goto cleanup;
     }
 
-    step = 17;
+    step = 18;
     snprintf(uri, sizeof(uri), "shm:file?path=%s|require_hugepages=true", file_path);
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
     {
@@ -211,7 +217,7 @@ void tp_test_shm_security(void)
 
     strncpy(base_dir, base_template, sizeof(base_dir) - 1);
     base_dir[sizeof(base_dir) - 1] = '\0';
-    step = 18;
+    step = 19;
     if (NULL == mkdtemp(base_dir))
     {
         goto cleanup;
@@ -238,7 +244,7 @@ void tp_test_shm_security(void)
 
     allowed_paths[0] = base_dir;
     tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    step = 19;
+    step = 20;
     if (tp_context_finalize_allowed_paths(&ctx) < 0)
     {
         goto cleanup;
@@ -253,7 +259,7 @@ void tp_test_shm_security(void)
         snprintf(link_file, sizeof(link_file), "%s/%s", link_dir, base + 1);
     }
     snprintf(uri, sizeof(uri), "shm:file?path=%s", link_file);
-    step = 20;
+    step = 21;
     if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
     {
         goto cleanup;

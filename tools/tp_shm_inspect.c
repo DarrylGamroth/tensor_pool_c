@@ -1,3 +1,4 @@
+#include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_shm.h"
 
 #include "wire/tensor_pool/shmRegionSuperblock.h"
@@ -10,34 +11,68 @@
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s [--json] <shm-uri>\n", name);
+    fprintf(stderr, "Usage: %s [--json] --allow <dir> [--allow <dir> ...] <shm-uri>\n", name);
 }
 
 int main(int argc, char **argv)
 {
     tp_shm_region_t region;
+    tp_context_t ctx;
     struct tensor_pool_shmRegionSuperblock block;
+    const char *allowed_paths[16];
+    size_t allowed_count = 0;
     const char *uri = NULL;
     int json = 0;
+    int i;
 
-    if (argc == 2)
+    for (i = 1; i < argc; i++)
     {
-        uri = argv[1];
+        if (strcmp(argv[i], "--json") == 0)
+        {
+            json = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--allow") == 0)
+        {
+            if (i + 1 >= argc || allowed_count >= (sizeof(allowed_paths) / sizeof(allowed_paths[0])))
+            {
+                usage(argv[0]);
+                return 1;
+            }
+            allowed_paths[allowed_count++] = argv[++i];
+            continue;
+        }
+        if (argv[i][0] == '-')
+        {
+            usage(argv[0]);
+            return 1;
+        }
+        uri = argv[i];
     }
-    else if (argc == 3 && strcmp(argv[1], "--json") == 0)
-    {
-        json = 1;
-        uri = argv[2];
-    }
-    else
+
+    if (NULL == uri || allowed_count == 0)
     {
         usage(argv[0]);
         return 1;
     }
 
-    if (tp_shm_map(&region, uri, 0, NULL, NULL) < 0)
+    if (tp_context_init(&ctx) < 0)
+    {
+        fprintf(stderr, "Failed to init context: %s\n", aeron_errmsg());
+        return 1;
+    }
+    tp_context_set_allowed_paths(&ctx, allowed_paths, allowed_count);
+    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    {
+        fprintf(stderr, "Failed to finalize allowlist: %s\n", aeron_errmsg());
+        tp_context_clear_allowed_paths(&ctx);
+        return 1;
+    }
+
+    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) < 0)
     {
         fprintf(stderr, "Failed to map: %s\n", aeron_errmsg());
+        tp_context_clear_allowed_paths(&ctx);
         return 1;
     }
 
@@ -102,6 +137,7 @@ int main(int argc, char **argv)
     }
 
     tp_shm_unmap(&region, NULL);
+    tp_context_clear_allowed_paths(&ctx);
 
     return 0;
 }

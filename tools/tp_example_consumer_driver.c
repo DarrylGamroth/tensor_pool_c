@@ -54,6 +54,7 @@ int main(int argc, char **argv)
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t *pool_cfg = NULL;
     tp_consumer_sample_state_t state;
+    const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
     int max_frames;
@@ -79,6 +80,7 @@ int main(int argc, char **argv)
     tp_client_context_set_control_channel(&client_context, argv[2], 1000);
     tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
     tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
+    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {

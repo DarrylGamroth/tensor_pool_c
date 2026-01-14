@@ -25,6 +25,7 @@ int main(int argc, char **argv)
     tp_frame_metadata_t meta;
     tp_tensor_header_t header;
     float payload[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
     size_t i;
@@ -49,6 +50,7 @@ int main(int argc, char **argv)
     tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
     tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
     tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);
+    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {

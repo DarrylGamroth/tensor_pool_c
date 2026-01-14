@@ -26,10 +26,14 @@ tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
 tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
 tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
 tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
+const char *allowed_paths[] = { "/dev/shm", "/tmp" };
+tp_context_set_allowed_paths(&ctx.base, allowed_paths, 2);
 
 tp_client_init(&client, &ctx);
 tp_client_start(&client);
 ```
+
+Shared-memory mappings require an allowlist of base directories (`allowed_paths`) to satisfy the containment rules in the wire spec. If no allowlist is configured, SHM mappings are rejected.
 
 Call `tp_client_do_work(&client)` in your poll loop to drive keepalives and conductor work.
 

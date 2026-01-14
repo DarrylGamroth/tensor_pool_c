@@ -318,6 +318,12 @@ int tp_shm_map(tp_shm_region_t *region, const char *uri, int writable, const tp_
         return -1;
     }
 
+    if (NULL == allowed || allowed->canonical_length == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_shm_map: allowed paths not configured");
+        return -1;
+    }
+
     memset(region, 0, sizeof(*region));
     region->fd = -1;
 
