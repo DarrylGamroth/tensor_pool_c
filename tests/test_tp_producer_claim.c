@@ -278,6 +278,8 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     claim.tensor.progress_unit = tensor_pool_progressUnit_NONE;
     claim.tensor.dims[0] = 8;
     claim.tensor.strides[0] = 4;
+    claim.tensor.dims[1] = 99;
+    claim.tensor.strides[1] = 123;
     memset(claim.payload, 0xAB, claim.payload_len);
 
     memset(&meta, 0, sizeof(meta));
@@ -337,6 +339,17 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
         {
             assert(header_bytes[header_len + pad_offset + i] == 0);
         }
+
+        for (i = claim.tensor.ndims; i < TP_MAX_DIMS; i++)
+        {
+            int32_t dim = 0;
+            int32_t stride = 0;
+
+            assert(tensor_pool_tensorHeader_dims(&tensor_header, i, &dim));
+            assert(tensor_pool_tensorHeader_strides(&tensor_header, i, &stride));
+            assert(dim == 0);
+            assert(stride == 0);
+        }
     }
 
     if (fixed_pool_mode)
@@ -382,8 +395,141 @@ cleanup:
     assert(result == 0);
 }
 
+static void tp_test_producer_invalid_tensor_header(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_context_t producer_ctx;
+    tp_producer_t producer;
+    aeron_subscription_t *descriptor_sub = NULL;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_header_invalidXXXXXX";
+    char pool_path[] = "/tmp/tp_pool_invalidXXXXXX";
+    char header_uri[512];
+    char pool_uri[512];
+    size_t header_size = TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4;
+    size_t pool_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
+    tp_tensor_header_t tensor;
+    tp_frame_t frame;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, (off_t)header_size) != 0 || ftruncate(pool_fd, (off_t)pool_size) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 7, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 128);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    {
+        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
+        size_t i;
+        int started = 0;
+
+        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+        {
+            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
+            {
+                started = 1;
+                break;
+            }
+        }
+
+        if (!started)
+        {
+            result = 0;
+            goto cleanup;
+        }
+    }
+
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_producer_context_init(&producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&frame, 0, sizeof(frame));
+    frame.tensor = &tensor;
+    frame.pool_id = 1;
+
+    memset(&tensor, 0, sizeof(tensor));
+    tensor.dtype = tensor_pool_dtype_FLOAT32;
+    tensor.major_order = tensor_pool_majorOrder_ROW;
+    tensor.progress_unit = tensor_pool_progressUnit_NONE;
+
+    tensor.ndims = 0;
+    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+
+    tensor.ndims = 1;
+    tensor.dims[0] = 8;
+    tensor.strides[0] = -4;
+    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+
+    tensor.strides[0] = 4;
+    tensor.progress_unit = tensor_pool_progressUnit_ROWS;
+    tensor.progress_stride_bytes = 8;
+    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+
+    result = 0;
+
+cleanup:
+    if (producer.client)
+    {
+        tp_producer_close(&producer);
+    }
+    if (descriptor_sub)
+    {
+        aeron_subscription_close(descriptor_sub, NULL, NULL);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
 void tp_test_producer_claim_lifecycle(void)
 {
     tp_test_claim_lifecycle(true);
     tp_test_claim_lifecycle(false);
+    tp_test_producer_invalid_tensor_header();
 }

@@ -34,9 +34,9 @@ Authoritative reference:
 - [x] Add unit/integration tests to verify progress is received on per-consumer control streams.
 
 ### Phase 2: Producer TensorHeader enforcement (High)
-- [ ] Validate `tp_tensor_header_t` in producer publish/claim paths (ndims range, no negative strides, progress stride consistency).
-- [ ] Zero-fill dims/strides beyond `ndims` before encoding.
-- [ ] Add tests for producer-side rejection of invalid TensorHeader values.
+- [x] Validate `tp_tensor_header_t` in producer publish/claim paths (ndims range, no negative strides, progress stride consistency).
+- [x] Zero-fill dims/strides beyond `ndims` before encoding.
+- [x] Add tests for producer-side rejection of invalid TensorHeader values.
 
 ### Phase 3: QoS-driven liveness updates (Medium)
 - [ ] Update consumer registry liveness on `QosConsumer` events.
@@ -64,3 +64,4 @@ Authoritative reference:
 ## Progress Log
 - 2025-01-14: Plan created.
 - 2025-01-14: Phase 1 complete (per-consumer control stream progress polling + tests).
+- 2025-01-14: Phase 2 complete (producer TensorHeader validation + zero-fill + tests).

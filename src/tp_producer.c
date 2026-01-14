@@ -907,6 +907,40 @@ static int tp_encode_tensor_header(uint8_t *buffer, size_t buffer_len, const tp_
     return 0;
 }
 
+static int tp_prepare_tensor_header(tp_producer_t *producer, const tp_tensor_header_t *tensor, tp_tensor_header_t *out)
+{
+    size_t i;
+    tp_log_t *log = NULL;
+
+    if (NULL == tensor || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_prepare_tensor_header: null input");
+        return -1;
+    }
+
+    if (producer && producer->client)
+    {
+        log = &producer->client->context.base.log;
+    }
+
+    memcpy(out, tensor, sizeof(*out));
+    if (out->ndims < TP_MAX_DIMS)
+    {
+        for (i = out->ndims; i < TP_MAX_DIMS; i++)
+        {
+            out->dims[i] = 0;
+            out->strides[i] = 0;
+        }
+    }
+
+    if (tp_tensor_header_validate(out, log) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 int tp_producer_publish_frame(
     tp_producer_t *producer,
     uint64_t seq,
@@ -926,6 +960,7 @@ int tp_producer_publish_frame(
     uint32_t header_index;
     uint64_t in_progress;
     uint64_t committed;
+    tp_tensor_header_t prepared_tensor;
 
     if (NULL == producer || NULL == tensor || (NULL == payload && payload_len > 0))
     {
@@ -945,6 +980,11 @@ int tp_producer_publish_frame(
     if (payload_len > pool->stride_bytes)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_frame: payload too large for pool");
+        return -1;
+    }
+
+    if (tp_prepare_tensor_header(producer, tensor, &prepared_tensor) < 0)
+    {
         return -1;
     }
 
@@ -974,7 +1014,7 @@ int tp_producer_publish_frame(
     tensor_pool_slotHeader_set_metaVersion(&slot_header, meta_version);
     tp_zero_slot_padding(slot);
 
-    if (tp_encode_tensor_header(header_bytes, sizeof(header_bytes), tensor) < 0)
+    if (tp_encode_tensor_header(header_bytes, sizeof(header_bytes), &prepared_tensor) < 0)
     {
         return -1;
     }
