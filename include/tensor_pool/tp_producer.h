@@ -151,11 +151,17 @@ typedef struct tp_producer_stct
     size_t tracelink_entry_count;
     tp_tracelink_validate_t tracelink_validator;
     void *tracelink_validator_clientd;
+    uint64_t next_attach_ns;
+    uint32_t attach_failures;
+    bool reattach_requested;
 }
 tp_producer_t;
 
 int tp_producer_context_init(tp_producer_context_t *ctx);
 void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
+void tp_producer_schedule_reattach(tp_producer_t *producer, uint64_t now_ns);
+int tp_producer_reattach_due(const tp_producer_t *producer, uint64_t now_ns);
+void tp_producer_clear_reattach(tp_producer_t *producer);
 void tp_producer_context_set_payload_flush(
     tp_producer_context_t *ctx,
     void (*payload_flush)(void *clientd, void *payload, size_t length),

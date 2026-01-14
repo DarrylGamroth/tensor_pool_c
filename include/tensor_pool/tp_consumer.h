@@ -134,12 +134,18 @@ typedef struct tp_consumer_stct
     uint64_t last_announce_timestamp_ns;
     uint8_t last_announce_clock_domain;
     uint64_t last_announce_epoch;
+    uint64_t next_attach_ns;
+    uint32_t attach_failures;
+    bool reattach_requested;
 }
 tp_consumer_t;
 
 int tp_consumer_context_init(tp_consumer_context_t *ctx);
 int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *context);
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
+void tp_consumer_schedule_reattach(tp_consumer_t *consumer, uint64_t now_ns);
+int tp_consumer_reattach_due(const tp_consumer_t *consumer, uint64_t now_ns);
+void tp_consumer_clear_reattach(tp_consumer_t *consumer);
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
 int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_progress_t *progress);

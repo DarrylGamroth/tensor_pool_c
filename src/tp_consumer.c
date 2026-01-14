@@ -92,6 +92,49 @@ static void tp_consumer_enter_fallback(tp_consumer_t *consumer)
     consumer->state = TP_CONSUMER_STATE_FALLBACK;
 }
 
+static uint64_t tp_consumer_next_backoff_ns(uint32_t failures)
+{
+    const uint64_t base_ns = 100ULL * 1000ULL * 1000ULL;
+    const uint32_t max_shift = 5;
+    uint32_t shift = failures > max_shift ? max_shift : failures;
+
+    return base_ns << shift;
+}
+
+void tp_consumer_schedule_reattach(tp_consumer_t *consumer, uint64_t now_ns)
+{
+    if (NULL == consumer || !consumer->context.use_driver)
+    {
+        return;
+    }
+
+    consumer->reattach_requested = true;
+    consumer->attach_failures++;
+    consumer->next_attach_ns = now_ns + tp_consumer_next_backoff_ns(consumer->attach_failures - 1);
+}
+
+int tp_consumer_reattach_due(const tp_consumer_t *consumer, uint64_t now_ns)
+{
+    if (NULL == consumer || !consumer->reattach_requested)
+    {
+        return 0;
+    }
+
+    return now_ns >= consumer->next_attach_ns ? 1 : 0;
+}
+
+void tp_consumer_clear_reattach(tp_consumer_t *consumer)
+{
+    if (NULL == consumer)
+    {
+        return;
+    }
+
+    consumer->reattach_requested = false;
+    consumer->attach_failures = 0;
+    consumer->next_attach_ns = 0;
+}
+
 static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_t now_ns)
 {
     uint64_t activity_ns = 0;
@@ -651,6 +694,8 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         if (revoked.client_id == consumer->context.consumer_id &&
             revoked.role == tensor_pool_role_CONSUMER)
         {
+            uint64_t now = (uint64_t)tp_clock_now_ns();
+
             TP_SET_ERR(
                 ECANCELED,
                 "consumer lease revoked stream=%u reason=%u: %s",
@@ -664,8 +709,14 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                     tp_errcode(),
                     tp_errmsg());
             }
+            tp_consumer_unmap_regions(consumer);
+            if (consumer->driver_attached)
+            {
+                tp_driver_attach_info_close(&consumer->driver_attach);
+            }
             consumer->driver.active_lease_id = 0;
             consumer->driver_attached = false;
+            tp_consumer_schedule_reattach(consumer, now);
         }
         return;
     }
@@ -1048,6 +1099,7 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     consumer->drops_gap = 0;
     consumer->drops_late = 0;
     consumer->last_qos_ns = 0;
+    tp_consumer_clear_reattach(consumer);
     return 0;
 
 cleanup:

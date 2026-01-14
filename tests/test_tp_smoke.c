@@ -55,6 +55,8 @@ void tp_test_progress_layout_validation(void);
 void tp_test_producer_claim_lifecycle(void);
 void tp_test_rollover(void);
 void tp_test_shm_security(void);
+void tp_test_consumer_lease_revoked(void);
+void tp_test_producer_lease_revoked(void);
 
 static void test_version(void)
 {
@@ -281,6 +283,8 @@ int main(void)
     tp_test_producer_claim_lifecycle();
     tp_test_rollover();
     tp_test_shm_security();
+    tp_test_consumer_lease_revoked();
+    tp_test_producer_lease_revoked();
 
     return 0;
 }

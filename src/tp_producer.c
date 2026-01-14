@@ -123,6 +123,7 @@ static int tp_producer_init_tracelink_entries(tp_producer_t *producer)
         producer->tracelink_entries[i].trace_id = 0;
     }
 
+    tp_producer_clear_reattach(producer);
     return 0;
 }
 
@@ -462,6 +463,84 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
     ctx->fixed_pool_mode = enabled;
 }
 
+static void tp_producer_unmap_regions(tp_producer_t *producer)
+{
+    size_t i;
+
+    if (NULL == producer || NULL == producer->client)
+    {
+        return;
+    }
+
+    tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
+
+    if (producer->pools)
+    {
+        for (i = 0; i < producer->pool_count; i++)
+        {
+            tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base.log);
+        }
+        aeron_free(producer->pools);
+        producer->pools = NULL;
+    }
+
+    if (producer->tracelink_entries)
+    {
+        aeron_free(producer->tracelink_entries);
+        producer->tracelink_entries = NULL;
+        producer->tracelink_entry_count = 0;
+    }
+
+    producer->pool_count = 0;
+    producer->header_nslots = 0;
+    producer->epoch = 0;
+    producer->layout_version = 0;
+    producer->next_seq = 0;
+}
+
+static uint64_t tp_producer_next_backoff_ns(uint32_t failures)
+{
+    const uint64_t base_ns = 100ULL * 1000ULL * 1000ULL;
+    const uint32_t max_shift = 5;
+    uint32_t shift = failures > max_shift ? max_shift : failures;
+
+    return base_ns << shift;
+}
+
+void tp_producer_schedule_reattach(tp_producer_t *producer, uint64_t now_ns)
+{
+    if (NULL == producer || !producer->context.use_driver)
+    {
+        return;
+    }
+
+    producer->reattach_requested = true;
+    producer->attach_failures++;
+    producer->next_attach_ns = now_ns + tp_producer_next_backoff_ns(producer->attach_failures - 1);
+}
+
+int tp_producer_reattach_due(const tp_producer_t *producer, uint64_t now_ns)
+{
+    if (NULL == producer || !producer->reattach_requested)
+    {
+        return 0;
+    }
+
+    return now_ns >= producer->next_attach_ns ? 1 : 0;
+}
+
+void tp_producer_clear_reattach(tp_producer_t *producer)
+{
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    producer->reattach_requested = false;
+    producer->attach_failures = 0;
+    producer->next_attach_ns = 0;
+}
+
 void tp_producer_context_set_payload_flush(
     tp_producer_context_t *ctx,
     void (*payload_flush)(void *clientd, void *payload, size_t length),
@@ -522,6 +601,8 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
         if (revoked.client_id == producer->context.producer_id &&
             revoked.role == tensor_pool_role_PRODUCER)
         {
+            uint64_t now = (uint64_t)tp_clock_now_ns();
+
             TP_SET_ERR(
                 ECANCELED,
                 "producer lease revoked stream=%u reason=%u: %s",
@@ -535,8 +616,14 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
                     tp_errcode(),
                     tp_errmsg());
             }
+            tp_producer_unmap_regions(producer);
+            if (producer->driver_attached)
+            {
+                tp_driver_attach_info_close(&producer->driver_attach);
+            }
             producer->driver.active_lease_id = 0;
             producer->driver_attached = false;
+            tp_producer_schedule_reattach(producer, now);
         }
         return;
     }
@@ -1072,6 +1159,12 @@ int tp_producer_publish_frame(
         return -1;
     }
 
+    if (producer->header_nslots == 0 || producer->pool_count == 0 || NULL == producer->header_region.addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_frame: producer not attached");
+        return -1;
+    }
+
     header_index = (uint32_t)(seq & (producer->header_nslots - 1));
 
     pool = tp_find_pool(producer, pool_id);
@@ -1263,6 +1356,12 @@ int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame
         return -1;
     }
 
+    if (producer->header_nslots == 0 || producer->pool_count == 0 || NULL == producer->header_region.addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_offer_frame: producer not attached");
+        return -1;
+    }
+
     if (NULL != meta)
     {
         timestamp_ns = meta->timestamp_ns;
@@ -1331,6 +1430,12 @@ int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_
     if (NULL == producer || NULL == claim)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_try_claim: null input");
+        return -1;
+    }
+
+    if (producer->header_nslots == 0 || producer->pool_count == 0 || NULL == producer->header_region.addr)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_try_claim: producer not attached");
         return -1;
     }
 
