@@ -29,10 +29,10 @@ Authoritative references:
 - [x] Add unit tests for unsupported discovery schema versions and empty response channel.
 
 ### Phase 2: Driver enum validation (Medium)
-- [ ] Fail closed on unknown `responseCode` in `tp_driver_decode_attach_response`.
-- [ ] Fail closed on unknown `responseCode` in `tp_driver_decode_detach_response`.
-- [ ] Fail closed on unknown `shutdownReason` in `tp_driver_decode_shutdown`.
-- [ ] Add unit tests for invalid enum values in driver decoders.
+- [x] Fail closed on unknown `responseCode` in `tp_driver_decode_attach_response`.
+- [x] Fail closed on unknown `responseCode` in `tp_driver_decode_detach_response`.
+- [x] Fail closed on unknown `shutdownReason` in `tp_driver_decode_shutdown`.
+- [x] Add unit tests for invalid enum values in driver decoders.
 
 ### Phase 3: Payload fallback behavior (Medium)
 - [ ] Decide and document fallback behavior when `payload_fallback_uri` is supplied.
@@ -49,3 +49,4 @@ Authoritative references:
 - 2025-01-14: UDP Bridge marked external by request.
 - 2025-01-14: Supervisor marked external by request.
 - 2025-01-14: Phase 1 complete (discovery strictness).
+- 2025-01-14: Phase 2 complete (driver enum validation).

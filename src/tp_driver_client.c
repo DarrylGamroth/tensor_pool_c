@@ -129,7 +129,8 @@ int tp_driver_decode_attach_response(
         enum tensor_pool_responseCode code;
         if (!tensor_pool_shmAttachResponse_code(&response, &code))
         {
-            out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+            TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_attach_response: invalid response code");
+            return -1;
         }
         else
         {
@@ -370,7 +371,8 @@ int tp_driver_decode_detach_response(
         enum tensor_pool_responseCode code;
         if (!tensor_pool_shmDetachResponse_code(&response, &code))
         {
-            out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+            TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_detach_response: invalid response code");
+            return -1;
         }
         else
         {
@@ -539,7 +541,8 @@ int tp_driver_decode_shutdown(
         enum tensor_pool_shutdownReason reason;
         if (!tensor_pool_shmDriverShutdown_reason(&shutdown, &reason))
         {
-            out->reason = 0;
+            TP_SET_ERR(EINVAL, "%s", "tp_driver_decode_shutdown: invalid shutdown reason");
+            return -1;
         }
         else
         {
