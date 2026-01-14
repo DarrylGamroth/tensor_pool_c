@@ -158,6 +158,78 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_decode_attach_response_null_expiry(void)
+{
+    uint8_t buffer[1024];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_shmAttachResponse response;
+    struct tensor_pool_shmAttachResponse_payloadPools pools;
+    tp_driver_attach_info_t info;
+    int result = -1;
+
+    memset(&info, 0, sizeof(info));
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_shmAttachResponse_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_shmAttachResponse_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_shmAttachResponse_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_shmAttachResponse_sbe_schema_version());
+
+    tensor_pool_shmAttachResponse_wrap_for_encode(&response, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_shmAttachResponse_set_correlationId(&response, 303);
+    tensor_pool_shmAttachResponse_set_code(&response, tensor_pool_responseCode_OK);
+    tensor_pool_shmAttachResponse_set_leaseId(&response, 10);
+    tensor_pool_shmAttachResponse_set_leaseExpiryTimestampNs(
+        &response,
+        tensor_pool_shmAttachResponse_leaseExpiryTimestampNs_null_value());
+    tensor_pool_shmAttachResponse_set_streamId(&response, 30);
+    tensor_pool_shmAttachResponse_set_epoch(&response, 40);
+    tensor_pool_shmAttachResponse_set_layoutVersion(&response, 1);
+    tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
+    tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, TP_HEADER_SLOT_BYTES);
+    tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
+
+    if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
+        &pools,
+        (char *)buffer,
+        1,
+        tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
+        tensor_pool_shmAttachResponse_sbe_schema_version(),
+        sizeof(buffer)))
+    {
+        goto cleanup;
+    }
+
+    if (NULL == tensor_pool_shmAttachResponse_payloadPools_next(&pools))
+    {
+        goto cleanup;
+    }
+    tensor_pool_shmAttachResponse_payloadPools_set_poolId(&pools, 2);
+    tensor_pool_shmAttachResponse_payloadPools_set_poolNslots(&pools, 16);
+    tensor_pool_shmAttachResponse_payloadPools_set_strideBytes(&pools, 4096);
+    tensor_pool_shmAttachResponse_payloadPools_put_regionUri(&pools, "shm:file?path=/dev/shm/pool", 27);
+    tensor_pool_shmAttachResponse_put_headerRegionUri(&response, "shm:file?path=/dev/shm/hdr", 26);
+
+    if (tp_driver_decode_attach_response(buffer, sizeof(buffer), 303, &info) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(info.code == tensor_pool_responseCode_OK);
+    assert(info.lease_expiry_timestamp_ns == TP_NULL_U64);
+
+    result = 0;
+
+cleanup:
+    tp_driver_attach_info_close(&info);
+    assert(result == 0);
+}
+
 static void test_decode_detach_response(void)
 {
     uint8_t buffer[256];
@@ -316,6 +388,14 @@ static void test_driver_keepalive_helpers(void)
     }
     assert(expired == 1);
 
+    client.lease_expiry_timestamp_ns = TP_NULL_U64;
+    expired = tp_driver_client_lease_expired(&client, 500);
+    if (expired < 0)
+    {
+        goto cleanup;
+    }
+    assert(expired == 0);
+
     if (tp_driver_client_record_keepalive(&client, 180) != 0)
     {
         goto cleanup;
@@ -332,6 +412,7 @@ void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
     test_decode_attach_response_invalid_slot_bytes();
+    test_decode_attach_response_null_expiry();
     test_decode_detach_response();
     test_decode_lease_revoked();
     test_decode_shutdown();

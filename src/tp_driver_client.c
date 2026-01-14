@@ -133,6 +133,10 @@ int tp_driver_decode_attach_response(
 
         out->lease_id = tensor_pool_shmAttachResponse_leaseId(&response);
         out->lease_expiry_timestamp_ns = tensor_pool_shmAttachResponse_leaseExpiryTimestampNs(&response);
+        if (out->lease_expiry_timestamp_ns == tensor_pool_shmAttachResponse_leaseExpiryTimestampNs_null_value())
+        {
+            out->lease_expiry_timestamp_ns = TP_NULL_U64;
+        }
         out->stream_id = tensor_pool_shmAttachResponse_streamId(&response);
         out->epoch = tensor_pool_shmAttachResponse_epoch(&response);
         out->layout_version = tensor_pool_shmAttachResponse_layoutVersion(&response);
@@ -146,7 +150,6 @@ int tp_driver_decode_attach_response(
         }
 
         if (out->lease_id == tensor_pool_shmAttachResponse_leaseId_null_value() ||
-            out->lease_expiry_timestamp_ns == tensor_pool_shmAttachResponse_leaseExpiryTimestampNs_null_value() ||
             out->stream_id == tensor_pool_shmAttachResponse_streamId_null_value() ||
             out->epoch == tensor_pool_shmAttachResponse_epoch_null_value() ||
             out->layout_version == tensor_pool_shmAttachResponse_layoutVersion_null_value() ||
@@ -1199,6 +1202,11 @@ int tp_driver_client_lease_expired(const tp_driver_client_t *client, uint64_t no
     }
 
     if (client->active_lease_id == 0)
+    {
+        return 0;
+    }
+
+    if (client->lease_expiry_timestamp_ns == TP_NULL_U64)
     {
         return 0;
     }

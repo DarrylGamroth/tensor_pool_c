@@ -34,12 +34,12 @@ Authoritative references:
 ## Plan
 
 ### Phase 1: Driver attach/lease semantics (High)
-- [ ] Allow `leaseExpiryTimestampNs` to be absent in `ShmAttachResponse`.
-- [ ] Treat `leaseExpiryTimestampNs = null` as "unknown" rather than expired.
-- [ ] Adjust lease-expiry checks to only enforce expiry when an explicit timestamp is provided.
-- [ ] Add unit tests covering:
-  - [ ] attach response with `leaseExpiryTimestampNs = null` accepted
-  - [ ] lease-expiry behavior with null expiry does not force detach
+- [x] Allow `leaseExpiryTimestampNs` to be absent in `ShmAttachResponse`.
+- [x] Treat `leaseExpiryTimestampNs = null` as "unknown" rather than expired.
+- [x] Adjust lease-expiry checks to only enforce expiry when an explicit timestamp is provided.
+- [x] Add unit tests covering:
+  - [x] attach response with `leaseExpiryTimestampNs = null` accepted
+  - [x] lease-expiry behavior with null expiry does not force detach
 
 ### Phase 2: Driver control-plane strictness (Medium)
 - [ ] Enforce `schemaId`, `templateId`, `version`, and `blockLength` gating on:
@@ -62,3 +62,4 @@ Authoritative references:
 
 ## Progress Log
 - 2025-01-14: Plan created.
+- 2025-01-14: Phase 1 in progress (driver attach/lease semantics).
