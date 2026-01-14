@@ -462,6 +462,20 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
     ctx->fixed_pool_mode = enabled;
 }
 
+void tp_producer_context_set_payload_flush(
+    tp_producer_context_t *ctx,
+    void (*payload_flush)(void *clientd, void *payload, size_t length),
+    void *clientd)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->payload_flush = payload_flush;
+    ctx->payload_flush_clientd = clientd;
+}
+
 void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_generator_t *generator)
 {
     if (NULL == producer)
@@ -1115,6 +1129,14 @@ int tp_producer_publish_frame(
         uint8_t *header_dst = slot + tensor_pool_slotHeader_sbe_block_length();
         memcpy(header_dst, &header_len_le, sizeof(header_len_le));
         memcpy(header_dst + sizeof(header_len_le), header_bytes, header_len);
+    }
+
+    if (producer->context.payload_flush && payload_len > 0)
+    {
+        producer->context.payload_flush(
+            producer->context.payload_flush_clientd,
+            payload_dst,
+            payload_len);
     }
 
     __atomic_thread_fence(__ATOMIC_RELEASE);

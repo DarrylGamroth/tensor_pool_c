@@ -60,6 +60,8 @@ typedef struct tp_producer_context_stct
     bool use_driver;
     bool fixed_pool_mode;
     tp_driver_attach_request_t driver_request;
+    void (*payload_flush)(void *clientd, void *payload, size_t length);
+    void *payload_flush_clientd;
 }
 tp_producer_context_t;
 
@@ -154,6 +156,10 @@ tp_producer_t;
 
 int tp_producer_context_init(tp_producer_context_t *ctx);
 void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
+void tp_producer_context_set_payload_flush(
+    tp_producer_context_t *ctx,
+    void (*payload_flush)(void *clientd, void *payload, size_t length),
+    void *clientd);
 
 int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *ctx);
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config);

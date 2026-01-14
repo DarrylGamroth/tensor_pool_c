@@ -114,6 +114,7 @@ prod_ctx.stream_id = 10000;
 prod_ctx.producer_id = 7;
 prod_ctx.use_driver = true;
 prod_ctx.fixed_pool_mode = true;
+tp_producer_context_set_payload_flush(&prod_ctx, flush_fn, flush_clientd); // optional DMA visibility hook
 
 tp_producer_init(&producer, &client, &prod_ctx);
 tp_producer_enable_consumer_manager(&producer, 128);
