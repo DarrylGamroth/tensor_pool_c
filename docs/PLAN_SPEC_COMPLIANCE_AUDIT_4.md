@@ -39,9 +39,9 @@ Authoritative reference:
 - [x] Add tests for producer-side rejection of invalid TensorHeader values.
 
 ### Phase 3: QoS-driven liveness updates (Medium)
-- [ ] Update consumer registry liveness on `QosConsumer` events.
-- [ ] Ensure per-consumer publications are closed only after absence of both hello and QoS for the stale window.
-- [ ] Add tests to confirm QoS keeps a consumer alive.
+- [x] Update consumer registry liveness on `QosConsumer` events.
+- [x] Ensure per-consumer publications are closed only after absence of both hello and QoS for the stale window.
+- [x] Add tests to confirm QoS keeps a consumer alive.
 
 ### Phase 4: Epoch regression handling (Medium)
 - [ ] On epoch regression in ShmPoolAnnounce, force unmap/remap and drop stale frames.
@@ -65,3 +65,4 @@ Authoritative reference:
 - 2025-01-14: Plan created.
 - 2025-01-14: Phase 1 complete (per-consumer control stream progress polling + tests).
 - 2025-01-14: Phase 2 complete (producer TensorHeader validation + zero-fill + tests).
+- 2025-01-14: Phase 3 complete (QoS consumer liveness updates + tests).

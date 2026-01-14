@@ -42,6 +42,7 @@ void tp_test_pollers(void);
 void tp_test_cadence(void);
 void tp_test_shm_announce_freshness(void);
 void tp_test_rate_limit(void);
+void tp_test_qos_liveness(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
 void tp_test_producer_claim_lifecycle(void);
@@ -261,6 +262,7 @@ int main(void)
     tp_test_cadence();
     tp_test_shm_announce_freshness();
     tp_test_rate_limit();
+    tp_test_qos_liveness();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
     tp_test_producer_claim_lifecycle();

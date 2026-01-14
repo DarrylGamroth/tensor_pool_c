@@ -20,6 +20,7 @@ extern "C" {
 
 typedef struct tp_consumer_manager_stct tp_consumer_manager_t;
 typedef struct tp_tracelink_entry_stct tp_tracelink_entry_t;
+typedef struct tp_qos_poller_stct tp_qos_poller_t;
 
 typedef struct tp_payload_pool_config_stct
 {
@@ -117,6 +118,7 @@ typedef struct tp_producer_stct
     aeron_publication_t *qos_publication;
     aeron_publication_t *metadata_publication;
     aeron_fragment_assembler_t *control_assembler;
+    tp_qos_poller_t *qos_poller;
     tp_shm_region_t header_region;
     tp_payload_pool_t *pools;
     size_t pool_count;

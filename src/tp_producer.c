@@ -543,6 +543,65 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
     }
 }
 
+static void tp_producer_qos_event_handler(void *clientd, const tp_qos_event_t *event)
+{
+    tp_producer_t *producer = (tp_producer_t *)clientd;
+
+    if (NULL == producer || NULL == event || NULL == producer->consumer_manager)
+    {
+        return;
+    }
+
+    if (event->type != TP_QOS_EVENT_CONSUMER)
+    {
+        return;
+    }
+
+    if (event->stream_id != producer->stream_id || event->epoch != producer->epoch)
+    {
+        return;
+    }
+
+    tp_consumer_manager_touch(producer->consumer_manager, event->consumer_id, (uint64_t)tp_clock_now_ns());
+}
+
+static int tp_producer_poll_qos(tp_producer_t *producer, int fragment_limit)
+{
+    tp_qos_handlers_t handlers;
+
+    if (NULL == producer || NULL == producer->client || NULL == producer->client->qos_subscription)
+    {
+        return 0;
+    }
+
+    if (!producer->consumer_manager)
+    {
+        return 0;
+    }
+
+    if (NULL == producer->qos_poller)
+    {
+        if (aeron_alloc((void **)&producer->qos_poller, sizeof(*producer->qos_poller)) < 0)
+        {
+            return -1;
+        }
+        memset(producer->qos_poller, 0, sizeof(*producer->qos_poller));
+
+        memset(&handlers, 0, sizeof(handlers));
+        handlers.on_qos_event = tp_producer_qos_event_handler;
+        handlers.clientd = producer;
+
+        if (tp_qos_poller_init(producer->qos_poller, producer->client, &handlers) < 0)
+        {
+            aeron_free(producer->qos_poller);
+            producer->qos_poller = NULL;
+            return -1;
+        }
+    }
+
+    return tp_qos_poll(producer->qos_poller, fragment_limit);
+}
+
 int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *context)
 {
     if (NULL == producer || NULL == client || NULL == context)
@@ -1360,6 +1419,7 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
     uint64_t now_ns;
     uint64_t stale_ns = 5ULL * 1000 * 1000 * 1000ULL;
     int fragments;
+    int qos_fragments;
 
     if (NULL == producer || NULL == producer->client || NULL == producer->client->control_subscription)
     {
@@ -1390,6 +1450,11 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
     if (producer->consumer_manager)
     {
         tp_progress_policy_t policy;
+        qos_fragments = tp_producer_poll_qos(producer, fragment_limit);
+        if (qos_fragments < 0)
+        {
+            return -1;
+        }
         if (tp_consumer_manager_get_progress_policy(producer->consumer_manager, &policy) == 0 &&
             policy.interval_us != TP_NULL_U32 &&
             policy.interval_us > 0)
@@ -1583,6 +1648,17 @@ int tp_producer_close(tp_producer_t *producer)
     {
         aeron_fragment_assembler_delete(producer->control_assembler);
         producer->control_assembler = NULL;
+    }
+
+    if (producer->qos_poller)
+    {
+        if (producer->qos_poller->assembler)
+        {
+            aeron_fragment_assembler_delete(producer->qos_poller->assembler);
+            producer->qos_poller->assembler = NULL;
+        }
+        aeron_free(producer->qos_poller);
+        producer->qos_poller = NULL;
     }
 
     tp_shm_unmap(&producer->header_region, &producer->client->context.base.log);
