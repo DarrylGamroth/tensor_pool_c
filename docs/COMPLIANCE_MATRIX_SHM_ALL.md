@@ -24,7 +24,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Slot header / TensorHeader validation | Partial | `src/tp_slot.c` and `src/tp_tensor.c` validate on read; producer-side checks are limited. |
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
-| QoS messages | Partial | Encode/decode implemented; periodic publish policy not enforced. |
+| QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
 | Supervisor/unified management | Missing | Not implemented in this repo. |
 | Consumer modes and fallback | Partial | Per-consumer descriptor/control mode supported with decline behavior; fallback URI handled for `use_shm=0`. |
 | SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks enforced in `src/tp_shm.c`. |
@@ -38,7 +38,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Attach request encode | Compliant | `tp_driver_send_attach` in `src/tp_driver_client.c`. |
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
 | Node ID negotiation | Partial | `desiredNodeId` and `nodeId` supported; allocation is driver-owned. |
-| Keepalive send / tracking | Partial | `tp_driver_keepalive` implemented; lease expiry handling respects optional expiry. |
+| Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
 | Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
 | Lease revoked / shutdown handling | Compliant | Decode validates enums and rejects invalid values; schema version/block length gated. |
 | Schema version compatibility | Compliant | `schemaId`/`templateId`/`version`/`blockLength` gated in driver client decoders. |

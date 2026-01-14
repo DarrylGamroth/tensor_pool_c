@@ -9,19 +9,14 @@ Legend:
 
 ## High Priority
 
-- [ ] W-15.20-1: Implement layout/wire compatibility matrix gating in attach/consume paths (`src/tp_shm.c`, `src/tp_consumer.c`); add tests.
-- [ ] W-8.3-1 / W-15.3-1: Add explicit `seq_commit` regression handling and platform hooks for DMA flush; add tests for stale/stomped slots.
-- [ ] D-4.4-1 / D-4.7-1: Add driver-client keepalive scheduler, attach retry/backoff, and lease expiry handling; add tests.
+- [x] W-8.3-1b / W-15.18-1: Add payload visibility hook for non-coherent DMA; add targeted tests.
 - [ ] W-15.21-1 / W-15.12-1: Fill out protocol state machine coverage for remap/fallback states; add tests for transitions.
+- [ ] D-4.7-1: Provide helper(s) for lease revoke handling (auto-reattach/backoff) or document required app behavior; add tests.
 
 ## Medium Priority
 
-- [ ] W-10.4-1: Enforce QoS publish cadence (producer/consumer) per spec; add cadence tests.
-- [ ] W-15.14-1: Enforce ShmPoolAnnounce cadence policy and liveness timeouts in core; add tests.
 - [ ] W-15.10-1: Enforce permissions/ownership policy for SHM paths (uid/gid/mode checks) or document explicit opt-out.
-- [ ] W-15.8-1: Implement enum/type registry version checks and compatibility gating.
 - [ ] W-11-1: Expand consumer fallback modes and document behavior in API usage.
-- [ ] W-15.16a-1: Implement file-backed SHM policy (prefault/lock/fsync) or explicitly mark unsupported in code paths.
 - [ ] TL-6.3-1: Add helper(s) to enforce TraceLink propagation rules for N->1 flows (auto-emit TraceLinkSet or documented hook).
 - [ ] DS-3-1: Ensure discovery advisory semantics are clear in API docs and examples.
 
@@ -37,6 +32,10 @@ Legend:
 
 ## Open Questions / Uncertainties
 
-- Compatibility matrix details: confirm how to apply layout/wire compatibility rules in client attach paths.
 - DMA flush hooks: decide which platforms require explicit flush instructions and how to expose that in the C API.
 - TraceLink propagation: confirm whether automatic emission is required in core or remains a helper for applications.
+
+## Current Focus Order
+
+1. W-15.21-1 / W-15.12-1 state machine coverage + tests.
+2. D-4.7-1 lease revoke handling helpers + tests.

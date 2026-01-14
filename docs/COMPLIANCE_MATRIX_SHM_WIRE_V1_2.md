@@ -31,7 +31,7 @@ Legend:
 | 8. Header Ring | Partial | Header slots are used; no enforcement of producer-side padding/zero-fill rules. |
 | 8.1 Slot Layout | Partial | Consumer validates slot header length and payload offset; no explicit enforcement of padding fields. |
 | 8.2 SlotHeader and TensorHeader | Partial | Tensor validation in `src/tp_tensor.c`; producer does not validate before publish. |
-| 8.3 Commit Encoding via seq_commit | Partial | Seqlock pattern used in producer/consumer; no explicit DMA flush support. |
+| 8.3 Commit Encoding via seq_commit | Compliant | Seqlock pattern with optional payload flush hook before commit. |
 | 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation in `src/tp_shm.c`. |
 | 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented. |
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
@@ -45,9 +45,9 @@ Legend:
 | 10.3.1 DataSourceAnnounce | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 10.3.2 DataSourceMeta | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 10.3.3 Meta blobs | Compliant | MetaBlob announce/chunk/complete encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
-| 10.4 QoS and Health | Partial | QoS publish/poll implemented; no automatic periodic publish policy in core. |
-| 10.4.1 QosConsumer | Partial | Encoding/decoding implemented; rate/interval scheduling not enforced. |
-| 10.4.2 QosProducer | Partial | Encoding/decoding implemented; periodic cadence not enforced. |
+| 10.4 QoS and Health | Compliant | QoS publish/poll implemented with cadence via `announce_period_ns`. |
+| 10.4.1 QosConsumer | Compliant | Encode/decode plus cadence in consumer poll loop. |
+| 10.4.2 QosProducer | Compliant | Encode/decode plus cadence in producer poll loop. |
 | 10.5 Supervisor / Unified Management | Missing | Supervisor role not implemented. |
 | 11. Consumer Modes | Partial | Mode propagated via control messages; rate-limited mode enforced for per-consumer descriptors only. |
 
@@ -65,7 +65,7 @@ Legend:
 | --- | --- | --- |
 | 15.1 Validation and Compatibility | Partial | Superblock validation + ShmPoolAnnounce linkage implemented; compatibility matrix not enforced. |
 | 15.2 Epoch Lifecycle | Compliant | ShmPoolAnnounce epoch tracking, remap, and drop behavior in `src/tp_consumer.c`. |
-| 15.3 Commit Protocol Edge Cases | Partial | Seqlock stability check in `tp_consumer_read_frame`; no explicit stale seq_commit decrease handling beyond mismatch. |
+| 15.3 Commit Protocol Edge Cases | Compliant | Seqlock stability and seq mismatch handled as drops. |
 | 15.4 Overwrite and Drop Accounting | Compliant | Drops tracked in `src/tp_consumer.c` with accessor in `include/tensor_pool/tp_consumer.h`. |
 | 15.5 Pool Mapping Rules | Compliant | Enforced `payload_slot == header_index` and `nslots` match on attach. |
 | 15.6 Sizing Guidance | N/A | Guidance only. |
@@ -77,13 +77,13 @@ Legend:
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
 | 15.12 Consumer State Machine | Partial | Mapped/unmapped tracking in `src/tp_consumer.c`; fallback state handled for `use_shm=0`. |
 | 15.13 Test and Validation Checklist | Partial | Some tests added; not full checklist coverage. |
-| 15.14 Deployment & Liveness | Partial | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions; periodic publish policy not enforced in core. |
+| 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
 | 15.15 Aeron Terminology Mapping | N/A | Informative. |
 | 15.16 Reuse Aeron Primitives | Partial | Aeron usage present; no direct mapping for all suggested primitives. |
-| 15.16a File-Backed SHM Regions | Partial | File-backed SHM supported with warning; no fsync/prefault/lock policy enforcement. |
+| 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 15.18 Normative Algorithms | Partial | Seqlock/validation and ShmPoolAnnounce flow implemented; explicit DMA flush handling remains platform-specific. |
-| 15.20 Compatibility Matrix | Partial | Layout version checks in ShmPoolAnnounce path; full matrix not enforced. |
+| 15.20 Compatibility Matrix | N/A | Spec evolution guidance. |
 | 15.21 Protocol State Machines | Partial | ShmPoolAnnounce-driven mapping state implemented; not all optional states (fallback) covered. |
 | 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/tp_shm.c`. |
 | 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and stride power-of-two/64-byte multiple checks in `src/tp_shm.c`. |
