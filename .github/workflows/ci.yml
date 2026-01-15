@@ -25,6 +25,14 @@ jobs:
           distribution: zulu
           java-version: "17"
 
+      - name: Cache Maven jars
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/maven
+          key: maven-jars-${{ runner.os }}-${{ hashFiles('aeron/version.txt') }}
+          restore-keys: |
+            maven-jars-${{ runner.os }}-
+
       - name: Download Aeron driver and SBE tool
         run: |
           set -euo pipefail
@@ -53,6 +61,8 @@ jobs:
               jar_name = f"{artifact}-{version}.jar"
               url = f"{base}/{jar_name}"
               dest_path = dest / jar_name
+              if dest_path.exists():
+                  return dest_path
               urllib.request.urlretrieve(url, dest_path)
               return dest_path
           
