@@ -32,9 +32,9 @@ Legend:
 
 ## Open Questions / Uncertainties
 
-- DMA flush hooks: decide which platforms require explicit flush instructions and how to expose that in the C API.
+- DMA flush hooks: resolved by existing `tp_producer_context_set_payload_flush` callback; platform-specific flush/invalidate remains an app/driver concern.
 - TraceLink propagation: resolved as no auto-emission required; helper/API covers explicit emission.
 
 ## Current Focus Order
 
-1. Resolve open questions (DMA flush hooks).
+1. No remaining open items; monitor for spec changes.
