@@ -15,9 +15,22 @@ fi
 
 CONTROL_CHANNEL="${CONTROL_CHANNEL:-aeron:ipc?term-length=4m}"
 STREAM_ID="${STREAM_ID:-10000}"
-PRODUCER_ID="${PRODUCER_ID:-42}"
-CONSUMER_ID="${CONSUMER_ID:-43}"
-READY_CONSUMER_ID="${READY_CONSUMER_ID:-$((CONSUMER_ID + 1000))}"
+if [[ -z "${PRODUCER_ID:-}" ]]; then
+  PRODUCER_ID=$(( (RANDOM << 16) | RANDOM ))
+fi
+if [[ -z "${CONSUMER_ID:-}" ]]; then
+  CONSUMER_ID=$(( (RANDOM << 16) | RANDOM ))
+fi
+if [[ "${PRODUCER_ID}" -eq 0 ]]; then
+  PRODUCER_ID=1
+fi
+if [[ "${CONSUMER_ID}" -eq 0 ]]; then
+  CONSUMER_ID=1
+fi
+if [[ "${CONSUMER_ID}" -eq "${PRODUCER_ID}" ]]; then
+  CONSUMER_ID=$(( (CONSUMER_ID + 1) & 0xffffffff ))
+fi
+READY_CONSUMER_ID_BASE="${READY_CONSUMER_ID_BASE:-$(( (CONSUMER_ID + 1000) & 0xffffffff ))}"
 MAX_FRAMES="${MAX_FRAMES:-1}"
 
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
@@ -83,7 +96,11 @@ ready=false
 SECONDS=0
 while (( SECONDS < READY_TIMEOUT_S )); do
   set +e
-  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$READY_CONSUMER_ID" 0
+  ready_id=$(( (READY_CONSUMER_ID_BASE + SECONDS) & 0xffffffff ))
+  if [[ $ready_id -eq 0 ]]; then
+    ready_id=1
+  fi
+  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$ready_id" 0
   status=$?
   set -e
   if [[ $status -eq 0 ]]; then
