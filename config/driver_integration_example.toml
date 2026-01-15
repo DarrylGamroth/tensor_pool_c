@@ -14,12 +14,12 @@ control_stream_id_range = "32000-32999"
 
 # Shared-memory layout defaults
 [shm]
-base_dir = "/dev/shm/tensorpool"
+base_dir = "/dev/shm"
 namespace = "default"
 require_hugepages = false
 page_size_bytes = 4096
 permissions_mode = "660"
-allowed_base_dirs = ["/dev/shm/tensorpool", "/dev/shm"]
+allowed_base_dirs = ["/dev/shm"]
 
 # Operational policies
 [policies]

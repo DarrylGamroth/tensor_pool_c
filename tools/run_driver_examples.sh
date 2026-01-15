@@ -17,6 +17,7 @@ CONTROL_CHANNEL="${CONTROL_CHANNEL:-aeron:ipc?term-length=4m}"
 STREAM_ID="${STREAM_ID:-10000}"
 PRODUCER_ID="${PRODUCER_ID:-42}"
 CONSUMER_ID="${CONSUMER_ID:-43}"
+READY_CONSUMER_ID="${READY_CONSUMER_ID:-$((CONSUMER_ID + 1000))}"
 MAX_FRAMES="${MAX_FRAMES:-16}"
 
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
@@ -82,7 +83,7 @@ ready=false
 SECONDS=0
 while (( SECONDS < READY_TIMEOUT_S )); do
   set +e
-  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$CONSUMER_ID" 0
+  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$READY_CONSUMER_ID" 0
   status=$?
   set -e
   if [[ $status -eq 0 ]]; then
