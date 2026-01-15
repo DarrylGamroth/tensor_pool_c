@@ -19,32 +19,77 @@ jobs:
           repository: aeron-io/aeron
           path: aeron
 
-      - name: Checkout SBE
-        uses: actions/checkout@v4
-        with:
-          repository: aeron-io/simple-binary-encoding
-          path: simple-binary-encoding
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: "17"
 
-      - name: Build SBE tool
-        run: ./gradlew :sbe-tool:shadowJar
-        working-directory: simple-binary-encoding
-
-      - name: Build Aeron driver
-        run: ./gradlew :aeron-driver:assemble
-        working-directory: aeron
+      - name: Download Aeron driver and SBE tool
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          
+          def latest_release(group, artifact):
+              url = f"https://repo1.maven.org/maven2/{group.replace('.','/')}/{artifact}/maven-metadata.xml"
+              with urllib.request.urlopen(url) as resp:
+                  data = resp.read()
+              root = ET.fromstring(data)
+              version = root.findtext("versioning/release") or root.findtext("versioning/latest")
+              if not version:
+                  versions = root.findall("versioning/versions/version")
+                  if versions:
+                      version = versions[-1].text
+              if not version:
+                  raise RuntimeError(f"No release version for {group}:{artifact}")
+              return version
+          
+          def download_jar(group, artifact, version, dest):
+              base = f"https://repo1.maven.org/maven2/{group.replace('.','/')}/{artifact}/{version}"
+              jar_name = f"{artifact}-{version}.jar"
+              url = f"{base}/{jar_name}"
+              dest_path = dest / jar_name
+              urllib.request.urlretrieve(url, dest_path)
+              return dest_path
+          
+          cache = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "maven"
+          cache.mkdir(parents=True, exist_ok=True)
+          
+          aeron_version = ""
+          version_txt = pathlib.Path("aeron/version.txt")
+          if version_txt.exists():
+              aeron_version = version_txt.read_text(encoding="utf-8").splitlines()[0].strip()
+          if not aeron_version or aeron_version.endswith("-SNAPSHOT"):
+              aeron_version = latest_release("io.aeron", "aeron-driver")
+          
+          aeron_jar = download_jar("io.aeron", "aeron-driver", aeron_version, cache)
+          
+          sbe_jar = None
+          for group in ("io.aeron", "uk.co.real-logic"):
+              try:
+                  sbe_version = latest_release(group, "sbe-tool")
+                  sbe_jar = download_jar(group, "sbe-tool", sbe_version, cache)
+                  break
+              except Exception:
+                  continue
+          
+          if not sbe_jar:
+              raise RuntimeError("Unable to locate sbe-tool on Maven Central")
+          
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"AERON_DRIVER_JAR={aeron_jar}\n")
+              fh.write(f"SBE_TOOL_JAR={sbe_jar}\n")
+          PY
 
       - name: Configure
         run: >
           cmake -S . -B build
           -DAERON_ROOT=${{ github.workspace }}/aeron
-          -DSBE_ROOT=${{ github.workspace }}/simple-binary-encoding
-          -DSBE_TOOL_JAR=$(ls simple-binary-encoding/sbe-tool/build/libs/sbe-tool-*.jar | head -n 1)
+          -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
 
       - name: Build
         run: cmake --build build
@@ -53,12 +98,12 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf "${AERON_DIR}"
-          JAR=$(ls aeron/aeron-driver/build/libs/aeron-driver-*.jar | head -n 1)
-          if [ -z "${JAR}" ]; then
+          if [ -z "${AERON_DRIVER_JAR:-}" ]; then
             echo "Aeron driver jar not found" >&2
             exit 1
           fi
-          java -cp "${JAR}" io.aeron.driver.MediaDriver > /tmp/aeron-driver.log 2>&1 &
+          java -Daeron.dir="${AERON_DIR}" -cp "${AERON_DRIVER_JAR}" io.aeron.driver.MediaDriver \
+            > /tmp/aeron-driver.log 2>&1 &
           echo $! > /tmp/aeron-driver.pid
           for _ in $(seq 1 50); do
             if [ -f "${AERON_DIR}/CnC.dat" ] || [ -f "${AERON_DIR}/cnc.dat" ]; then
