@@ -52,13 +52,13 @@ fi
 
 if [[ -z "$STREAM_ID" ]]; then
   STREAM_ID="$(awk '
-    $0 ~ /^\\[streams\\./ { in_stream = 1; next }
+    $0 ~ /^\[streams\./ { in_stream = 1; next }
     in_stream && $0 ~ /^[[:space:]]*stream_id[[:space:]]*=/ {
       sub(/#.*/, "", $0);
       gsub(/[^0-9]/, "", $0);
       if (length($0) > 0) { print $0; exit }
     }
-    $0 ~ /^\\[/ { in_stream = 0 }
+    $0 ~ /^\[/ { in_stream = 0 }
   ' "$DRIVER_CONFIG")"
 fi
 STREAM_ID="${STREAM_ID:-10000}"
