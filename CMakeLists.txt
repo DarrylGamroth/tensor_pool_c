@@ -12,8 +12,9 @@ set(CMAKE_C_EXTENSIONS OFF)
 option(TP_ENABLE_SBE_CODEGEN "Enable SBE code generation" ON)
 
 set(AERON_ROOT "${CMAKE_CURRENT_LIST_DIR}/../aeron" CACHE PATH "Path to Aeron source tree")
-set(SBE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../simple-binary-encoding" CACHE PATH "Path to simple-binary-encoding source tree")
 set(SBE_TOOL_JAR "" CACHE FILEPATH "Path to sbe-tool or sbe-all jar")
+set(SBE_TOOL_VERSION "" CACHE STRING "SBE tool version to download (empty = latest)")
+set(SBE_TOOL_CACHE_DIR "" CACHE PATH "Cache directory for downloaded sbe-tool jars")
 
 if (NOT EXISTS "${AERON_ROOT}/aeron-client/src/main/c/CMakeLists.txt")
     message(FATAL_ERROR "Aeron C client not found at ${AERON_ROOT}/aeron-client/src/main/c")
@@ -103,19 +104,13 @@ set(TP_SOURCES
 if (TP_ENABLE_SBE_CODEGEN)
     find_package(Java REQUIRED COMPONENTS Runtime)
 
-    if (SBE_TOOL_JAR STREQUAL "")
-        file(GLOB SBE_JAR_CANDIDATES
-            "${SBE_ROOT}/sbe-all/build/libs/sbe-all-*.jar"
-            "${SBE_ROOT}/sbe-tool/build/libs/sbe-tool-*.jar")
-
-        list(LENGTH SBE_JAR_CANDIDATES SBE_JAR_COUNT)
-        if (SBE_JAR_COUNT GREATER 0)
-            list(GET SBE_JAR_CANDIDATES 0 SBE_TOOL_JAR)
-        endif ()
+    if (SBE_TOOL_JAR STREQUAL "" OR NOT EXISTS "${SBE_TOOL_JAR}")
+        include("${CMAKE_CURRENT_LIST_DIR}/cmake/FetchSbeTool.cmake")
+        tp_fetch_sbe_tool(SBE_TOOL_JAR)
     endif ()
 
     if (NOT EXISTS "${SBE_TOOL_JAR}")
-        message(FATAL_ERROR "SBE tool jar not found. Set -DSBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar")
+        message(FATAL_ERROR "SBE tool jar not found. Set -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar")
     endif ()
 
     set(SBE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
