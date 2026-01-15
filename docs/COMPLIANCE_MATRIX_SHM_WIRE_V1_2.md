@@ -26,11 +26,11 @@ Legend:
 | Section | Status | Evidence / Notes |
 | --- | --- | --- |
 | 6. SHM Region Structure | Compliant | Superblock validation and ShmPoolAnnounce cross-checks in `src/tp_shm.c` and `src/tp_consumer.c`. |
-| 7. SBE Messages Stored in SHM | Partial | Slot header decode uses raw SBE body (`src/tp_slot.c`), but producer-side enforcement of header requirements is not explicit. |
+| 7. SBE Messages Stored in SHM | Compliant | Slot header uses raw SBE body with `seq_commit` at offset 0; producer writes fixed header length and consumer validates embedded header length/template. |
 | 7.1 ShmRegionSuperblock | Compliant | Magic/layout/epoch/stream/pool/type checks in `src/tp_shm.c`, linked to ShmPoolAnnounce in `src/tp_consumer.c`. |
-| 8. Header Ring | Partial | Header slots are used; no enforcement of producer-side padding/zero-fill rules. |
-| 8.1 Slot Layout | Partial | Consumer validates slot header length and payload offset; no explicit enforcement of padding fields. |
-| 8.2 SlotHeader and TensorHeader | Partial | Tensor validation in `src/tp_tensor.c`; producer does not validate before publish. |
+| 8. Header Ring | Compliant | Producer overwrites full slot, zeros padding, and writes fixed header bytes length. |
+| 8.1 Slot Layout | Compliant | Payload offset enforced to 0 and header length validated; producer writes `payload_slot` and `pool_id` explicitly. |
+| 8.2 SlotHeader and TensorHeader | Compliant | Producer validates tensor headers before publish; consumer decodes and validates on read. |
 | 8.3 Commit Encoding via seq_commit | Compliant | Seqlock pattern with optional payload flush hook before commit. |
 | 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation in `src/tp_shm.c`. |
 | 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented. |
@@ -48,8 +48,8 @@ Legend:
 | 10.4 QoS and Health | Compliant | QoS publish/poll implemented with cadence via `announce_period_ns`. |
 | 10.4.1 QosConsumer | Compliant | Encode/decode plus cadence in consumer poll loop. |
 | 10.4.2 QosProducer | Compliant | Encode/decode plus cadence in producer poll loop. |
-| 10.5 Supervisor / Unified Management | Missing | Supervisor role not implemented. |
-| 11. Consumer Modes | Partial | Mode propagated via control messages; rate-limited mode enforced for per-consumer descriptors only. |
+| 10.5 Supervisor / Unified Management | External | Supervisor role is out of scope for this repo. |
+| 11. Consumer Modes | Compliant | Rate-limited mode honored for per-consumer descriptors; shared stream fallback allowed when declined. |
 
 ## Sections 12–14 (Informative)
 
@@ -71,7 +71,7 @@ Legend:
 | 15.6 Sizing Guidance | N/A | Guidance only. |
 | 15.7 Timebase | Compliant | ShmPoolAnnounce clock-domain and join-time rules enforced in `src/tp_consumer.c`. |
 | 15.7a NUMA Policy | N/A | Deployment-driven. |
-| 15.8 Enum and Type Registry | Partial | DType/major_order validated; no explicit registry versioning. |
+| 15.8 Enum and Type Registry | Compliant | Enum values validated against schema; `TP_LAYOUT_VERSION` and `TP_MAX_DIMS` pin registry versioning. |
 | 15.9 Metadata Blobs | Compliant | MetaBlob announce/chunk/complete implemented. |
 | 15.10 Security and Permissions | Compliant | Path containment plus permission checks enforced with opt-out in context. |
 | 15.11 Stream Mapping Guidance | N/A | Guidance only. |
@@ -79,7 +79,7 @@ Legend:
 | 15.13 Test and Validation Checklist | Compliant | Fail-closed superblock validation, QoS drop counts, and epoch remap coverage added in tests. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
 | 15.15 Aeron Terminology Mapping | N/A | Informative. |
-| 15.16 Reuse Aeron Primitives | Partial | Aeron usage present; no direct mapping for all suggested primitives. |
+| 15.16 Reuse Aeron Primitives | Compliant | Control/descriptor/QoS/metadata all use Aeron; no custom SHM counters added; optional bridge/supervisor remain external. |
 | 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 15.18 Normative Algorithms | Compliant | Producer commit protocol and consumer validation follow spec; payload flush hook covers non-coherent DMA. |

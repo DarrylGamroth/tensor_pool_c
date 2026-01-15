@@ -20,12 +20,12 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| SHM region validation, headers, payload pools | Partial | Core validation in `src/tp_shm.c` and `src/tp_consumer.c`; allowlist containment and pid liveness enforced; some padding/flush requirements remain unenforced. |
-| Slot header / TensorHeader validation | Partial | `src/tp_slot.c` and `src/tp_tensor.c` validate on read; producer-side checks are limited. |
+| SHM region validation, headers, payload pools | Compliant | Superblock validation, padding zeroing, and payload flush hook implemented in `src/tp_shm.c`/`src/tp_producer.c`. |
+| Slot header / TensorHeader validation | Compliant | Producer validates tensor headers before publish; consumer validates on read. |
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
-| Supervisor/unified management | Missing | Not implemented in this repo. |
+| Supervisor/unified management | External | Not implemented in this repo. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
 | SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |
@@ -37,7 +37,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Driver lifecycle, ownership, epoch management | External | Driver responsibilities are out of scope for this repo. |
 | Attach request encode | Compliant | `tp_driver_send_attach` in `src/tp_driver_client.c`. |
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
-| Node ID negotiation | Partial | `desiredNodeId` and `nodeId` supported; allocation is driver-owned. |
+| Node ID negotiation | Compliant | `desiredNodeId` sent; `nodeId` accepted from driver; allocation remains driver-owned. |
 | Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
 | Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
 | Lease revoked / shutdown handling | Compliant | Decode validates enums; revoke clears mappings and schedules reattach. |
@@ -51,7 +51,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | DiscoveryRequest encode | Compliant | `tp_discovery_request` validates non-empty response channel and stream ID. |
 | DiscoveryResponse decode | Compliant | Required fields validated; schema version/block length gated; pool `nslots` vs header `nslots` mismatch rejected. |
 | Client polling / async handling | Compliant | `tp_discovery_poll` and `tp_discovery_poller` implemented. |
-| Discovery provider / registry | Missing | No provider implementation in this repo. |
+| Discovery provider / registry | External | No provider implementation in this repo. |
 | Authority rules | External | Driver/registry responsibilities. |
 
 ## SHM_TraceLink_Spec_v1.0
