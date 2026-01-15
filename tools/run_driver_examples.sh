@@ -13,6 +13,10 @@ if [[ -z "${AERON_DIR:-}" ]]; then
   fi
 fi
 
+if [[ -n "${DESIRED_NODE_ID:-}" && -z "${TP_DESIRED_NODE_ID:-}" ]]; then
+  export TP_DESIRED_NODE_ID="${DESIRED_NODE_ID}"
+fi
+
 CONTROL_CHANNEL="${CONTROL_CHANNEL:-aeron:ipc?term-length=4m}"
 STREAM_ID="${STREAM_ID:-10000}"
 if [[ -z "${PRODUCER_ID:-}" ]]; then

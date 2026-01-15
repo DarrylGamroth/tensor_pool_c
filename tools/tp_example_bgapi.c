@@ -83,7 +83,10 @@ int main(int argc, char **argv)
     request.expected_layout_version = 0;
     request.publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
     request.require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
-    request.desired_node_id = TP_NULL_U32;
+    {
+        const char *env = getenv("TP_DESIRED_NODE_ID");
+        request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
+    }
 
     if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
