@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.tracelink"
+                   id="904"
+                   version="1"
+                   semanticVersion="1.0"
+                   byteOrder="littleEndian">
+
+  <types>
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="groupSizeEncoding">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="numInGroup"  primitiveType="uint16"/>
+    </composite>
+  </types>
+
+  <message name="TraceLinkSet" id="1">
+    <field name="streamId" id="1" type="uint32"/>
+    <field name="epoch" id="2" type="uint64"/>
+    <field name="seq" id="3" type="uint64"/>
+    <field name="traceId" id="4" type="uint64"/>
+    <group name="parents" id="5" dimensionType="groupSizeEncoding">
+      <field name="traceId" id="6" type="uint64"/>
+    </group>
+  </message>
+</sbe:messageSchema>

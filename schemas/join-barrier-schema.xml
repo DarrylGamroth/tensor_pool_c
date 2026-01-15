@@ -1,0 +1,77 @@
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="shm.tensorpool.merge"
+                   id="903"
+                   version="1"
+                   semanticVersion="1.0"
+                   byteOrder="littleEndian">
+  <types>
+    <composite name="messageHeader">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="templateId"  primitiveType="uint16"/>
+      <type name="schemaId"    primitiveType="uint16"/>
+      <type name="version"     primitiveType="uint16"/>
+    </composite>
+
+    <composite name="groupSizeEncoding">
+      <type name="blockLength" primitiveType="uint16"/>
+      <type name="numInGroup"  primitiveType="uint16"/>
+    </composite>
+
+    <enum name="ClockDomain" encodingType="uint8">
+      <validValue name="MONOTONIC">1</validValue>
+      <validValue name="REALTIME_SYNCED">2</validValue>
+    </enum>
+
+    <enum name="TimestampSource" encodingType="uint8">
+      <validValue name="FRAME_DESCRIPTOR">1</validValue>
+      <validValue name="SLOT_HEADER">2</validValue>
+    </enum>
+
+    <enum name="MergeRuleType" encodingType="uint8">
+      <validValue name="OFFSET">0</validValue>
+      <validValue name="WINDOW">1</validValue>
+    </enum>
+
+    <enum name="MergeTimeRuleType" encodingType="uint8">
+      <validValue name="OFFSET_NS">0</validValue>
+      <validValue name="WINDOW_NS">1</validValue>
+    </enum>
+  </types>
+
+  <message name="SequenceMergeMapAnnounce" id="1">
+    <field name="outStreamId" id="1" type="uint32"/>
+    <field name="epoch" id="2" type="uint64"/>
+    <field name="staleTimeoutNs" id="3" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <group name="rules" id="4" dimensionType="groupSizeEncoding">
+      <field name="inputStreamId" id="5" type="uint32"/>
+      <field name="ruleType" id="6" type="MergeRuleType"/>
+      <field name="offset" id="7" type="int32" presence="optional" nullValue="-2147483648"/>
+      <field name="windowSize" id="8" type="uint32" presence="optional" nullValue="4294967295"/>
+    </group>
+  </message>
+
+  <message name="SequenceMergeMapRequest" id="2">
+    <field name="outStreamId" id="1" type="uint32"/>
+    <field name="epoch" id="2" type="uint64"/>
+  </message>
+
+  <message name="TimestampMergeMapAnnounce" id="3">
+    <field name="outStreamId" id="1" type="uint32"/>
+    <field name="epoch" id="2" type="uint64"/>
+    <field name="staleTimeoutNs" id="3" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <field name="clockDomain" id="4" type="ClockDomain"/>
+    <field name="latenessNs" id="5" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    <group name="rules" id="6" dimensionType="groupSizeEncoding">
+      <field name="inputStreamId" id="7" type="uint32"/>
+      <field name="ruleType" id="8" type="MergeTimeRuleType"/>
+      <field name="timestampSource" id="9" type="TimestampSource"/>
+      <field name="offsetNs" id="10" type="int64" presence="optional" nullValue="-9223372036854775808"/>
+      <field name="windowNs" id="11" type="uint64" presence="optional" nullValue="18446744073709551615"/>
+    </group>
+  </message>
+
+  <message name="TimestampMergeMapRequest" id="4">
+    <field name="outStreamId" id="1" type="uint32"/>
+    <field name="epoch" id="2" type="uint64"/>
+  </message>
+</sbe:messageSchema>

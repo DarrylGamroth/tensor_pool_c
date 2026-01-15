@@ -3,7 +3,7 @@
                    package="shm.tensorpool.bridge"
                    id="902"
                    version="1"
-                   semanticVersion="1.0"
+                   semanticVersion="1.1"
                    byteOrder="littleEndian">
 
   <types>
@@ -34,11 +34,13 @@
     <field name="streamId"       id="1" type="uint32"/>
     <field name="epoch"          id="2" type="uint64"/>
     <field name="seq"            id="3" type="uint64"/>
+    <field name="traceId"        id="12" type="uint64" presence="optional" nullValue="0"/>
     <field name="chunkIndex"     id="4" type="uint32" maxValue="65535"/>
     <field name="chunkCount"     id="5" type="uint32" maxValue="65535"/>
     <field name="chunkOffset"    id="6" type="uint32"/>
     <field name="chunkLength"    id="7" type="uint32" maxValue="65535"/>
     <field name="payloadLength"  id="8" type="uint32" maxValue="1073741824"/>
+    <field name="payloadCrc32c"  id="13" type="uint32"/>
     <field name="headerIncluded" id="9" type="Bool"/>
     <data  name="headerBytes"    id="10" type="varDataEncoding256"/>
     <data  name="payloadBytes"   id="11" type="varDataEncoding"/>

@@ -64,7 +64,6 @@
     <type name="epoch_t"    primitiveType="uint64"/>
     <type name="version_t"  primitiveType="uint32"/>
     <type name="lease_id_t" primitiveType="uint64"/>
-    <type name="node_id_t"  primitiveType="uint32"/>
 
   </types>
 
@@ -76,10 +75,9 @@
     <field name="clientId"             id="3" type="uint32"/>
     <field name="role"                 id="4" type="Role"/>
     <field name="expectedLayoutVersion" id="5" type="version_t"/>
-    <field name="maxDims"              id="6" type="uint8"/>
-    <field name="publishMode"          id="7" type="PublishMode" presence="optional" nullValue="255"/>
-    <field name="requireHugepages"     id="8" type="HugepagesPolicy"/>
-    <field name="desiredNodeId"        id="9" type="node_id_t" presence="optional" nullValue="4294967295"/>
+    <field name="publishMode"          id="6" type="PublishMode" presence="optional" nullValue="255"/>
+    <field name="requireHugepages"     id="7" type="HugepagesPolicy"/>
+    <field name="desiredNodeId"        id="8" type="uint32" presence="optional" nullValue="4294967295"/>
   </sbe:message>
 
   <sbe:message name="ShmAttachResponse" id="2">
@@ -92,8 +90,7 @@
     <field name="layoutVersion"         id="7" type="version_t" presence="optional" nullValue="4294967295"/>
     <field name="headerNslots"          id="8" type="uint32" presence="optional" nullValue="4294967295"/>
     <field name="headerSlotBytes"       id="9" type="uint16" presence="optional" nullValue="65535"/>
-    <field name="maxDims"               id="10" type="uint8" presence="optional" nullValue="255"/>
-    <field name="nodeId"                id="31" type="node_id_t" presence="optional" nullValue="4294967295"/>
+    <field name="nodeId"                id="10" type="uint32" presence="optional" nullValue="4294967295"/>
     <group name="payloadPools"          id="20" dimensionType="groupSizeEncoding">
       <field name="poolId"      id="1" type="uint16"/>
       <field name="poolNslots"  id="2" type="uint32"/>
