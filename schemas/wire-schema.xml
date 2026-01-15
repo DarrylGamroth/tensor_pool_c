@@ -248,6 +248,27 @@
     </group>
   </sbe:message>
 
+  <sbe:message name="MetaBlobAnnounce" id="10">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="metaVersion" id="2" type="version_t"/>
+    <field name="blobType"    id="3" type="uint32"/>
+    <field name="totalLen"    id="4" type="uint64"/>
+    <field name="checksum"    id="5" type="uint64"/>
+  </sbe:message>
+
+  <sbe:message name="MetaBlobChunk" id="12">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="metaVersion" id="2" type="version_t"/>
+    <field name="chunkOffset" id="3" type="uint64"/>
+    <data  name="bytes"       id="4" type="varDataEncoding"/>
+  </sbe:message>
+
+  <sbe:message name="MetaBlobComplete" id="13">
+    <field name="streamId"    id="1" type="uint32"/>
+    <field name="metaVersion" id="2" type="version_t"/>
+    <field name="checksum"    id="3" type="uint64"/>
+  </sbe:message>
+
   <sbe:message name="ControlResponse" id="9">
     <field name="correlationId" id="1" type="int64"/>
     <field name="code"          id="2" type="ResponseCode"/>

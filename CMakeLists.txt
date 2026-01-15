@@ -112,6 +112,9 @@ if (TP_ENABLE_SBE_CODEGEN)
     if (NOT EXISTS "${SBE_TOOL_JAR}")
         message(FATAL_ERROR "SBE tool jar not found. Set -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar")
     endif ()
+    if (SBE_TOOL_CLASSPATH STREQUAL "")
+        set(SBE_TOOL_CLASSPATH "${SBE_TOOL_JAR}")
+    endif ()
 
     set(SBE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
     set(SBE_OUTPUT_WIRE "${SBE_OUTPUT_DIR}/wire")
@@ -122,6 +125,7 @@ if (TP_ENABLE_SBE_CODEGEN)
     set(SBE_OUTPUT_TRACE "${SBE_OUTPUT_DIR}/trace")
     set(SBE_SCHEMA_DIR "${CMAKE_CURRENT_LIST_DIR}/schemas")
     set(SBE_JAVA_OPTS "--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED")
+    set(SBE_JAVA_MAIN uk.co.real_logic.sbe.SbeTool)
 
     add_custom_command(
         OUTPUT "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
@@ -133,45 +137,45 @@ if (TP_ENABLE_SBE_CODEGEN)
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SBE_OUTPUT_TRACE}"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_WIRE}"
+            -Dsbe.output.dir=${SBE_OUTPUT_WIRE}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/wire-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DRIVER}"
+            -Dsbe.output.dir=${SBE_OUTPUT_DRIVER}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/driver-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_DISCOVERY}"
+            -Dsbe.output.dir=${SBE_OUTPUT_DISCOVERY}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/discovery-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_BRIDGE}"
+            -Dsbe.output.dir=${SBE_OUTPUT_BRIDGE}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/bridge-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_MERGE}"
+            -Dsbe.output.dir=${SBE_OUTPUT_MERGE}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/merge-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
-            -Dsbe.output.dir="${SBE_OUTPUT_TRACE}"
+            -Dsbe.output.dir=${SBE_OUTPUT_TRACE}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
-            -jar "${SBE_TOOL_JAR}"
+            -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
             "${SBE_SCHEMA_DIR}/tracelink-schema.xml"
         COMMAND "${CMAKE_COMMAND}" -E touch "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
         DEPENDS
