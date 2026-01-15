@@ -206,6 +206,11 @@ int tp_client_conductor_do_work(tp_client_conductor_t *conductor)
         return -1;
     }
 
+    if (!conductor->use_agent_invoker)
+    {
+        return 0;
+    }
+
     return aeron_main_do_work(conductor->aeron.aeron);
 }
 
