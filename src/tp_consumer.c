@@ -986,6 +986,12 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     consumer->header_nslots = config->header_nslots;
     consumer->pool_count = config->pool_count;
 
+    if (config->layout_version != TP_LAYOUT_VERSION)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach: unsupported layout version");
+        goto cleanup;
+    }
+
     if (!tp_is_power_of_two(config->header_nslots))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach: header_nslots must be power of two");
@@ -1234,8 +1240,13 @@ int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *conf
         return -1;
     }
 
-    if (consumer->context.use_driver && NULL == config)
+    if (consumer->context.use_driver)
     {
+        if (NULL != config)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach: driver mode ignores manual config");
+            return -1;
+        }
         return tp_consumer_attach_driver(consumer);
     }
 

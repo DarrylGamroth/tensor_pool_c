@@ -826,6 +826,12 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
     producer->header_nslots = config->header_nslots;
     producer->pool_count = config->pool_count;
 
+    if (config->layout_version != TP_LAYOUT_VERSION)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: unsupported layout version");
+        goto cleanup;
+    }
+
     if (!tp_is_power_of_two(config->header_nslots))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_config: header_nslots must be power of two");
@@ -1036,8 +1042,13 @@ int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *conf
         return -1;
     }
 
-    if (producer->context.use_driver && NULL == config)
+    if (producer->context.use_driver)
     {
+        if (NULL != config)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_attach: driver mode ignores manual config");
+            return -1;
+        }
         return tp_producer_attach_driver(producer);
     }
 

@@ -194,8 +194,6 @@ void tp_test_consumer_lease_revoked(void)
         goto cleanup;
     }
 
-    consumer.context.use_driver = true;
-
     if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
@@ -240,6 +238,7 @@ void tp_test_consumer_lease_revoked(void)
         goto cleanup;
     }
 
+    consumer.context.use_driver = true;
     consumer.driver_attached = true;
     consumer.driver.active_lease_id = 55;
 
@@ -358,8 +357,6 @@ void tp_test_producer_lease_revoked(void)
         goto cleanup;
     }
 
-    producer.context.use_driver = true;
-
     if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
@@ -405,6 +402,7 @@ void tp_test_producer_lease_revoked(void)
         goto cleanup;
     }
 
+    producer.context.use_driver = true;
     producer.driver_attached = true;
     producer.driver.active_lease_id = 77;
 
@@ -480,4 +478,3 @@ cleanup:
     assert(result == 0);
     assert(tp_producer_reattach_due(&producer, producer.next_attach_ns) == 1);
 }
-

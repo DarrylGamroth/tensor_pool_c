@@ -5,6 +5,8 @@
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_context.h"
+#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_uri.h"
@@ -51,6 +53,7 @@ void tp_test_pid_liveness(void);
 void tp_test_consumer_fallback_state(void);
 void tp_test_consumer_fallback_recover(void);
 void tp_test_consumer_fallback_invalid_announce(void);
+void tp_test_consumer_fallback_layout_version(void);
 void tp_test_qos_drop_counts(void);
 void tp_test_epoch_remap(void);
 void tp_test_progress_per_consumer_control(void);
@@ -361,6 +364,24 @@ static void test_tensor_header(void)
     assert(tp_tensor_header_decode(&header, buffer, sizeof(buffer), NULL) < 0);
 }
 
+static void test_driver_attach_rejects_manual_config(void)
+{
+    tp_producer_t producer;
+    tp_producer_config_t producer_cfg;
+    tp_consumer_t consumer;
+    tp_consumer_config_t consumer_cfg;
+
+    memset(&producer, 0, sizeof(producer));
+    memset(&producer_cfg, 0, sizeof(producer_cfg));
+    producer.context.use_driver = true;
+    assert(tp_producer_attach(&producer, &producer_cfg) < 0);
+
+    memset(&consumer, 0, sizeof(consumer));
+    memset(&consumer_cfg, 0, sizeof(consumer_cfg));
+    consumer.context.use_driver = true;
+    assert(tp_consumer_attach(&consumer, &consumer_cfg) < 0);
+}
+
 int main(void)
 {
     test_version();
@@ -369,6 +390,7 @@ int main(void)
     test_shm_superblock();
     test_shm_superblock_fail_closed();
     test_tensor_header();
+    test_driver_attach_rejects_manual_config();
     tp_test_decode_consumer_hello();
     tp_test_decode_consumer_config();
     tp_test_decode_data_source_meta();
@@ -395,6 +417,7 @@ int main(void)
     tp_test_consumer_fallback_state();
     tp_test_consumer_fallback_recover();
     tp_test_consumer_fallback_invalid_announce();
+    tp_test_consumer_fallback_layout_version();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
     tp_test_producer_claim_lifecycle();
