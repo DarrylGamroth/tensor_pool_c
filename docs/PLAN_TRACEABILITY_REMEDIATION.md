@@ -26,16 +26,15 @@ Legend:
 
 ## External / Out of Scope
 
-- [ ] W-10.5-1: Supervisor/unified management layer (external).
-- [ ] D-2.1, D-4.3-1, D-4.8-1: Driver-owned policies and enforcement (external).
-- [ ] DS-5.1-1, DS-6-1: Discovery provider/registry implementation (external).
+- [x] W-10.5-1: Supervisor/unified management layer (external).
+- [x] D-2.1, D-4.3-1, D-4.8-1: Driver-owned policies and enforcement (external).
+- [x] DS-5.1-1, DS-6-1: Discovery provider/registry implementation (external).
 
 ## Open Questions / Uncertainties
 
 - DMA flush hooks: decide which platforms require explicit flush instructions and how to expose that in the C API.
-- TraceLink propagation: confirm whether automatic emission is required in core or remains a helper for applications.
+- TraceLink propagation: resolved as no auto-emission required; helper/API covers explicit emission.
 
 ## Current Focus Order
 
-1. External/out-of-scope items (supervisor, driver policies, discovery provider).
-2. Resolve open questions (DMA flush hooks, TraceLink auto emission).
+1. Resolve open questions (DMA flush hooks).

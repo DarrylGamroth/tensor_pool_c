@@ -44,7 +44,7 @@ Columns:
 | W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/tp_progress_poller.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
-| W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | Missing | External supervisor not implemented |
+| W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | External | External supervisor not implemented |
 | W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/tp_consumer_registry.c`, `src/tp_consumer.c` | `tests/test_tp_consumer_registry.c`, `tests/test_tp_pollers.c` | Compliant | Fallback entered on invalid announce or mapping failure when configured. |
 | W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c` | Partial | Compatibility matrix not enforced |
 | W-15.2-1 | 15.2 | Epoch lifecycle: drop on mismatch, remap on announce | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
@@ -76,7 +76,7 @@ Columns:
 | D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | Schema/block length gated |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/tp_driver_client.c`, `src/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
-| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Partial | Driver enforcement external |
+| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | External | Driver enforcement external |
 | D-4.4-1 | 4.4 | Lease keepalive send/expiry handling | `src/tp_driver_client.c`, `src/tp_client.c` | `tests/test_tp_driver_client.c` | Compliant | `tp_client_do_work` schedules keepalives |
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
