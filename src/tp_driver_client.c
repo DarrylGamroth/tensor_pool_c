@@ -293,9 +293,36 @@ int tp_driver_decode_attach_response(
     }
     else
     {
-        uint32_t len = tensor_pool_shmAttachResponse_errorMessage_length(&response);
-        const char *err = tensor_pool_shmAttachResponse_errorMessage(&response);
-        tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+        struct tensor_pool_shmAttachResponse_payloadPools pools;
+        size_t pool_count = 0;
+
+        tensor_pool_shmAttachResponse_payloadPools_wrap_for_decode(
+            &pools,
+            (char *)buffer,
+            tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
+            version,
+            length);
+        pool_count = (size_t)tensor_pool_shmAttachResponse_payloadPools_count(&pools);
+        for (size_t i = 0; i < pool_count; i++)
+        {
+            if (NULL == tensor_pool_shmAttachResponse_payloadPools_next(&pools))
+            {
+                break;
+            }
+        }
+
+        {
+            uint32_t header_len = tensor_pool_shmAttachResponse_headerRegionUri_length(&response);
+            const char *header_uri = tensor_pool_shmAttachResponse_headerRegionUri(&response);
+            (void)header_len;
+            (void)header_uri;
+        }
+
+        {
+            uint32_t len = tensor_pool_shmAttachResponse_errorMessage_length(&response);
+            const char *err = tensor_pool_shmAttachResponse_errorMessage(&response);
+            tp_copy_ascii(out->error_message, sizeof(out->error_message), err, len);
+        }
     }
 
     return 0;
