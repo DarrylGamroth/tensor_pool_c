@@ -283,6 +283,12 @@ int tp_producer_publish_descriptor_to(
         return -1;
     }
 
+    if (producer->context.drop_unconnected_descriptors &&
+        !aeron_publication_is_connected(publication))
+    {
+        return AERON_PUBLICATION_NOT_CONNECTED;
+    }
+
     memset(buffer, 0, header_len + tensor_pool_tensorHeader_sbe_block_length());
 
     tensor_pool_messageHeader_wrap(
@@ -357,33 +363,48 @@ static int tp_producer_publish_descriptor(
                 }
                 entry->last_descriptor_ns = now_ns;
             }
-            if (tp_producer_publish_descriptor_to(
-                producer,
-                entry->descriptor_publication,
-                seq,
-                timestamp_ns,
-                meta_version,
-                trace_id) < 0)
             {
-                result = -1;
+                int offer_result = tp_producer_publish_descriptor_to(
+                    producer,
+                    entry->descriptor_publication,
+                    seq,
+                    timestamp_ns,
+                    meta_version,
+                    trace_id);
+                if (offer_result == AERON_PUBLICATION_NOT_CONNECTED &&
+                    producer->context.drop_unconnected_descriptors)
+                {
+                    published = 1;
+                    continue;
+                }
+                if (offer_result < 0)
+                {
+                    result = -1;
+                }
+                else
+                {
+                    published_ok = 1;
+                }
+                published = 1;
             }
-            else
-            {
-                published_ok = 1;
-            }
-            published = 1;
         }
     }
 
     if (producer->descriptor_publication)
     {
-        if (tp_producer_publish_descriptor_to(
+        int offer_result = tp_producer_publish_descriptor_to(
             producer,
             producer->descriptor_publication,
             seq,
             timestamp_ns,
             meta_version,
-            trace_id) < 0)
+            trace_id);
+        if (offer_result == AERON_PUBLICATION_NOT_CONNECTED &&
+            producer->context.drop_unconnected_descriptors)
+        {
+            published = 1;
+        }
+        else if (offer_result < 0)
         {
             result = -1;
         }
@@ -461,6 +482,16 @@ void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool en
     }
 
     ctx->fixed_pool_mode = enabled;
+}
+
+void tp_producer_context_set_drop_unconnected_descriptors(tp_producer_context_t *ctx, bool enabled)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->drop_unconnected_descriptors = enabled;
 }
 
 static void tp_producer_unmap_regions(tp_producer_t *producer)

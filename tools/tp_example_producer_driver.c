@@ -155,6 +155,7 @@ int main(int argc, char **argv)
 
     producer_context.stream_id = info.stream_id;
     producer_context.producer_id = client_id;
+    tp_producer_context_set_drop_unconnected_descriptors(&producer_context, true);
 
     if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
