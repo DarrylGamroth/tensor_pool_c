@@ -169,22 +169,22 @@ if (TP_ENABLE_SBE_CODEGEN)
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
-            "${SBE_SCHEMA_DIR}/merge-schema.xml"
+            "${SBE_SCHEMA_DIR}/join-barrier-schema.xml"
         COMMAND "${Java_JAVA_EXECUTABLE}" ${SBE_JAVA_OPTS}
             -Dsbe.target.language=C
             -Dsbe.output.dir=${SBE_OUTPUT_TRACE}
             -Dsbe.target.namespace=tensor_pool
             -Dsbe.generate.ir=true
             -cp "${SBE_TOOL_CLASSPATH}" ${SBE_JAVA_MAIN}
-            "${SBE_SCHEMA_DIR}/tracelink-schema.xml"
+            "${SBE_SCHEMA_DIR}/trace-link-schema.xml"
         COMMAND "${CMAKE_COMMAND}" -E touch "${SBE_OUTPUT_DIR}/tp_codegen.stamp"
         DEPENDS
             "${SBE_SCHEMA_DIR}/wire-schema.xml"
             "${SBE_SCHEMA_DIR}/driver-schema.xml"
             "${SBE_SCHEMA_DIR}/discovery-schema.xml"
             "${SBE_SCHEMA_DIR}/bridge-schema.xml"
-            "${SBE_SCHEMA_DIR}/merge-schema.xml"
-            "${SBE_SCHEMA_DIR}/tracelink-schema.xml"
+            "${SBE_SCHEMA_DIR}/join-barrier-schema.xml"
+            "${SBE_SCHEMA_DIR}/trace-link-schema.xml"
         VERBATIM
     )
 
