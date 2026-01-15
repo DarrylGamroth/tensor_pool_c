@@ -16,13 +16,13 @@ jobs:
       - name: Checkout Aeron
         uses: actions/checkout@v4
         with:
-          repository: real-logic/aeron
+          repository: aeron-io/aeron
           path: aeron
 
       - name: Checkout SBE
         uses: actions/checkout@v4
         with:
-          repository: real-logic/simple-binary-encoding
+          repository: aeron-io/simple-binary-encoding
           path: simple-binary-encoding
 
       - name: Setup Java
