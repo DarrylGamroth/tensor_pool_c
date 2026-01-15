@@ -33,7 +33,6 @@ typedef struct tp_driver_attach_info_stct
     uint32_t layout_version;
     uint32_t header_nslots;
     uint16_t header_slot_bytes;
-    uint8_t max_dims;
     uint32_t node_id;
     char header_region_uri[4096];
     tp_driver_pool_info_t *pools;

@@ -46,7 +46,6 @@ static void test_decode_attach_response_valid(void)
     tensor_pool_shmAttachResponse_set_layoutVersion(&response, 1);
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, TP_HEADER_SLOT_BYTES);
-    tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
 
     if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
         &pools,
@@ -77,7 +76,6 @@ static void test_decode_attach_response_valid(void)
     assert(info.code == tensor_pool_responseCode_OK);
     assert(info.pool_count == 1);
     assert(info.header_slot_bytes == TP_HEADER_SLOT_BYTES);
-    assert(info.max_dims == TP_MAX_DIMS);
 
     result = 0;
 
@@ -117,7 +115,6 @@ static void test_decode_attach_response_invalid_slot_bytes(void)
     tensor_pool_shmAttachResponse_set_layoutVersion(&response, 1);
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, 128);
-    tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
     {
         struct tensor_pool_shmAttachResponse_payloadPools pools;
 
@@ -256,7 +253,6 @@ static void test_decode_attach_response_null_expiry(void)
     tensor_pool_shmAttachResponse_set_layoutVersion(&response, 1);
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 16);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, TP_HEADER_SLOT_BYTES);
-    tensor_pool_shmAttachResponse_set_maxDims(&response, TP_MAX_DIMS);
 
     if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
         &pools,

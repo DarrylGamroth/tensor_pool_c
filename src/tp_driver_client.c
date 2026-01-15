@@ -155,7 +155,6 @@ int tp_driver_decode_attach_response(
         out->layout_version = tensor_pool_shmAttachResponse_layoutVersion(&response);
         out->header_nslots = tensor_pool_shmAttachResponse_headerNslots(&response);
         out->header_slot_bytes = tensor_pool_shmAttachResponse_headerSlotBytes(&response);
-        out->max_dims = tensor_pool_shmAttachResponse_maxDims(&response);
         out->node_id = tensor_pool_shmAttachResponse_nodeId(&response);
         if (out->node_id == tensor_pool_shmAttachResponse_nodeId_null_value())
         {
@@ -167,8 +166,7 @@ int tp_driver_decode_attach_response(
             out->epoch == tensor_pool_shmAttachResponse_epoch_null_value() ||
             out->layout_version == tensor_pool_shmAttachResponse_layoutVersion_null_value() ||
             out->header_nslots == tensor_pool_shmAttachResponse_headerNslots_null_value() ||
-            out->header_slot_bytes == tensor_pool_shmAttachResponse_headerSlotBytes_null_value() ||
-            out->max_dims == tensor_pool_shmAttachResponse_maxDims_null_value())
+            out->header_slot_bytes == tensor_pool_shmAttachResponse_headerSlotBytes_null_value())
         {
             out->code = tensor_pool_responseCode_INTERNAL_ERROR;
             strncpy(out->error_message, "attach response missing required fields", sizeof(out->error_message) - 1);
@@ -180,14 +178,6 @@ int tp_driver_decode_attach_response(
         {
             out->code = tensor_pool_responseCode_INVALID_PARAMS;
             strncpy(out->error_message, "attach response header_slot_bytes mismatch", sizeof(out->error_message) - 1);
-            out->error_message[sizeof(out->error_message) - 1] = '\0';
-            return 0;
-        }
-
-        if (out->max_dims != TP_MAX_DIMS)
-        {
-            out->code = tensor_pool_responseCode_INVALID_PARAMS;
-            strncpy(out->error_message, "attach response max_dims mismatch", sizeof(out->error_message) - 1);
             out->error_message[sizeof(out->error_message) - 1] = '\0';
             return 0;
         }
@@ -890,7 +880,6 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
     tensor_pool_shmAttachRequest_set_clientId(&attach, request->client_id);
     tensor_pool_shmAttachRequest_set_role(&attach, request->role);
     tensor_pool_shmAttachRequest_set_expectedLayoutVersion(&attach, request->expected_layout_version);
-    tensor_pool_shmAttachRequest_set_maxDims(&attach, 0);
     tensor_pool_shmAttachRequest_set_publishMode(&attach, request->publish_mode);
     tensor_pool_shmAttachRequest_set_requireHugepages(&attach, request->require_hugepages);
     if (request->desired_node_id == TP_NULL_U32)
