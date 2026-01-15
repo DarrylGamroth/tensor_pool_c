@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      AERON_DIR: /dev/shm/aeron-ci
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Aeron
+        uses: actions/checkout@v4
+        with:
+          repository: real-logic/aeron
+          path: aeron
+
+      - name: Checkout SBE
+        uses: actions/checkout@v4
+        with:
+          repository: real-logic/simple-binary-encoding
+          path: simple-binary-encoding
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build SBE tool
+        run: ./gradlew :sbe-tool:shadowJar
+        working-directory: simple-binary-encoding
+
+      - name: Build Aeron driver
+        run: ./gradlew :aeron-driver:assemble
+        working-directory: aeron
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DAERON_ROOT=${{ github.workspace }}/aeron
+          -DSBE_ROOT=${{ github.workspace }}/simple-binary-encoding
+          -DSBE_TOOL_JAR=$(ls simple-binary-encoding/sbe-tool/build/libs/sbe-tool-*.jar | head -n 1)
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Start Aeron Media Driver
+        run: |
+          set -euo pipefail
+          rm -rf "${AERON_DIR}"
+          JAR=$(ls aeron/aeron-driver/build/libs/aeron-driver-*.jar | head -n 1)
+          if [ -z "${JAR}" ]; then
+            echo "Aeron driver jar not found" >&2
+            exit 1
+          fi
+          java -cp "${JAR}" io.aeron.driver.MediaDriver > /tmp/aeron-driver.log 2>&1 &
+          echo $! > /tmp/aeron-driver.pid
+          for _ in $(seq 1 50); do
+            if [ -f "${AERON_DIR}/CnC.dat" ] || [ -f "${AERON_DIR}/cnc.dat" ]; then
+              exit 0
+            fi
+            sleep 0.1
+          done
+          echo "Aeron driver did not start" >&2
+          exit 1
+
+      - name: Test
+        run: ./build/tensor_pool_tests
+
+      - name: Stop Aeron Media Driver
+        if: always()
+        run: |
+          if [ -f /tmp/aeron-driver.pid ]; then
+            kill "$(cat /tmp/aeron-driver.pid)" || true
+          fi
+          pkill -f io.aeron.driver.MediaDriver || true
