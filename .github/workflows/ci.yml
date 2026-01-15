@@ -36,64 +36,64 @@ jobs:
       - name: Download Aeron driver and SBE tool
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import os
-          import pathlib
-          import urllib.request
-          import xml.etree.ElementTree as ET
-          
-          def latest_release(group, artifact):
-              url = f"https://repo1.maven.org/maven2/{group.replace('.','/')}/{artifact}/maven-metadata.xml"
-              with urllib.request.urlopen(url) as resp:
-                  data = resp.read()
-              root = ET.fromstring(data)
-              version = root.findtext("versioning/release") or root.findtext("versioning/latest")
-              if not version:
-                  versions = root.findall("versioning/versions/version")
-                  if versions:
-                      version = versions[-1].text
-              if not version:
-                  raise RuntimeError(f"No release version for {group}:{artifact}")
-              return version
-          
-          def download_jar(group, artifact, version, dest):
-              base = f"https://repo1.maven.org/maven2/{group.replace('.','/')}/{artifact}/{version}"
-              jar_name = f"{artifact}-{version}.jar"
-              url = f"{base}/{jar_name}"
-              dest_path = dest / jar_name
-              if dest_path.exists():
-                  return dest_path
-              urllib.request.urlretrieve(url, dest_path)
-              return dest_path
-          
-          cache = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "maven"
-          cache.mkdir(parents=True, exist_ok=True)
-          
-          aeron_version = ""
-          version_txt = pathlib.Path("aeron/version.txt")
-          if version_txt.exists():
-              aeron_version = version_txt.read_text(encoding="utf-8").splitlines()[0].strip()
-          if not aeron_version or aeron_version.endswith("-SNAPSHOT"):
-              aeron_version = latest_release("io.aeron", "aeron-driver")
-          
-          aeron_jar = download_jar("io.aeron", "aeron-driver", aeron_version, cache)
-          
-          sbe_jar = None
-          for group in ("io.aeron", "uk.co.real-logic"):
-              try:
-                  sbe_version = latest_release(group, "sbe-tool")
-                  sbe_jar = download_jar(group, "sbe-tool", sbe_version, cache)
-                  break
-              except Exception:
-                  continue
-          
-          if not sbe_jar:
-              raise RuntimeError("Unable to locate sbe-tool on Maven Central")
-          
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
-              fh.write(f"AERON_DRIVER_JAR={aeron_jar}\n")
-              fh.write(f"SBE_TOOL_JAR={sbe_jar}\n")
-          PY
+          cache_dir="${RUNNER_TEMP:-/tmp}/maven"
+          mkdir -p "${cache_dir}"
+
+          get_metadata_value() {
+            local url="$1"
+            local key="$2"
+            curl -fsSL "${url}" | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
+          }
+
+          aeron_version=""
+          if [ -f "aeron/version.txt" ]; then
+            aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
+          fi
+          if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            if [ -z "${aeron_version}" ]; then
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${aeron_version}" ]; then
+            echo "Unable to resolve aeron-driver version" >&2
+            exit 1
+          fi
+
+          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          if [ ! -f "${aeron_jar}" ]; then
+            curl -fsSL -o "${aeron_jar}" \
+              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+          fi
+
+          sbe_group=""
+          sbe_version=""
+          for group in io.aeron uk.co.real-logic; do
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            sbe_version="$(get_metadata_value "${meta_url}" "release")"
+            if [ -z "${sbe_version}" ]; then
+              sbe_version="$(get_metadata_value "${meta_url}" "latest")"
+            fi
+            if [ -n "${sbe_version}" ]; then
+              sbe_group="${group}"
+              break
+            fi
+          done
+          if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
+            echo "Unable to resolve sbe-tool version" >&2
+            exit 1
+          fi
+
+          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          if [ ! -f "${sbe_jar}" ]; then
+            curl -fsSL -o "${sbe_jar}" \
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
+          fi
+
+          {
+            echo "AERON_DRIVER_JAR=${aeron_jar}"
+            echo "SBE_TOOL_JAR=${sbe_jar}"
+          } >> "${GITHUB_ENV}"
 
       - name: Configure
         run: >
