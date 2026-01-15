@@ -18,7 +18,7 @@ if [[ -n "${DESIRED_NODE_ID:-}" && -z "${TP_DESIRED_NODE_ID:-}" ]]; then
 fi
 
 CONTROL_CHANNEL="${CONTROL_CHANNEL:-aeron:ipc?term-length=4m}"
-STREAM_ID="${STREAM_ID:-10000}"
+STREAM_ID="${STREAM_ID:-}"
 if [[ -z "${PRODUCER_ID:-}" ]]; then
   PRODUCER_ID=$(( (RANDOM << 16) | RANDOM ))
 fi
@@ -49,6 +49,19 @@ if [[ ! -f "$DRIVER_CONFIG" ]]; then
     exit 1
   fi
 fi
+
+if [[ -z "$STREAM_ID" ]]; then
+  STREAM_ID="$(awk '
+    $0 ~ /^\\[streams\\./ { in_stream = 1; next }
+    in_stream && $0 ~ /^[[:space:]]*stream_id[[:space:]]*=/ {
+      sub(/#.*/, "", $0);
+      gsub(/[^0-9]/, "", $0);
+      if (length($0) > 0) { print $0; exit }
+    }
+    $0 ~ /^\\[/ { in_stream = 0 }
+  ' "$DRIVER_CONFIG")"
+fi
+STREAM_ID="${STREAM_ID:-10000}"
 
 PRODUCER_BIN="$BUILD_DIR/tp_example_producer_driver"
 CONSUMER_BIN="$BUILD_DIR/tp_example_consumer_driver"
