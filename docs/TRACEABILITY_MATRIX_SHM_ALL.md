@@ -46,7 +46,7 @@ Columns:
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
 | W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | External | External supervisor not implemented |
 | W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/tp_consumer_registry.c`, `src/tp_consumer.c` | `tests/test_tp_consumer_registry.c`, `tests/test_tp_pollers.c` | Compliant | Fallback entered on invalid announce or mapping failure when configured. |
-| W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c` | Partial | Compatibility matrix not enforced |
+| W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/tp_shm.c`, `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_consumer_apply.c` | Compliant | Layout version gated at attach and superblock validation matches announce |
 | W-15.2-1 | 15.2 | Epoch lifecycle: drop on mismatch, remap on announce | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-15.3-1 | 15.3 | Commit protocol edge cases | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | Drops on instability or seq mismatch |
 | W-15.4-1 | 15.4 | Overwrite/drop accounting | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | |
@@ -59,7 +59,7 @@ Columns:
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/tp_consumer.c`, `src/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
 | W-15.16a-1 | 15.16a | File-backed SHM prefault/lock/fsync policy | n/a | n/a | N/A | Informative guidance |
 | W-15.17-1 | 15.17 | ControlResponse error codes | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
-| W-15.18-1 | 15.18 | Normative algorithms (per role) | `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c` | Partial | DMA flush and some edge cases not covered |
+| W-15.18-1 | 15.18 | Normative algorithms (per role) | `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_producer_claim.c` | Compliant | Commit protocol, header validation, and payload flush hook implemented |
 | W-15.20-1 | 15.20 | Compatibility matrix (layout/wire) | n/a | n/a | N/A | Spec evolution guidance |
 | W-15.21-1 | 15.21 | Protocol state machines | `src/tp_consumer.c` | `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | Compliant | Mapping transitions validated |
 | W-15.21a-1 | 15.21a | Canonical layout + path containment validation | `src/tp_shm.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | |
@@ -71,8 +71,8 @@ Columns:
 | Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | D-2.1 | 2 | Single authoritative driver per stream | n/a | n/a | External | Driver responsibility |
-| D-2.2 | 2.2/2.3 | Clients MUST NOT create/truncate/unlink SHM files | n/a | n/a | Partial | Not enforced in client API |
-| D-3-1 | 3 | Clients treat driver URIs as authoritative | `src/tp_driver_client.c`, `src/tp_client.c` | `tests/test_tp_driver_client.c` | Partial | Enforced by usage, not hard-checked |
+| D-2.2 | 2.2/2.3 | Clients MUST NOT create/truncate/unlink SHM files | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Client library never creates/truncates; driver owns SHM lifecycles |
+| D-3-1 | 3 | Clients treat driver URIs as authoritative | `src/tp_driver_client.c`, `src/tp_client.c`, `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c` | Compliant | Driver mode rejects manual config |
 | D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | Schema/block length gated |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/tp_driver_client.c`, `src/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
@@ -92,7 +92,7 @@ Columns:
 | DS-3-1 | 3 | Discovery is advisory; attach via driver | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Discovery guidance clarified in API usage. |
 | DS-4.2-1 | 4.2 | Gate decode by `schemaId`/`templateId` on shared streams | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-4.3-1 | 4.3 | Request must include response channel and non-zero stream ID | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
-| DS-5.0-1 | 5.0 | Optional fields use nullValue or zero-length strings | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Partial | Decode assumes SBE defaults |
+| DS-5.0-1 | 5.0 | Optional fields use nullValue or zero-length strings | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | Optional dataSourceId nullValue handled |
 | DS-5.1-1 | 5.1 | Filter AND semantics, tag matching rules | n/a | n/a | External | Provider responsibility |
 | DS-5.2-1 | 5.2 | Response validation: headerSlotBytes/maxDims, pool_nslots match, authority fields non-empty | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-6-1 | 6 | Registry expiry/indexing/conflict resolution | n/a | n/a | External | Provider responsibility |

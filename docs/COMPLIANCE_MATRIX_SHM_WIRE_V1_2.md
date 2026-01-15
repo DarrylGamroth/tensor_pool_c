@@ -63,7 +63,7 @@ Legend:
 
 | Section | Status | Evidence / Notes |
 | --- | --- | --- |
-| 15.1 Validation and Compatibility | Partial | Superblock validation + ShmPoolAnnounce linkage implemented; compatibility matrix not enforced. |
+| 15.1 Validation and Compatibility | Compliant | Layout version gated at attach; superblock fields validated against ShmPoolAnnounce. |
 | 15.2 Epoch Lifecycle | Compliant | ShmPoolAnnounce epoch tracking, remap, and drop behavior in `src/tp_consumer.c`. |
 | 15.3 Commit Protocol Edge Cases | Compliant | Seqlock stability and seq mismatch handled as drops. |
 | 15.4 Overwrite and Drop Accounting | Compliant | Drops tracked in `src/tp_consumer.c` with accessor in `include/tensor_pool/tp_consumer.h`. |
@@ -82,7 +82,7 @@ Legend:
 | 15.16 Reuse Aeron Primitives | Partial | Aeron usage present; no direct mapping for all suggested primitives. |
 | 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/tp_control.c` and `src/tp_control_adapter.c`. |
-| 15.18 Normative Algorithms | Partial | Seqlock/validation and ShmPoolAnnounce flow implemented; explicit DMA flush handling remains platform-specific. |
+| 15.18 Normative Algorithms | Compliant | Producer commit protocol and consumer validation follow spec; payload flush hook covers non-coherent DMA. |
 | 15.20 Compatibility Matrix | N/A | Spec evolution guidance. |
 | 15.21 Protocol State Machines | Compliant | Mapping transitions and fallback recovery exercised in tests. |
 | 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/tp_shm.c`. |

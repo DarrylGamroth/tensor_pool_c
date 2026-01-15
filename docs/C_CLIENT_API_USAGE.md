@@ -112,6 +112,7 @@ Notes:
 - `tp_consumer_attach` (direct SHM) sends `ConsumerHello` on success.
 - On `ShmLeaseRevoked`, `tp_consumer_reattach_due` can be used to retry attach with backoff.
 - Invalid `ShmPoolAnnounce` or SHM mapping failures transition to fallback when `payload_fallback_uri` is configured.
+- In driver model, clients must not create/truncate/unlink SHM files; the driver owns SHM lifecycles.
 
 ```c
 if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
