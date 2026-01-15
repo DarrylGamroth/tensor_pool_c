@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void usage(const char *name)
 {
@@ -39,6 +40,31 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
             desc->seq,
             frame.pool_id,
             frame.payload_len);
+    }
+}
+
+static void drive_keepalives(tp_client_t *client)
+{
+    const char *env = getenv("TP_EXAMPLE_KEEPALIVE_MS");
+    uint64_t duration_ns = 1000ULL * 1000ULL * 1000ULL;
+    struct timespec ts = { 0, 10 * 1000 * 1000 };
+    uint64_t deadline;
+
+    if (env && env[0] != '\0')
+    {
+        duration_ns = (uint64_t)strtoull(env, NULL, 10) * 1000ULL * 1000ULL;
+    }
+
+    if (duration_ns == 0)
+    {
+        return;
+    }
+
+    deadline = (uint64_t)tp_clock_now_ns() + duration_ns;
+    while ((uint64_t)tp_clock_now_ns() < deadline)
+    {
+        tp_client_do_work(client);
+        nanosleep(&ts, NULL);
     }
 }
 
@@ -197,6 +223,8 @@ int main(int argc, char **argv)
         tp_consumer_poll_control(&consumer, 10);
         tp_consumer_poll_descriptors(&consumer, 10);
     }
+
+    drive_keepalives(&client);
 
     tp_consumer_close(&consumer);
     free(pool_cfg);

@@ -4,10 +4,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static void usage(const char *name)
 {
     fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id>\n", name);
+}
+
+static void drive_keepalives(tp_client_t *client)
+{
+    const char *env = getenv("TP_EXAMPLE_KEEPALIVE_MS");
+    uint64_t duration_ns = 1000ULL * 1000ULL * 1000ULL;
+    struct timespec ts = { 0, 10 * 1000 * 1000 };
+    uint64_t deadline;
+
+    if (env && env[0] != '\0')
+    {
+        duration_ns = (uint64_t)strtoull(env, NULL, 10) * 1000ULL * 1000ULL;
+    }
+
+    if (duration_ns == 0)
+    {
+        return;
+    }
+
+    deadline = (uint64_t)tp_clock_now_ns() + duration_ns;
+    while ((uint64_t)tp_clock_now_ns() < deadline)
+    {
+        tp_client_do_work(client);
+        nanosleep(&ts, NULL);
+    }
 }
 
 int main(int argc, char **argv)
@@ -188,6 +214,8 @@ int main(int argc, char **argv)
             printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
         }
     }
+
+    drive_keepalives(&client);
 
     tp_producer_close(&producer);
     free(pool_cfg);
