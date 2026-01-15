@@ -76,7 +76,26 @@ LAUNCH_MEDIA_DRIVER="$launch_media_driver" \
 
 driver_pid=$!
 
-sleep 1
+READY_TIMEOUT_S="${READY_TIMEOUT_S:-20}"
+READY_SLEEP_S="${READY_SLEEP_S:-0.5}"
+ready=false
+SECONDS=0
+while (( SECONDS < READY_TIMEOUT_S )); do
+  set +e
+  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$CONSUMER_ID" 0
+  status=$?
+  set -e
+  if [[ $status -eq 0 ]]; then
+    ready=true
+    break
+  fi
+  sleep "$READY_SLEEP_S"
+done
+
+if [[ $ready != true ]]; then
+  echo "Driver did not become ready within ${READY_TIMEOUT_S}s" >&2
+  exit 1
+fi
 
 set +e
 "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$CONSUMER_ID" "$MAX_FRAMES" &
