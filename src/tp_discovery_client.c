@@ -222,7 +222,14 @@ int tp_discovery_decode_response(
             result->header_nslots = tensor_pool_discoveryResponse_results_headerNslots(&results);
             result->header_slot_bytes = tensor_pool_discoveryResponse_results_headerSlotBytes(&results);
             result->max_dims = tensor_pool_discoveryResponse_results_maxDims(&results);
-            result->data_source_id = tensor_pool_discoveryResponse_results_dataSourceId(&results);
+            {
+                uint64_t data_source_id = tensor_pool_discoveryResponse_results_dataSourceId(&results);
+                if (data_source_id == tensor_pool_discoveryResponse_results_dataSourceId_null_value())
+                {
+                    data_source_id = TP_NULL_U64;
+                }
+                result->data_source_id = data_source_id;
+            }
             result->driver_control_stream_id = tensor_pool_discoveryResponse_results_driverControlStreamId(&results);
 
             if (result->header_slot_bytes != TP_HEADER_SLOT_BYTES || result->max_dims != TP_MAX_DIMS)
