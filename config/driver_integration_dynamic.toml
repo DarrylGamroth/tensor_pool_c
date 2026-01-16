@@ -1,0 +1,42 @@
+# Driver instance and control-plane endpoints
+[driver]
+instance_id = "driver-example"
+aeron_dir = ""
+control_channel = "aeron:ipc?term-length=4m"
+control_stream_id = 1000
+announce_channel = "aeron:ipc?term-length=4m"
+announce_stream_id = 1001
+qos_channel = "aeron:ipc?term-length=4m"
+qos_stream_id = 1200
+stream_id_range = "20000-29999"
+descriptor_stream_id_range = "31000-31999"
+control_stream_id_range = "32000-32999"
+
+# Shared-memory layout defaults
+[shm]
+base_dir = "/dev/shm"
+namespace = "default"
+require_hugepages = false
+page_size_bytes = 4096
+permissions_mode = "660"
+allowed_base_dirs = ["/dev/shm"]
+
+# Operational policies
+[policies]
+allow_dynamic_streams = true
+default_profile = "camera"
+announce_period_ms = 1000
+lease_keepalive_interval_ms = 1000
+lease_expiry_grace_intervals = 3
+
+# Profiles define SHM sizing and pool layout
+[profiles.camera]
+header_nslots = 64
+payload_pools = [
+  { pool_id = 1, stride_bytes = 1048576 }
+]
+
+# Static stream definitions (optional even with dynamic streams enabled)
+[streams.cam1]
+stream_id = 10000
+profile = "camera"
