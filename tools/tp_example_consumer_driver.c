@@ -165,6 +165,10 @@ int main(int argc, char **argv)
     tp_client_context_set_control_channel(&client_context, argv[2], 1000);
     tp_client_context_set_descriptor_channel(&client_context, argv[2], 1100);
     tp_client_context_set_qos_channel(&client_context, argv[2], 1200);
+    fprintf(stderr,
+        "Descriptor subscription config channel=%s stream_id=%d\n",
+        client_context.base.descriptor_channel,
+        client_context.base.descriptor_stream_id);
     tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)

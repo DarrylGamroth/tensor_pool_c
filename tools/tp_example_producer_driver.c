@@ -49,8 +49,10 @@ static void log_publication_status(const char *label, aeron_publication_t *publi
     }
 
     fprintf(stderr,
-        "%s publication status=%" PRId64 " connected=%d\n",
+        "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
         label,
+        aeron_publication_channel(publication),
+        aeron_publication_stream_id(publication),
         aeron_publication_channel_status(publication),
         aeron_publication_is_connected(publication) ? 1 : 0);
 }
