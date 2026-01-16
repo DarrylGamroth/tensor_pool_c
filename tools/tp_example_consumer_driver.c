@@ -185,10 +185,6 @@ int main(int argc, char **argv)
     consumer_context.consumer_id = client_id;
     consumer_context.hello.stream_id = info.stream_id;
     consumer_context.hello.consumer_id = client_id;
-    consumer_context.hello.descriptor_stream_id = 1100;
-    consumer_context.hello.control_stream_id = 1000;
-    consumer_context.hello.descriptor_channel = argv[2];
-    consumer_context.hello.control_channel = argv[2];
 
     if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
     {
