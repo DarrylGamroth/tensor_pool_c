@@ -40,6 +40,38 @@ static void drive_keepalives(tp_client_t *client)
     }
 }
 
+static void wait_for_descriptor_connection(tp_producer_t *producer)
+{
+    const char *env = getenv("TP_EXAMPLE_WAIT_CONNECTED_MS");
+    uint64_t wait_ms = 2000;
+    struct timespec ts = { 0, 10 * 1000 * 1000 };
+    uint64_t deadline;
+
+    if (env && env[0] != '\0')
+    {
+        wait_ms = (uint64_t)strtoull(env, NULL, 10);
+    }
+
+    if (wait_ms == 0 || NULL == producer || NULL == producer->descriptor_publication)
+    {
+        return;
+    }
+
+    deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
+    while ((uint64_t)tp_clock_now_ns() < deadline)
+    {
+        if (aeron_publication_is_connected(producer->descriptor_publication))
+        {
+            fprintf(stderr, "Descriptor publication connected\n");
+            return;
+        }
+        tp_client_do_work(producer->client);
+        nanosleep(&ts, NULL);
+    }
+
+    fprintf(stderr, "Descriptor publication not connected after %" PRIu64 " ms\n", wait_ms);
+}
+
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
@@ -166,7 +198,13 @@ int main(int argc, char **argv)
 
     producer_context.stream_id = info.stream_id;
     producer_context.producer_id = client_id;
-    tp_producer_context_set_drop_unconnected_descriptors(&producer_context, true);
+    {
+        const char *env = getenv("TP_EXAMPLE_DROP_UNCONNECTED");
+        if (env && env[0] != '\0')
+        {
+            tp_producer_context_set_drop_unconnected_descriptors(&producer_context, true);
+        }
+    }
 
     if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
@@ -177,6 +215,8 @@ int main(int argc, char **argv)
         tp_client_close(&client);
         return 1;
     }
+
+    wait_for_descriptor_connection(&producer);
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer_cfg.stream_id = info.stream_id;
