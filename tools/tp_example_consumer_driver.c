@@ -220,6 +220,8 @@ int main(int argc, char **argv)
     const char *expect_lease_env;
     const char *idle_before_work_env;
     const char *require_hugepages_env;
+    const char *attach_timeout_env;
+    const char *silent_attach_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
     int require_per_consumer = 0;
@@ -227,6 +229,8 @@ int main(int argc, char **argv)
     int poll_progress = 0;
     int expect_lease_expire = 0;
     int progress_min = 0;
+    int silent_attach = 0;
+    int64_t attach_timeout_ns = 2 * 1000 * 1000 * 1000LL;
     const char *request_desc_channel = NULL;
     const char *request_ctrl_channel = NULL;
     aeron_subscription_t *last_descriptor_subscription = NULL;
@@ -298,6 +302,8 @@ int main(int argc, char **argv)
     expect_lease_env = getenv("TP_EXAMPLE_EXPECT_LEASE_EXPIRE");
     idle_before_work_env = getenv("TP_EXAMPLE_IDLE_BEFORE_WORK_MS");
     require_hugepages_env = getenv("TP_EXAMPLE_REQUIRE_HUGEPAGES");
+    attach_timeout_env = getenv("TP_EXAMPLE_ATTACH_TIMEOUT_MS");
+    silent_attach_env = getenv("TP_EXAMPLE_SILENT_ATTACH");
     if (require_progress_env && require_progress_env[0] != '\0')
     {
         require_progress = 1;
@@ -318,6 +324,14 @@ int main(int argc, char **argv)
     if (idle_before_work_env && idle_before_work_env[0] != '\0')
     {
         idle_before_work_ms = (uint64_t)strtoull(idle_before_work_env, NULL, 10);
+    }
+    if (attach_timeout_env && attach_timeout_env[0] != '\0')
+    {
+        attach_timeout_ns = (int64_t)strtoll(attach_timeout_env, NULL, 10) * 1000LL * 1000LL;
+    }
+    if (silent_attach_env && silent_attach_env[0] != '\0')
+    {
+        silent_attach = 1;
     }
 
     if (per_consumer_env && per_consumer_env[0] != '\0')
@@ -405,9 +419,12 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_driver_attach(&driver, &request, &info, attach_timeout_ns) < 0)
     {
-        fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
+        if (!silent_attach)
+        {
+            fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
+        }
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
@@ -415,7 +432,10 @@ int main(int argc, char **argv)
 
     if (info.code != TP_RESPONSE_OK)
     {
-        fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
+        if (!silent_attach)
+        {
+            fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
+        }
         tp_driver_attach_info_close(&info);
         tp_driver_client_close(&driver);
         tp_client_close(&client);

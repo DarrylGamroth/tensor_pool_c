@@ -116,14 +116,23 @@ wait_ready() {
   local ready_sleep="${READY_SLEEP_S:-0.5}"
   local ready=false
   local attempt=0
+  local attach_timeout_ms="${READY_ATTACH_TIMEOUT_MS:-100}"
 
   while (( attempt < ready_timeout )); do
     local ready_id=$(( (READY_CONSUMER_ID_BASE + attempt) & 0xffffffff ))
     if [[ $ready_id -eq 0 ]]; then
       ready_id=1
     fi
+    while [[ $ready_id -eq $CONSUMER_ID || $ready_id -eq $PRODUCER_ID ]]; do
+      ready_id=$(( (ready_id + 1) & 0xffffffff ))
+      if [[ $ready_id -eq 0 ]]; then
+        ready_id=1
+      fi
+    done
     set +e
-    "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$ready_id" 0
+    TP_EXAMPLE_SILENT_ATTACH=1 \
+    TP_EXAMPLE_ATTACH_TIMEOUT_MS="$attach_timeout_ms" \
+      "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$ready_id" 0 >/dev/null 2>&1
     local status=$?
     set -e
     if [[ $status -eq 0 ]]; then

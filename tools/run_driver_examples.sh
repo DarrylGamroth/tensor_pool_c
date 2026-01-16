@@ -118,6 +118,8 @@ driver_pid=$!
 READY_TIMEOUT_S="${READY_TIMEOUT_S:-30}"
 READY_SLEEP_S="${READY_SLEEP_S:-0.5}"
 ready=false
+ready_waited=false
+READY_ATTACH_TIMEOUT_MS="${READY_ATTACH_TIMEOUT_MS:-100}"
 SECONDS=0
 while (( SECONDS < READY_TIMEOUT_S )); do
   set +e
@@ -125,19 +127,32 @@ while (( SECONDS < READY_TIMEOUT_S )); do
   if [[ $ready_id -eq 0 ]]; then
     ready_id=1
   fi
-  "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$ready_id" 0
+  while [[ $ready_id -eq $CONSUMER_ID || $ready_id -eq $PRODUCER_ID ]]; do
+    ready_id=$(( (ready_id + 1) & 0xffffffff ))
+    if [[ $ready_id -eq 0 ]]; then
+      ready_id=1
+    fi
+  done
+  TP_EXAMPLE_SILENT_ATTACH=1 \
+  TP_EXAMPLE_ATTACH_TIMEOUT_MS="$READY_ATTACH_TIMEOUT_MS" \
+    "$CONSUMER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$ready_id" 0 >/dev/null 2>&1
   status=$?
   set -e
   if [[ $status -eq 0 ]]; then
     ready=true
     break
   fi
+  ready_waited=true
   sleep "$READY_SLEEP_S"
 done
 
 if [[ $ready != true ]]; then
   echo "Driver did not become ready within ${READY_TIMEOUT_S}s" >&2
   exit 1
+fi
+
+if [[ $ready_waited == true ]]; then
+  echo "Driver became ready after retries."
 fi
 
 set +e
