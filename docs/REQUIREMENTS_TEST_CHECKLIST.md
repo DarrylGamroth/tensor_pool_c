@@ -15,7 +15,7 @@ These tests ensure distinct spec-driven configuration permutations are exercised
 | Case | Purpose | Driver Config | Command | Expected Result |
 | --- | --- | --- | --- | --- |
 | A | Control and announce stream IDs equal | `config/driver_integration_example.toml` | `DRIVER_CONFIG=config/driver_integration_example.toml tools/run_driver_examples.sh` | Producer/consumer exchange succeeds |
-| B | Control and announce stream IDs differ | `config/driver_integration_announce_separate.toml` | `TP_EXAMPLE_ANNOUNCE_STREAM_ID=1002 DRIVER_CONFIG=config/driver_integration_announce_separate.toml tools/run_driver_examples.sh` | Producer/consumer exchange succeeds |
+| B | Control and announce stream IDs differ | `config/driver_integration_announce_separate.toml` | `TP_EXAMPLE_ANNOUNCE_STREAM_ID=1002 STREAM_ID=10001 DRIVER_CONFIG=config/driver_integration_announce_separate.toml tools/run_driver_examples.sh` | Producer/consumer exchange succeeds |
 | C | Per-consumer descriptor/control streams | TBD | Manual: request per-consumer streams and verify consumer switches subscriptions | Verified when example support exists |
 | D | Dynamic stream allocation | TBD | Manual: enable `allow_dynamic_streams` and validate stream assignment | Verified when driver config is available |
 

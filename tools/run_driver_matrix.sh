@@ -13,7 +13,11 @@ run_case() {
   local label="$1"
   shift
   echo "==> $label"
-  "$RUNNER" "$@"
+  if [[ $# -eq 0 ]]; then
+    "$RUNNER"
+  else
+    env "$@" "$RUNNER"
+  fi
 }
 
 run_case "case A: control == announce (1001)" \
@@ -21,4 +25,5 @@ run_case "case A: control == announce (1001)" \
 
 run_case "case B: control != announce (1002)" \
   TP_EXAMPLE_ANNOUNCE_STREAM_ID=1002 \
+  STREAM_ID=10001 \
   DRIVER_CONFIG="$ROOT_DIR/config/driver_integration_announce_separate.toml"

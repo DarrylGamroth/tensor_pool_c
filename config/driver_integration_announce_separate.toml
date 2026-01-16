@@ -38,5 +38,5 @@ payload_pools = [
 
 # Static stream definitions
 [streams.cam1]
-stream_id = 10000
+stream_id = 10001
 profile = "camera"
