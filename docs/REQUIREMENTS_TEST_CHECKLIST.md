@@ -20,5 +20,16 @@ These tests ensure distinct spec-driven configuration permutations are exercised
 | D | Dynamic stream allocation | `config/driver_integration_dynamic.toml` | `TP_EXAMPLE_MAX_WAIT_MS=5000 STREAM_ID=20001 DRIVER_CONFIG=config/driver_integration_dynamic.toml tools/run_driver_examples.sh` | Producer/consumer exchange succeeds on dynamically created stream |
 
 Notes:
-- Cases C/D are required by the spec but depend on test harness support; keep them flagged until covered.
+- Cases A-D are automated by `tools/run_driver_matrix.sh` when the driver is available.
 - If the driver is not available, the cases above are manual and should be tracked as such in the traceability matrix.
+
+## Coverage (optional)
+
+Build with coverage enabled and run the target:
+
+```sh
+cmake -S . -B build -DTP_ENABLE_COVERAGE=ON
+cmake --build build --target coverage
+```
+
+Requires `gcovr` in `PATH`.

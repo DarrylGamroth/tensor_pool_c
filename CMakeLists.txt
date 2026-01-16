@@ -10,6 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(TP_ENABLE_SBE_CODEGEN "Enable SBE code generation" ON)
+option(TP_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 
 set(AERON_ROOT "${CMAKE_CURRENT_LIST_DIR}/../aeron" CACHE PATH "Path to Aeron source tree")
 set(SBE_TOOL_JAR "" CACHE FILEPATH "Path to sbe-tool or sbe-all jar")
@@ -206,6 +207,15 @@ target_include_directories(tensor_pool
 
 target_link_libraries(tensor_pool PUBLIC aeron::aeron_static)
 
+if (TP_ENABLE_COVERAGE)
+    if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(tensor_pool PRIVATE -O0 -g --coverage)
+        target_link_options(tensor_pool PRIVATE --coverage)
+    else ()
+        message(WARNING "TP_ENABLE_COVERAGE is set but compiler does not support gcov-style coverage")
+    endif ()
+endif ()
+
 enable_testing()
 
 add_executable(tensor_pool_tests
@@ -224,7 +234,37 @@ add_executable(tensor_pool_tests
     tests/test_tp_shm_security.c
     tests/test_tp_consumer_apply.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool aeron)
+if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(tensor_pool_tests PRIVATE -O0 -g --coverage)
+    target_link_options(tensor_pool_tests PRIVATE --coverage)
+endif ()
 add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
+
+if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if (GCOVR_EXECUTABLE)
+        add_custom_target(coverage
+            COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
+            COMMAND "${GCOVR_EXECUTABLE}"
+                -r "${CMAKE_CURRENT_LIST_DIR}"
+                --exclude "${AERON_ROOT}"
+                --exclude ".*CMakeFiles.*"
+                --exclude ".*generated.*"
+                --exclude ".*aeron-client.*"
+                --exclude ".*build.*"
+                --print-summary
+                --xml-pretty -o coverage.xml
+                --html-details -o coverage.html
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            DEPENDS tensor_pool_tests)
+    else ()
+        add_custom_target(coverage
+            COMMAND "${CMAKE_COMMAND}" -E echo "gcovr not found; install gcovr to generate coverage reports."
+            COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+            DEPENDS tensor_pool_tests)
+    endif ()
+endif ()
 
 add_executable(tp_shm_inspect tools/tp_shm_inspect.c)
 target_link_libraries(tp_shm_inspect PRIVATE tensor_pool)
