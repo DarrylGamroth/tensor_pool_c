@@ -283,12 +283,6 @@ int tp_producer_publish_descriptor_to(
         return -1;
     }
 
-    if (producer->context.drop_unconnected_descriptors &&
-        !aeron_publication_is_connected(publication))
-    {
-        return AERON_PUBLICATION_NOT_CONNECTED;
-    }
-
     memset(buffer, 0, header_len + tensor_pool_tensorHeader_sbe_block_length());
 
     tensor_pool_messageHeader_wrap(
