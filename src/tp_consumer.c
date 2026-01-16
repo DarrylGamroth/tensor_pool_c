@@ -607,21 +607,24 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
     {
         const char *desc_channel = view.descriptor_channel.length > 0 ? view.descriptor_channel.data : "";
         const char *ctrl_channel = view.control_channel.length > 0 ? view.control_channel.data : "";
+        const char *fallback_uri = view.payload_fallback_uri.length > 0 ? view.payload_fallback_uri.data : "";
 
         tp_log_emit(
             &consumer->client->context.base.log,
             TP_LOG_INFO,
-            "ConsumerConfig stream=%u epoch=%" PRIu64 " layout=%u use_shm=%u descriptor_channel=%.*s descriptor_stream_id=%u control_channel=%.*s control_stream_id=%u",
+            "ConsumerConfig stream=%" PRIu32 " consumer=%" PRIu32 " mode=%u use_shm=%u descriptor_channel=%.*s descriptor_stream_id=%" PRIu32 " control_channel=%.*s control_stream_id=%" PRIu32 " payload_fallback_uri=%.*s",
             view.stream_id,
-            view.epoch,
-            view.layout_version,
+            view.consumer_id,
+            (unsigned)view.mode,
             view.use_shm,
             (int)view.descriptor_channel.length,
             desc_channel,
             view.descriptor_stream_id,
             (int)view.control_channel.length,
             ctrl_channel,
-            view.control_stream_id);
+            view.control_stream_id,
+            (int)view.payload_fallback_uri.length,
+            fallback_uri);
 
         if (view.consumer_id != consumer->context.consumer_id)
         {
