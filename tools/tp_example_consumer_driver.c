@@ -5,6 +5,7 @@
 #include "tensor_pool/tp.h"
 
 #include <inttypes.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +22,17 @@ typedef struct tp_consumer_sample_state_stct
     tp_consumer_t *consumer;
     int received;
     int limit;
+    int progress_received;
     int verbose;
 }
 tp_consumer_sample_state_t;
+
+typedef struct tp_consumer_error_state_stct
+{
+    int lease_expired;
+    int errcode;
+}
+tp_consumer_error_state_t;
 
 static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 {
@@ -61,6 +70,47 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     else if (state->verbose)
     {
         fprintf(stderr, "Frame seq=%" PRIu64 " not ready\n", desc->seq);
+    }
+}
+
+static void on_progress(void *clientd, const tp_frame_progress_t *progress)
+{
+    tp_consumer_sample_state_t *state = (tp_consumer_sample_state_t *)clientd;
+
+    if (NULL == state || NULL == progress)
+    {
+        return;
+    }
+
+    state->progress_received++;
+    if (state->verbose)
+    {
+        fprintf(stderr,
+            "Progress seq=%" PRIu64 " bytes=%" PRIu64 " state=%u\n",
+            progress->seq,
+            progress->payload_bytes_filled,
+            progress->state);
+    }
+}
+
+static void on_error(void *clientd, int errcode, const char *message)
+{
+    tp_consumer_error_state_t *state = (tp_consumer_error_state_t *)clientd;
+
+    if (NULL == state)
+    {
+        return;
+    }
+
+    state->errcode = errcode;
+    if (errcode == ETIMEDOUT)
+    {
+        state->lease_expired = 1;
+    }
+
+    if (message)
+    {
+        fprintf(stderr, "[tp][ERROR] (%d) %s\n", errcode, message);
     }
 }
 
@@ -163,9 +213,20 @@ int main(int argc, char **argv)
     const char *ctrl_channel_env;
     const char *require_per_consumer_env;
     const char *max_wait_env;
+    const char *require_progress_env;
+    const char *poll_progress_env;
+    const char *progress_min_env;
+    const char *keepalive_interval_env;
+    const char *expect_lease_env;
+    const char *idle_before_work_env;
+    const char *require_hugepages_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
     int require_per_consumer = 0;
+    int require_progress = 0;
+    int poll_progress = 0;
+    int expect_lease_expire = 0;
+    int progress_min = 0;
     const char *request_desc_channel = NULL;
     const char *request_ctrl_channel = NULL;
     aeron_subscription_t *last_descriptor_subscription = NULL;
@@ -174,7 +235,11 @@ int main(int argc, char **argv)
     int ctrl_assigned = 0;
     uint64_t max_wait_ns = 0;
     uint64_t start_ns = 0;
+    uint64_t idle_before_work_ms = 0;
     size_t i;
+    int exit_status = 0;
+    int loop_failed = 0;
+    tp_consumer_error_state_t error_state;
 
     if (argc != 6)
     {
@@ -226,6 +291,34 @@ int main(int argc, char **argv)
     {
         max_wait_ns = (uint64_t)strtoull(max_wait_env, NULL, 10) * 1000ULL * 1000ULL;
     }
+    require_progress_env = getenv("TP_EXAMPLE_REQUIRE_PROGRESS");
+    poll_progress_env = getenv("TP_EXAMPLE_POLL_PROGRESS");
+    progress_min_env = getenv("TP_EXAMPLE_PROGRESS_MIN");
+    keepalive_interval_env = getenv("TP_EXAMPLE_KEEPALIVE_INTERVAL_MS");
+    expect_lease_env = getenv("TP_EXAMPLE_EXPECT_LEASE_EXPIRE");
+    idle_before_work_env = getenv("TP_EXAMPLE_IDLE_BEFORE_WORK_MS");
+    require_hugepages_env = getenv("TP_EXAMPLE_REQUIRE_HUGEPAGES");
+    if (require_progress_env && require_progress_env[0] != '\0')
+    {
+        require_progress = 1;
+        poll_progress = 1;
+    }
+    if (poll_progress_env && poll_progress_env[0] != '\0')
+    {
+        poll_progress = 1;
+    }
+    if (progress_min_env && progress_min_env[0] != '\0')
+    {
+        progress_min = (int)strtol(progress_min_env, NULL, 10);
+    }
+    if (expect_lease_env && expect_lease_env[0] != '\0')
+    {
+        expect_lease_expire = 1;
+    }
+    if (idle_before_work_env && idle_before_work_env[0] != '\0')
+    {
+        idle_before_work_ms = (uint64_t)strtoull(idle_before_work_env, NULL, 10);
+    }
 
     if (per_consumer_env && per_consumer_env[0] != '\0')
     {
@@ -273,6 +366,14 @@ int main(int argc, char **argv)
         client_context.base.descriptor_channel,
         client_context.base.descriptor_stream_id);
     tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
+    if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
+    {
+        uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;
+        tp_client_context_set_keepalive_interval_ns(&client_context, keepalive_ns);
+    }
+
+    memset(&error_state, 0, sizeof(error_state));
+    tp_client_context_set_error_handler(&client_context, on_error, &error_state);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
@@ -295,6 +396,10 @@ int main(int argc, char **argv)
     request.expected_layout_version = 0;
     request.publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
     request.require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
+    if (require_hugepages_env && require_hugepages_env[0] != '\0')
+    {
+        request.require_hugepages = TP_HUGEPAGES_HUGEPAGES;
+    }
     {
         const char *env = getenv("TP_DESIRED_NODE_ID");
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
@@ -402,18 +507,63 @@ int main(int argc, char **argv)
     state.consumer = &consumer;
     state.received = 0;
     state.limit = max_frames;
+    state.progress_received = 0;
     state.verbose = verbose;
 
     tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
+    if (poll_progress)
+    {
+        if (tp_consumer_set_progress_handler(&consumer, on_progress, &state) < 0)
+        {
+            fprintf(stderr, "Progress handler setup failed: %s\n", tp_errmsg());
+            loop_failed = 1;
+        }
+    }
+
+    if (require_progress && progress_min <= 0)
+    {
+        progress_min = (max_frames > 0) ? max_frames : 1;
+    }
+
+    if (idle_before_work_ms > 0)
+    {
+        struct timespec ts;
+        ts.tv_sec = (time_t)(idle_before_work_ms / 1000ULL);
+        ts.tv_nsec = (long)((idle_before_work_ms % 1000ULL) * 1000ULL * 1000ULL);
+        nanosleep(&ts, NULL);
+    }
 
     start_ns = (uint64_t)tp_clock_now_ns();
-    while (state.received < state.limit)
+    while (!loop_failed && state.received < state.limit)
     {
+        int work = tp_client_do_work(&client);
         int ctrl_fragments = tp_consumer_poll_control(&consumer, 10);
         int desc_fragments = tp_consumer_poll_descriptors(&consumer, 10);
+        int progress_fragments = 0;
+        if (poll_progress)
+        {
+            progress_fragments = tp_consumer_poll_progress(&consumer, 10);
+        }
+        if (work < 0)
+        {
+            if (expect_lease_expire && error_state.lease_expired)
+            {
+                break;
+            }
+            fprintf(stderr, "Client work failed: %s\n", tp_errmsg());
+            loop_failed = 1;
+            break;
+        }
         if (ctrl_fragments < 0 || desc_fragments < 0)
         {
             fprintf(stderr, "Poll failed: %s\n", tp_errmsg());
+            loop_failed = 1;
+            break;
+        }
+        if (progress_fragments < 0)
+        {
+            fprintf(stderr, "Progress poll failed: %s\n", tp_errmsg());
+            loop_failed = 1;
             break;
         }
         if (verbose && (ctrl_fragments > 0 || desc_fragments > 0))
@@ -462,14 +612,22 @@ int main(int argc, char **argv)
             client.control_subscription,
             &ctrl_images,
             &ctrl_status);
+        if (expect_lease_expire && error_state.lease_expired)
+        {
+            break;
+        }
         if (max_wait_ns > 0 && (uint64_t)tp_clock_now_ns() - start_ns >= max_wait_ns)
         {
             fprintf(stderr, "Timed out waiting for frames\n");
+            loop_failed = 1;
             break;
         }
     }
 
-    drive_keepalives(&client);
+    if (!expect_lease_expire)
+    {
+        drive_keepalives(&client);
+    }
 
     tp_consumer_close(&consumer);
     free(pool_cfg);
@@ -487,13 +645,29 @@ int main(int argc, char **argv)
         if (request_ctrl_stream_id != 0 && !ctrl_assigned)
         {
             fprintf(stderr, "Per-consumer control stream not assigned\n");
-            return 1;
+            exit_status = 1;
         }
     }
-    if (max_wait_ns > 0 && state.received < state.limit)
+    if (require_progress && state.progress_received < progress_min)
     {
-        return 1;
+        fprintf(stderr, "Progress updates missing (got=%d expected=%d)\n",
+            state.progress_received,
+            progress_min);
+        exit_status = 1;
+    }
+    if (expect_lease_expire && !error_state.lease_expired)
+    {
+        fprintf(stderr, "Expected lease expiry not observed\n");
+        exit_status = 1;
+    }
+    if (!expect_lease_expire && max_wait_ns > 0 && state.received < state.limit)
+    {
+        exit_status = 1;
+    }
+    if (loop_failed)
+    {
+        exit_status = 1;
     }
 
-    return 0;
+    return exit_status;
 }

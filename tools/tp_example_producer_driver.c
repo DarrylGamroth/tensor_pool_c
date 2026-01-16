@@ -178,8 +178,14 @@ int main(int argc, char **argv)
     int published = 0;
     const char *verbose_env;
     const char *announce_env;
+    const char *publish_progress_env;
+    const char *keepalive_interval_env;
+    const char *print_attach_env;
+    const char *require_hugepages_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
+    int publish_progress = 0;
+    int print_attach = 0;
     size_t i;
 
     if (argc < 5 || argc > 6)
@@ -210,6 +216,18 @@ int main(int argc, char **argv)
     {
         announce_stream_id = (int32_t)strtol(announce_env, NULL, 10);
     }
+    publish_progress_env = getenv("TP_EXAMPLE_PUBLISH_PROGRESS");
+    if (publish_progress_env && publish_progress_env[0] != '\0')
+    {
+        publish_progress = 1;
+    }
+    keepalive_interval_env = getenv("TP_EXAMPLE_KEEPALIVE_INTERVAL_MS");
+    print_attach_env = getenv("TP_EXAMPLE_PRINT_ATTACH");
+    require_hugepages_env = getenv("TP_EXAMPLE_REQUIRE_HUGEPAGES");
+    if (print_attach_env && print_attach_env[0] != '\0')
+    {
+        print_attach = 1;
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -229,6 +247,11 @@ int main(int argc, char **argv)
     tp_client_context_set_qos_channel(&client_context, argv[2], 1200);
     tp_client_context_set_metadata_channel(&client_context, argv[2], 1300);
     tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
+    if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
+    {
+        uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;
+        tp_client_context_set_keepalive_interval_ns(&client_context, keepalive_ns);
+    }
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
@@ -251,6 +274,10 @@ int main(int argc, char **argv)
     request.expected_layout_version = 0;
     request.publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
     request.require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
+    if (require_hugepages_env && require_hugepages_env[0] != '\0')
+    {
+        request.require_hugepages = TP_HUGEPAGES_HUGEPAGES;
+    }
     {
         const char *env = getenv("TP_DESIRED_NODE_ID");
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
@@ -271,6 +298,15 @@ int main(int argc, char **argv)
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
+    }
+    if (print_attach)
+    {
+        fprintf(stderr,
+            "Attach info stream=%u epoch=%" PRIu64 " layout=%u header_nslots=%u\n",
+            info.stream_id,
+            info.epoch,
+            info.layout_version,
+            info.header_nslots);
     }
 
     pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
@@ -392,6 +428,7 @@ int main(int argc, char **argv)
 
     for (published = 0; published < frame_count; published++)
     {
+        tp_frame_progress_t progress;
         int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
         if (position < 0)
         {
@@ -399,6 +436,17 @@ int main(int argc, char **argv)
             break;
         }
         printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
+        if (publish_progress)
+        {
+            progress.seq = (uint64_t)position;
+            progress.payload_bytes_filled = (uint64_t)frame.payload_len;
+            progress.state = TP_PROGRESS_COMPLETE;
+            if (tp_producer_offer_progress(&producer, &progress) < 0)
+            {
+                fprintf(stderr, "Progress publish failed: %s\n", tp_errmsg());
+                break;
+            }
+        }
         tp_producer_poll_control(&producer, 0);
         tp_client_do_work(&client);
     }
