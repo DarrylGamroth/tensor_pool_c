@@ -81,6 +81,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
             fprintf(stderr, "Descriptor publication connected\n");
             return;
         }
+        tp_producer_poll_control(producer, 0);
         tp_client_do_work(producer->client);
         nanosleep(&ts, NULL);
     }
@@ -301,9 +302,11 @@ int main(int argc, char **argv)
             break;
         }
         printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
+        tp_producer_poll_control(&producer, 0);
         tp_client_do_work(&client);
     }
 
+    tp_producer_poll_control(&producer, 0);
     drive_keepalives(&client);
 
     tp_producer_close(&producer);
