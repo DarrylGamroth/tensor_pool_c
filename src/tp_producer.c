@@ -14,6 +14,7 @@
 #include "tensor_pool/tp_types.h"
 
 #include "aeron_alloc.h"
+#include "aeronc.h"
 
 #include "driver/tensor_pool/hugepagesPolicy.h"
 #include "driver/tensor_pool/publishMode.h"
@@ -318,6 +319,31 @@ int tp_producer_publish_descriptor_to(
 
     if (result < 0)
     {
+        if (result != AERON_PUBLICATION_ERROR)
+        {
+            const char *reason = "unknown";
+            switch (result)
+            {
+                case AERON_PUBLICATION_NOT_CONNECTED:
+                    reason = "NOT_CONNECTED";
+                    break;
+                case AERON_PUBLICATION_BACK_PRESSURED:
+                    reason = "BACK_PRESSURED";
+                    break;
+                case AERON_PUBLICATION_ADMIN_ACTION:
+                    reason = "ADMIN_ACTION";
+                    break;
+                case AERON_PUBLICATION_CLOSED:
+                    reason = "CLOSED";
+                    break;
+                case AERON_PUBLICATION_MAX_POSITION_EXCEEDED:
+                    reason = "MAX_POSITION_EXCEEDED";
+                    break;
+                default:
+                    break;
+            }
+            TP_SET_ERR(EAGAIN, "tp_producer_publish_descriptor_to: offer failed (%s)", reason);
+        }
         return (int)result;
     }
 

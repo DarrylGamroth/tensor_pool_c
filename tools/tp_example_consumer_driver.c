@@ -80,6 +80,8 @@ int main(int argc, char **argv)
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t *pool_cfg = NULL;
     tp_consumer_sample_state_t state;
+    int descriptor_connected = 0;
+    int control_connected = 0;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
@@ -220,8 +222,25 @@ int main(int argc, char **argv)
 
     while (state.received < state.limit)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_consumer_poll_descriptors(&consumer, 10);
+        int ctrl_fragments = tp_consumer_poll_control(&consumer, 10);
+        int desc_fragments = tp_consumer_poll_descriptors(&consumer, 10);
+        if (ctrl_fragments < 0 || desc_fragments < 0)
+        {
+            fprintf(stderr, "Poll failed: %s\n", tp_errmsg());
+            break;
+        }
+        if (!descriptor_connected && consumer.descriptor_subscription &&
+            aeron_subscription_is_connected(consumer.descriptor_subscription))
+        {
+            descriptor_connected = 1;
+            fprintf(stderr, "Descriptor subscription connected\n");
+        }
+        if (!control_connected && consumer.control_subscription &&
+            aeron_subscription_is_connected(consumer.control_subscription))
+        {
+            control_connected = 1;
+            fprintf(stderr, "Control subscription connected\n");
+        }
     }
 
     drive_keepalives(&client);
