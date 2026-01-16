@@ -12,7 +12,7 @@
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id>\n", name);
+    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> [frame_count]\n", name);
 }
 
 static void drive_keepalives(tp_client_t *client)
@@ -58,9 +58,11 @@ int main(int argc, char **argv)
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
+    int frame_count = 1;
+    int published = 0;
     size_t i;
 
-    if (argc != 5)
+    if (argc < 5 || argc > 6)
     {
         usage(argv[0]);
         return 1;
@@ -68,6 +70,15 @@ int main(int argc, char **argv)
 
     stream_id = (uint32_t)strtoul(argv[3], NULL, 10);
     client_id = (uint32_t)strtoul(argv[4], NULL, 10);
+    if (argc == 6)
+    {
+        frame_count = (int)strtol(argv[5], NULL, 10);
+    }
+    if (frame_count <= 0)
+    {
+        usage(argv[0]);
+        return 1;
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -208,16 +219,16 @@ int main(int argc, char **argv)
     meta.timestamp_ns = 0;
     meta.meta_version = 0;
 
+    for (published = 0; published < frame_count; published++)
     {
         int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
         if (position < 0)
         {
             fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
+            break;
         }
-        else
-        {
-            printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
-        }
+        printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
+        tp_client_do_work(&client);
     }
 
     drive_keepalives(&client);
