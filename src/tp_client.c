@@ -34,6 +34,7 @@ int tp_client_context_init(tp_client_context_t *ctx)
     ctx->message_retry_attempts = 0;
     ctx->driver_timeout_ns = 5 * 1000 * 1000 * 1000ULL;
     ctx->keepalive_interval_ns = 1000 * 1000 * 1000ULL;
+    ctx->lease_expiry_grace_intervals = 3;
     return 0;
 }
 
@@ -187,6 +188,16 @@ void tp_client_context_set_keepalive_interval_ns(tp_client_context_t *ctx, uint6
     }
 
     ctx->keepalive_interval_ns = value;
+}
+
+void tp_client_context_set_lease_expiry_grace_intervals(tp_client_context_t *ctx, uint32_t value)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->lease_expiry_grace_intervals = value;
 }
 
 void tp_client_context_set_idle_sleep_duration_ns(tp_client_context_t *ctx, uint64_t value)

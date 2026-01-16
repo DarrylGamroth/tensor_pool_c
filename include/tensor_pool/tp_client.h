@@ -25,6 +25,7 @@ typedef struct tp_client_context_stct
     uint64_t driver_timeout_ns;
     uint64_t keepalive_interval_ns;
     uint64_t idle_sleep_duration_ns;
+    uint32_t lease_expiry_grace_intervals;
     int64_t message_timeout_ns;
     int32_t message_retry_attempts;
     bool use_agent_invoker;
@@ -65,6 +66,7 @@ void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *cha
 void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_driver_timeout_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_keepalive_interval_ns(tp_client_context_t *ctx, uint64_t value);
+void tp_client_context_set_lease_expiry_grace_intervals(tp_client_context_t *ctx, uint32_t value);
 void tp_client_context_set_idle_sleep_duration_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_announce_period_ns(tp_client_context_t *ctx, uint64_t value);
 void tp_client_context_set_use_agent_invoker(tp_client_context_t *ctx, bool value);

@@ -1236,6 +1236,10 @@ int tp_driver_client_update_lease(
 
 int tp_driver_client_record_keepalive(tp_driver_client_t *client, uint64_t now_ns)
 {
+    tp_client_t *owner;
+    uint64_t interval_ns;
+    uint64_t grace_intervals;
+
     if (NULL == client)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_record_keepalive: null input");
@@ -1243,6 +1247,21 @@ int tp_driver_client_record_keepalive(tp_driver_client_t *client, uint64_t now_n
     }
 
     client->last_keepalive_ns = now_ns;
+    if (client->lease_expiry_timestamp_ns != TP_NULL_U64)
+    {
+        owner = client->client;
+        interval_ns = owner ? owner->context.keepalive_interval_ns : 0;
+        grace_intervals = owner ? owner->context.lease_expiry_grace_intervals : 0;
+        if (interval_ns > 0 && grace_intervals > 0)
+        {
+            uint64_t extension = interval_ns * grace_intervals;
+            uint64_t next_expiry = now_ns + extension;
+            if (next_expiry > client->lease_expiry_timestamp_ns)
+            {
+                client->lease_expiry_timestamp_ns = next_expiry;
+            }
+        }
+    }
     return 0;
 }
 
