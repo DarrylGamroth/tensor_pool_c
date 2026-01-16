@@ -40,6 +40,21 @@ static void drive_keepalives(tp_client_t *client)
     }
 }
 
+static void log_publication_status(const char *label, aeron_publication_t *publication)
+{
+    if (NULL == publication)
+    {
+        fprintf(stderr, "%s publication unavailable\n", label);
+        return;
+    }
+
+    fprintf(stderr,
+        "%s publication status=%" PRId64 " connected=%d\n",
+        label,
+        aeron_publication_channel_status(publication),
+        aeron_publication_is_connected(publication) ? 1 : 0);
+}
+
 static void wait_for_descriptor_connection(tp_producer_t *producer)
 {
     const char *env = getenv("TP_EXAMPLE_WAIT_CONNECTED_MS");
@@ -57,6 +72,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
         return;
     }
 
+    log_publication_status("Descriptor", producer->descriptor_publication);
     deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
     while ((uint64_t)tp_clock_now_ns() < deadline)
     {
@@ -69,6 +85,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
         nanosleep(&ts, NULL);
     }
 
+    log_publication_status("Descriptor", producer->descriptor_publication);
     fprintf(stderr, "Descriptor publication not connected after %" PRIu64 " ms\n", wait_ms);
 }
 
@@ -92,6 +109,8 @@ int main(int argc, char **argv)
     uint32_t client_id;
     int frame_count = 1;
     int published = 0;
+    const char *verbose_env;
+    int verbose = 0;
     size_t i;
 
     if (argc < 5 || argc > 6)
@@ -110,6 +129,12 @@ int main(int argc, char **argv)
     {
         usage(argv[0]);
         return 1;
+    }
+
+    verbose_env = getenv("TP_EXAMPLE_VERBOSE");
+    if (verbose_env && verbose_env[0] != '\0')
+    {
+        verbose = 1;
     }
 
     if (tp_client_context_init(&client_context) < 0)
@@ -214,6 +239,14 @@ int main(int argc, char **argv)
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
+    }
+
+    if (verbose)
+    {
+        log_publication_status("Descriptor", producer.descriptor_publication);
+        log_publication_status("Control", producer.control_publication);
+        log_publication_status("QoS", producer.qos_publication);
+        log_publication_status("Metadata", producer.metadata_publication);
     }
 
     wait_for_descriptor_connection(&producer);
