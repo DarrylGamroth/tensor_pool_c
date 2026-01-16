@@ -12,7 +12,7 @@
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> [frame_count]\n", name);
+    fprintf(stderr, "Usage: %s <aeron_dir> <channel> <stream_id> <client_id> [frame_count]\n", name);
 }
 
 static void drive_keepalives(tp_client_t *client)
@@ -88,9 +88,9 @@ int main(int argc, char **argv)
 
     tp_client_context_set_aeron_dir(&client_context, argv[1]);
     tp_client_context_set_control_channel(&client_context, argv[2], 1000);
-    tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
-    tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);
+    tp_client_context_set_descriptor_channel(&client_context, argv[2], 1100);
+    tp_client_context_set_qos_channel(&client_context, argv[2], 1200);
+    tp_client_context_set_metadata_channel(&client_context, argv[2], 1300);
     tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
