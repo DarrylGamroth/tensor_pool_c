@@ -159,7 +159,7 @@ static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_
         return;
     }
 
-    if (activity_ns == 0 || (now_ns > activity_ns && now_ns - activity_ns > stale_ns))
+    if (activity_ns != 0 && now_ns > activity_ns && now_ns - activity_ns > stale_ns)
     {
         tp_consumer_unmap_regions(consumer);
     }
