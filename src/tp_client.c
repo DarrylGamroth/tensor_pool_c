@@ -140,6 +140,16 @@ void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char 
     tp_context_set_control_channel(&ctx->base, channel, stream_id);
 }
 
+void tp_client_context_set_announce_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    tp_context_set_announce_channel(&ctx->base, channel, stream_id);
+}
+
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
 {
     if (NULL == ctx)
@@ -350,6 +360,21 @@ int tp_client_start(tp_client_t *client)
         return -1;
     }
 
+    if (client->context.base.announce_channel[0] != '\0' &&
+        client->context.base.announce_stream_id >= 0 &&
+        (client->context.base.announce_stream_id != client->context.base.control_stream_id ||
+            strcmp(client->context.base.announce_channel, client->context.base.control_channel) != 0))
+    {
+        if (tp_client_add_subscription(
+            client,
+            client->context.base.announce_channel,
+            client->context.base.announce_stream_id,
+            &client->announce_subscription) < 0)
+        {
+            return -1;
+        }
+    }
+
     if (tp_client_add_subscription(
         client,
         client->context.base.qos_channel,
@@ -445,6 +470,12 @@ int tp_client_close(tp_client_t *client)
     {
         aeron_subscription_close(client->control_subscription, NULL, NULL);
         client->control_subscription = NULL;
+    }
+
+    if (NULL != client->announce_subscription)
+    {
+        aeron_subscription_close(client->announce_subscription, NULL, NULL);
+        client->announce_subscription = NULL;
     }
 
     if (NULL != client->qos_subscription)

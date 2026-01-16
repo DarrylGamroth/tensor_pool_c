@@ -43,6 +43,7 @@ int tp_context_init(tp_context_t *context)
     tp_log_init(&context->log);
     context->descriptor_stream_id = -1;
     context->control_stream_id = -1;
+    context->announce_stream_id = -1;
     context->qos_stream_id = -1;
     context->metadata_stream_id = -1;
     context->announce_period_ns = TP_ANNOUNCE_PERIOD_DEFAULT_NS;
@@ -85,6 +86,12 @@ void tp_context_set_control_channel(tp_context_t *context, const char *channel, 
 {
     tp_context_set_channel(context->control_channel, sizeof(context->control_channel), channel,
         &context->control_stream_id, stream_id);
+}
+
+void tp_context_set_announce_channel(tp_context_t *context, const char *channel, int32_t stream_id)
+{
+    tp_context_set_channel(context->announce_channel, sizeof(context->announce_channel), channel,
+        &context->announce_stream_id, stream_id);
 }
 
 void tp_context_set_qos_channel(tp_context_t *context, const char *channel, int32_t stream_id)

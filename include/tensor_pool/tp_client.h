@@ -44,6 +44,7 @@ typedef struct tp_client_stct
     tp_client_context_t context;
     tp_client_conductor_t conductor;
     aeron_subscription_t *control_subscription;
+    aeron_subscription_t *announce_subscription;
     aeron_subscription_t *qos_subscription;
     aeron_subscription_t *metadata_subscription;
     tp_driver_client_t *driver_clients;
@@ -61,6 +62,7 @@ void tp_client_context_set_error_handler(tp_client_context_t *ctx, tp_error_hand
 void tp_client_context_set_delegating_invoker(tp_client_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
 void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_func_t handler, void *clientd);
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_client_context_set_announce_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);

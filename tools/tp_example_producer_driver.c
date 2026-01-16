@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tensor_pool/tp_consumer_manager.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -92,6 +93,69 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
     fprintf(stderr, "Descriptor publication not connected after %" PRIu64 " ms\n", wait_ms);
 }
 
+static int tp_producer_has_consumers(const tp_producer_t *producer)
+{
+    const tp_consumer_registry_t *registry;
+    size_t i;
+
+    if (NULL == producer || NULL == producer->consumer_manager)
+    {
+        return 0;
+    }
+
+    registry = &producer->consumer_manager->registry;
+    for (i = 0; i < registry->capacity; i++)
+    {
+        if (registry->entries[i].in_use)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void wait_for_consumer(tp_producer_t *producer)
+{
+    const char *env = getenv("TP_EXAMPLE_WAIT_CONSUMER_MS");
+    uint64_t wait_ms = 0;
+    struct timespec ts = { 0, 10 * 1000 * 1000 };
+    uint64_t deadline;
+
+    if (env && env[0] != '\0')
+    {
+        wait_ms = (uint64_t)strtoull(env, NULL, 10);
+    }
+
+    if (wait_ms == 0 || NULL == producer)
+    {
+        return;
+    }
+
+    if (!producer->consumer_manager)
+    {
+        if (tp_producer_enable_consumer_manager(producer, 16) < 0)
+        {
+            fprintf(stderr, "Consumer manager enable failed: %s\n", tp_errmsg());
+            return;
+        }
+    }
+
+    deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
+    while ((uint64_t)tp_clock_now_ns() < deadline)
+    {
+        tp_producer_poll_control(producer, 10);
+        if (tp_producer_has_consumers(producer))
+        {
+            fprintf(stderr, "Consumer detected, publishing frames\n");
+            return;
+        }
+        nanosleep(&ts, NULL);
+    }
+
+    fprintf(stderr, "No consumers detected after %" PRIu64 " ms\n", wait_ms);
+}
+
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
@@ -113,6 +177,8 @@ int main(int argc, char **argv)
     int frame_count = 1;
     int published = 0;
     const char *verbose_env;
+    const char *announce_env;
+    int32_t announce_stream_id = 1001;
     int verbose = 0;
     size_t i;
 
@@ -139,6 +205,11 @@ int main(int argc, char **argv)
     {
         verbose = 1;
     }
+    announce_env = getenv("TP_EXAMPLE_ANNOUNCE_STREAM_ID");
+    if (announce_env && announce_env[0] != '\0')
+    {
+        announce_stream_id = (int32_t)strtol(announce_env, NULL, 10);
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -146,8 +217,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (verbose)
+    {
+        tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
+    }
+
     tp_client_context_set_aeron_dir(&client_context, argv[1]);
     tp_client_context_set_control_channel(&client_context, argv[2], 1000);
+    tp_client_context_set_announce_channel(&client_context, argv[2], announce_stream_id);
     tp_client_context_set_descriptor_channel(&client_context, argv[2], 1100);
     tp_client_context_set_qos_channel(&client_context, argv[2], 1200);
     tp_client_context_set_metadata_channel(&client_context, argv[2], 1300);
@@ -252,6 +329,7 @@ int main(int argc, char **argv)
         log_publication_status("Metadata", producer.metadata_publication);
     }
 
+    wait_for_consumer(&producer);
     wait_for_descriptor_connection(&producer);
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));

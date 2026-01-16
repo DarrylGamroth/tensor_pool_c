@@ -1527,8 +1527,11 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
 {
     uint64_t now_ns;
+    int fragments = 0;
+    int polled;
 
-    if (NULL == consumer || NULL == consumer->client || NULL == consumer->client->control_subscription)
+    if (NULL == consumer || NULL == consumer->client ||
+        (NULL == consumer->client->control_subscription && NULL == consumer->client->announce_subscription))
     {
         return 0;
     }
@@ -1544,14 +1547,32 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
         }
     }
 
-    int fragments = aeron_subscription_poll(
-        consumer->client->control_subscription,
-        aeron_fragment_assembler_handler,
-        consumer->control_assembler,
-        fragment_limit);
-    if (fragments < 0)
+    if (consumer->client->control_subscription)
     {
-        return -1;
+        polled = aeron_subscription_poll(
+            consumer->client->control_subscription,
+            aeron_fragment_assembler_handler,
+            consumer->control_assembler,
+            fragment_limit);
+        if (polled < 0)
+        {
+            return -1;
+        }
+        fragments += polled;
+    }
+
+    if (consumer->client->announce_subscription)
+    {
+        polled = aeron_subscription_poll(
+            consumer->client->announce_subscription,
+            aeron_fragment_assembler_handler,
+            consumer->control_assembler,
+            fragment_limit);
+        if (polled < 0)
+        {
+            return -1;
+        }
+        fragments += polled;
     }
 
     now_ns = (uint64_t)tp_clock_now_ns();

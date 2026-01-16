@@ -68,8 +68,7 @@ static void log_subscription_status(
     const char *label,
     aeron_subscription_t *subscription,
     int *last_images,
-    int64_t *last_status,
-    int verbose)
+    int64_t *last_status)
 {
     int image_count;
     int64_t status;
@@ -81,12 +80,29 @@ static void log_subscription_status(
 
     image_count = aeron_subscription_image_count(subscription);
     status = aeron_subscription_channel_status(subscription);
-    if (verbose || image_count != *last_images || status != *last_status)
+    if (image_count != *last_images || status != *last_status)
     {
         fprintf(stderr, "%s images=%d channel_status=%" PRId64 "\n", label, image_count, status);
         *last_images = image_count;
         *last_status = status;
     }
+}
+
+static void log_publication_status(const char *label, aeron_publication_t *publication)
+{
+    if (NULL == publication)
+    {
+        fprintf(stderr, "%s publication unavailable\n", label);
+        return;
+    }
+
+    fprintf(stderr,
+        "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
+        label,
+        aeron_publication_channel(publication),
+        aeron_publication_stream_id(publication),
+        aeron_publication_channel_status(publication),
+        aeron_publication_is_connected(publication) ? 1 : 0);
 }
 
 static void drive_keepalives(tp_client_t *client)
@@ -137,6 +153,8 @@ int main(int argc, char **argv)
     uint32_t client_id;
     int max_frames;
     const char *verbose_env;
+    const char *announce_env;
+    int32_t announce_stream_id = 1001;
     int verbose = 0;
     size_t i;
 
@@ -154,6 +172,11 @@ int main(int argc, char **argv)
     {
         verbose = 1;
     }
+    announce_env = getenv("TP_EXAMPLE_ANNOUNCE_STREAM_ID");
+    if (announce_env && announce_env[0] != '\0')
+    {
+        announce_stream_id = (int32_t)strtol(announce_env, NULL, 10);
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -161,8 +184,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (verbose)
+    {
+        tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
+    }
+
     tp_client_context_set_aeron_dir(&client_context, argv[1]);
     tp_client_context_set_control_channel(&client_context, argv[2], 1000);
+    tp_client_context_set_announce_channel(&client_context, argv[2], announce_stream_id);
     tp_client_context_set_descriptor_channel(&client_context, argv[2], 1100);
     tp_client_context_set_qos_channel(&client_context, argv[2], 1200);
     fprintf(stderr,
@@ -257,6 +286,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (verbose)
+    {
+        log_publication_status("Control", consumer.control_publication);
+        log_publication_status("QoS", consumer.qos_publication);
+    }
+
     memset(&consumer_cfg, 0, sizeof(consumer_cfg));
     consumer_cfg.stream_id = info.stream_id;
     consumer_cfg.epoch = info.epoch;
@@ -313,14 +348,12 @@ int main(int argc, char **argv)
             "Descriptor subscription",
             consumer.descriptor_subscription,
             &desc_images,
-            &desc_status,
-            verbose);
+            &desc_status);
         log_subscription_status(
             "Control subscription",
             client.control_subscription,
             &ctrl_images,
-            &ctrl_status,
-            verbose);
+            &ctrl_status);
     }
 
     drive_keepalives(&client);
