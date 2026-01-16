@@ -321,6 +321,23 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    {
+        const char *env = getenv("TP_EXAMPLE_ENABLE_CONSUMER_MANAGER");
+        if (env && env[0] != '\0')
+        {
+            if (tp_producer_enable_consumer_manager(&producer, 16) < 0)
+            {
+                fprintf(stderr, "Consumer manager enable failed: %s\n", tp_errmsg());
+                tp_producer_close(&producer);
+                free(pool_cfg);
+                tp_driver_attach_info_close(&info);
+                tp_driver_client_close(&driver);
+                tp_client_close(&client);
+                return 1;
+            }
+        }
+    }
+
     if (verbose)
     {
         log_publication_status("Descriptor", producer.descriptor_publication);

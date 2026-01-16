@@ -151,11 +151,29 @@ int main(int argc, char **argv)
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
+    uint32_t request_desc_stream_id = 0;
+    uint32_t request_ctrl_stream_id = 0;
     int max_frames;
     const char *verbose_env;
     const char *announce_env;
+    const char *per_consumer_env;
+    const char *desc_stream_env;
+    const char *ctrl_stream_env;
+    const char *desc_channel_env;
+    const char *ctrl_channel_env;
+    const char *require_per_consumer_env;
+    const char *max_wait_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
+    int require_per_consumer = 0;
+    const char *request_desc_channel = NULL;
+    const char *request_ctrl_channel = NULL;
+    aeron_subscription_t *last_descriptor_subscription = NULL;
+    aeron_subscription_t *last_control_subscription = NULL;
+    int desc_assigned = 0;
+    int ctrl_assigned = 0;
+    uint64_t max_wait_ns = 0;
+    uint64_t start_ns = 0;
     size_t i;
 
     if (argc != 6)
@@ -176,6 +194,62 @@ int main(int argc, char **argv)
     if (announce_env && announce_env[0] != '\0')
     {
         announce_stream_id = (int32_t)strtol(announce_env, NULL, 10);
+    }
+    per_consumer_env = getenv("TP_EXAMPLE_PER_CONSUMER");
+    desc_stream_env = getenv("TP_EXAMPLE_DESC_STREAM_ID");
+    ctrl_stream_env = getenv("TP_EXAMPLE_CTRL_STREAM_ID");
+    desc_channel_env = getenv("TP_EXAMPLE_DESC_CHANNEL");
+    ctrl_channel_env = getenv("TP_EXAMPLE_CTRL_CHANNEL");
+    require_per_consumer_env = getenv("TP_EXAMPLE_REQUIRE_PER_CONSUMER");
+    max_wait_env = getenv("TP_EXAMPLE_MAX_WAIT_MS");
+    if (require_per_consumer_env && require_per_consumer_env[0] != '\0')
+    {
+        require_per_consumer = 1;
+    }
+    if (desc_stream_env && desc_stream_env[0] != '\0')
+    {
+        request_desc_stream_id = (uint32_t)strtoul(desc_stream_env, NULL, 10);
+    }
+    if (ctrl_stream_env && ctrl_stream_env[0] != '\0')
+    {
+        request_ctrl_stream_id = (uint32_t)strtoul(ctrl_stream_env, NULL, 10);
+    }
+    if (desc_channel_env && desc_channel_env[0] != '\0')
+    {
+        request_desc_channel = desc_channel_env;
+    }
+    if (ctrl_channel_env && ctrl_channel_env[0] != '\0')
+    {
+        request_ctrl_channel = ctrl_channel_env;
+    }
+    if (max_wait_env && max_wait_env[0] != '\0')
+    {
+        max_wait_ns = (uint64_t)strtoull(max_wait_env, NULL, 10) * 1000ULL * 1000ULL;
+    }
+
+    if (per_consumer_env && per_consumer_env[0] != '\0')
+    {
+        if (request_desc_stream_id == 0)
+        {
+            request_desc_stream_id = 31001;
+        }
+        if (request_ctrl_stream_id == 0)
+        {
+            request_ctrl_stream_id = 32001;
+        }
+        if (NULL == request_desc_channel)
+        {
+            request_desc_channel = argv[2];
+        }
+        if (NULL == request_ctrl_channel)
+        {
+            request_ctrl_channel = argv[2];
+        }
+    }
+
+    if (max_frames <= 0)
+    {
+        require_per_consumer = 0;
     }
 
     if (tp_client_context_init(&client_context) < 0)
@@ -275,6 +349,16 @@ int main(int argc, char **argv)
     consumer_context.consumer_id = client_id;
     consumer_context.hello.stream_id = info.stream_id;
     consumer_context.hello.consumer_id = client_id;
+    if (request_desc_stream_id != 0 && request_desc_channel)
+    {
+        consumer_context.hello.descriptor_stream_id = request_desc_stream_id;
+        consumer_context.hello.descriptor_channel = request_desc_channel;
+    }
+    if (request_ctrl_stream_id != 0 && request_ctrl_channel)
+    {
+        consumer_context.hello.control_stream_id = request_ctrl_stream_id;
+        consumer_context.hello.control_channel = request_ctrl_channel;
+    }
 
     if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
     {
@@ -285,6 +369,9 @@ int main(int argc, char **argv)
         tp_client_close(&client);
         return 1;
     }
+
+    last_descriptor_subscription = consumer.descriptor_subscription;
+    last_control_subscription = consumer.control_subscription;
 
     if (verbose)
     {
@@ -319,6 +406,7 @@ int main(int argc, char **argv)
 
     tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
 
+    start_ns = (uint64_t)tp_clock_now_ns();
     while (state.received < state.limit)
     {
         int ctrl_fragments = tp_consumer_poll_control(&consumer, 10);
@@ -331,6 +419,26 @@ int main(int argc, char **argv)
         if (verbose && (ctrl_fragments > 0 || desc_fragments > 0))
         {
             fprintf(stderr, "Polled control=%d descriptor=%d\n", ctrl_fragments, desc_fragments);
+        }
+        if (consumer.descriptor_subscription != last_descriptor_subscription)
+        {
+            fprintf(stderr, "Descriptor subscription switched\n");
+            last_descriptor_subscription = consumer.descriptor_subscription;
+        }
+        if (consumer.control_subscription != last_control_subscription && consumer.control_subscription != NULL)
+        {
+            fprintf(stderr, "Per-consumer control subscription active\n");
+            last_control_subscription = consumer.control_subscription;
+        }
+        if (request_desc_stream_id != 0 &&
+            consumer.assigned_descriptor_stream_id == request_desc_stream_id)
+        {
+            desc_assigned = 1;
+        }
+        if (request_ctrl_stream_id != 0 &&
+            consumer.assigned_control_stream_id == request_ctrl_stream_id)
+        {
+            ctrl_assigned = 1;
         }
         if (!descriptor_connected && consumer.descriptor_subscription &&
             aeron_subscription_is_connected(consumer.descriptor_subscription))
@@ -354,6 +462,11 @@ int main(int argc, char **argv)
             client.control_subscription,
             &ctrl_images,
             &ctrl_status);
+        if (max_wait_ns > 0 && (uint64_t)tp_clock_now_ns() - start_ns >= max_wait_ns)
+        {
+            fprintf(stderr, "Timed out waiting for frames\n");
+            break;
+        }
     }
 
     drive_keepalives(&client);
@@ -363,6 +476,24 @@ int main(int argc, char **argv)
     tp_driver_attach_info_close(&info);
     tp_driver_client_close(&driver);
     tp_client_close(&client);
+
+    if (require_per_consumer)
+    {
+        if (request_desc_stream_id != 0 && !desc_assigned)
+        {
+            fprintf(stderr, "Per-consumer descriptor stream not assigned\n");
+            return 1;
+        }
+        if (request_ctrl_stream_id != 0 && !ctrl_assigned)
+        {
+            fprintf(stderr, "Per-consumer control stream not assigned\n");
+            return 1;
+        }
+    }
+    if (max_wait_ns > 0 && state.received < state.limit)
+    {
+        return 1;
+    }
 
     return 0;
 }
