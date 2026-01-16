@@ -36,6 +36,7 @@ READY_CONSUMER_ID_BASE="${READY_CONSUMER_ID_BASE:-$(( (CONSUMER_ID + 1000) & 0xf
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
 CONFIG_FALLBACK="$AERON_TENSORPOOL_DIR/config/driver_integration_example.toml"
 DRIVER_CONFIG="${DRIVER_CONFIG:-$CONFIG_DEFAULT}"
+DRIVER_SCRIPT=""
 
 if [[ ! -f "$DRIVER_CONFIG" ]]; then
   if [[ -f "$CONFIG_FALLBACK" ]]; then
@@ -44,6 +45,12 @@ if [[ ! -f "$DRIVER_CONFIG" ]]; then
     echo "Driver config not found: $DRIVER_CONFIG" >&2
     exit 1
   fi
+fi
+
+if [[ -n "${DRIVER_SCRIPT_OVERRIDE:-}" ]]; then
+  DRIVER_SCRIPT="$DRIVER_SCRIPT_OVERRIDE"
+else
+  DRIVER_SCRIPT="$AERON_TENSORPOOL_DIR/scripts/run_driver.jl"
 fi
 
 if [[ -z "$STREAM_ID" ]]; then
@@ -92,7 +99,7 @@ start_driver() {
   TP_CONTROL_STREAM_ID="1000" \
   LAUNCH_MEDIA_DRIVER="$launch_media_driver" \
     julia --project="$AERON_TENSORPOOL_DIR" \
-    "$AERON_TENSORPOOL_DIR/scripts/run_driver.jl" "$DRIVER_CONFIG" &
+    "$DRIVER_SCRIPT" "$DRIVER_CONFIG" &
   driver_pid=$!
 }
 
