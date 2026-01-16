@@ -1677,17 +1677,14 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
 
     if (producer->consumer_manager)
     {
-        tp_progress_policy_t policy;
         qos_fragments = tp_producer_poll_qos(producer, fragment_limit);
         if (qos_fragments < 0)
         {
             return -1;
         }
-        if (tp_consumer_manager_get_progress_policy(producer->consumer_manager, &policy) == 0 &&
-            policy.interval_us != TP_NULL_U32 &&
-            policy.interval_us > 0)
+        if (producer->client && producer->client->context.base.announce_period_ns > 0)
         {
-            stale_ns = (uint64_t)policy.interval_us * 1000ULL * 5ULL;
+            stale_ns = producer->client->context.base.announce_period_ns * 5ULL;
         }
 
         now_ns = (uint64_t)tp_clock_now_ns();

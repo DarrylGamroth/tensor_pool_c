@@ -658,6 +658,9 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             return;
         }
 
+        consumer->assigned_descriptor_stream_id = 0;
+        consumer->assigned_control_stream_id = 0;
+
         consumer->use_shm = view.use_shm != 0;
         tp_consumer_set_payload_fallback(consumer, view.payload_fallback_uri);
         if (!consumer->use_shm)
@@ -671,6 +674,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 
         if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)
         {
+            aeron_subscription_t *new_subscription = NULL;
             char channel[4096];
             size_t copy_len = view.descriptor_channel.length;
             if (copy_len >= sizeof(channel))
@@ -680,21 +684,33 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             memcpy(channel, view.descriptor_channel.data, copy_len);
             channel[copy_len] = '\0';
 
-            if (consumer->descriptor_subscription)
-            {
-                aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
-                consumer->descriptor_subscription = NULL;
-            }
-
-            tp_consumer_add_subscription(
+            if (tp_consumer_add_subscription(
                 consumer,
                 channel,
                 (int32_t)view.descriptor_stream_id,
-                &consumer->descriptor_subscription);
+                &new_subscription) == 0 && new_subscription)
+            {
+                if (consumer->descriptor_subscription)
+                {
+                    aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
+                }
+                consumer->descriptor_subscription = new_subscription;
+                consumer->assigned_descriptor_stream_id = view.descriptor_stream_id;
+            }
+            else
+            {
+                tp_log_emit(
+                    &consumer->client->context.base.log,
+                    TP_LOG_WARN,
+                    "ConsumerConfig descriptor subscription update failed stream=%" PRIu32 " consumer=%" PRIu32,
+                    view.stream_id,
+                    view.consumer_id);
+            }
         }
 
         if (view.control_channel.length > 0 && view.control_stream_id > 0)
         {
+            aeron_subscription_t *new_subscription = NULL;
             char channel[4096];
             size_t copy_len = view.control_channel.length;
             if (copy_len >= sizeof(channel))
@@ -704,17 +720,28 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             memcpy(channel, view.control_channel.data, copy_len);
             channel[copy_len] = '\0';
 
-            if (consumer->control_subscription)
-            {
-                aeron_subscription_close(consumer->control_subscription, NULL, NULL);
-                consumer->control_subscription = NULL;
-            }
-
-            tp_consumer_add_subscription(
+            if (tp_consumer_add_subscription(
                 consumer,
                 channel,
                 (int32_t)view.control_stream_id,
-                &consumer->control_subscription);
+                &new_subscription) == 0 && new_subscription)
+            {
+                if (consumer->control_subscription)
+                {
+                    aeron_subscription_close(consumer->control_subscription, NULL, NULL);
+                }
+                consumer->control_subscription = new_subscription;
+                consumer->assigned_control_stream_id = view.control_stream_id;
+            }
+            else
+            {
+                tp_log_emit(
+                    &consumer->client->context.base.log,
+                    TP_LOG_WARN,
+                    "ConsumerConfig control subscription update failed stream=%" PRIu32 " consumer=%" PRIu32,
+                    view.stream_id,
+                    view.consumer_id);
+            }
         }
 
         return;

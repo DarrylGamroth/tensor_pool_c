@@ -98,6 +98,8 @@ typedef struct tp_consumer_stct
     tp_consumer_context_t context;
     aeron_subscription_t *descriptor_subscription;
     aeron_subscription_t *control_subscription;
+    uint32_t assigned_descriptor_stream_id;
+    uint32_t assigned_control_stream_id;
     aeron_publication_t *control_publication;
     aeron_publication_t *qos_publication;
     aeron_fragment_assembler_t *descriptor_assembler;
