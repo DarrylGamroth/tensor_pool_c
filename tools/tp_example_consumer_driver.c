@@ -5,6 +5,7 @@
 #include "tensor_pool/tp.h"
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,7 @@ typedef struct tp_consumer_sample_state_stct
     tp_consumer_t *consumer;
     int received;
     int limit;
+    int verbose;
 }
 tp_consumer_sample_state_t;
 
@@ -27,19 +29,54 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 {
     tp_consumer_sample_state_t *state = (tp_consumer_sample_state_t *)clientd;
     tp_frame_view_t frame;
+    int read_result;
 
     if (NULL == state || NULL == desc || NULL == state->consumer)
     {
         return;
     }
 
-    if (tp_consumer_read_frame(state->consumer, desc->seq, &frame) == 0)
+    read_result = tp_consumer_read_frame(state->consumer, desc->seq, &frame);
+    if (read_result == 0)
     {
         state->received++;
         fprintf(stdout, "Frame seq=%" PRIu64 " pool_id=%u payload=%u\n",
             desc->seq,
             frame.pool_id,
             frame.payload_len);
+    }
+    else if (read_result < 0)
+    {
+        fprintf(stderr, "Frame seq=%" PRIu64 " read failed: %s\n", desc->seq, tp_errmsg());
+    }
+    else if (state->verbose)
+    {
+        fprintf(stderr, "Frame seq=%" PRIu64 " not ready\n", desc->seq);
+    }
+}
+
+static void log_subscription_status(
+    const char *label,
+    aeron_subscription_t *subscription,
+    int *last_images,
+    int64_t *last_status,
+    int verbose)
+{
+    int image_count;
+    int64_t status;
+
+    if (NULL == subscription)
+    {
+        return;
+    }
+
+    image_count = aeron_subscription_image_count(subscription);
+    status = aeron_subscription_channel_status(subscription);
+    if (verbose || image_count != *last_images || status != *last_status)
+    {
+        fprintf(stderr, "%s images=%d channel_status=%" PRId64 "\n", label, image_count, status);
+        *last_images = image_count;
+        *last_status = status;
     }
 }
 
@@ -82,10 +119,16 @@ int main(int argc, char **argv)
     tp_consumer_sample_state_t state;
     int descriptor_connected = 0;
     int control_connected = 0;
+    int desc_images = -1;
+    int ctrl_images = -1;
+    int64_t desc_status = INT64_MIN;
+    int64_t ctrl_status = INT64_MIN;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
     int max_frames;
+    const char *verbose_env;
+    int verbose = 0;
     size_t i;
 
     if (argc != 6)
@@ -97,6 +140,11 @@ int main(int argc, char **argv)
     stream_id = (uint32_t)strtoul(argv[3], NULL, 10);
     client_id = (uint32_t)strtoul(argv[4], NULL, 10);
     max_frames = (int)strtol(argv[5], NULL, 10);
+    verbose_env = getenv("TP_EXAMPLE_VERBOSE");
+    if (verbose_env && verbose_env[0] != '\0')
+    {
+        verbose = 1;
+    }
 
     if (tp_client_context_init(&client_context) < 0)
     {
@@ -219,6 +267,7 @@ int main(int argc, char **argv)
     state.consumer = &consumer;
     state.received = 0;
     state.limit = max_frames;
+    state.verbose = verbose;
 
     tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
 
@@ -231,18 +280,34 @@ int main(int argc, char **argv)
             fprintf(stderr, "Poll failed: %s\n", tp_errmsg());
             break;
         }
+        if (verbose && (ctrl_fragments > 0 || desc_fragments > 0))
+        {
+            fprintf(stderr, "Polled control=%d descriptor=%d\n", ctrl_fragments, desc_fragments);
+        }
         if (!descriptor_connected && consumer.descriptor_subscription &&
             aeron_subscription_is_connected(consumer.descriptor_subscription))
         {
             descriptor_connected = 1;
             fprintf(stderr, "Descriptor subscription connected\n");
         }
-        if (!control_connected && consumer.control_subscription &&
-            aeron_subscription_is_connected(consumer.control_subscription))
+        if (!control_connected && client.control_subscription &&
+            aeron_subscription_is_connected(client.control_subscription))
         {
             control_connected = 1;
             fprintf(stderr, "Control subscription connected\n");
         }
+        log_subscription_status(
+            "Descriptor subscription",
+            consumer.descriptor_subscription,
+            &desc_images,
+            &desc_status,
+            verbose);
+        log_subscription_status(
+            "Control subscription",
+            client.control_subscription,
+            &ctrl_images,
+            &ctrl_status,
+            verbose);
     }
 
     drive_keepalives(&client);

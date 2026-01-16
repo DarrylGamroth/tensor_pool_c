@@ -1,6 +1,7 @@
 #include "tensor_pool/tp_consumer.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -604,6 +605,24 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 
     if (tp_control_decode_consumer_config(buffer, length, &view) == 0)
     {
+        const char *desc_channel = view.descriptor_channel.length > 0 ? view.descriptor_channel.data : "";
+        const char *ctrl_channel = view.control_channel.length > 0 ? view.control_channel.data : "";
+
+        tp_log_emit(
+            &consumer->client->context.base.log,
+            TP_LOG_INFO,
+            "ConsumerConfig stream=%u epoch=%" PRIu64 " layout=%u use_shm=%u descriptor_channel=%.*s descriptor_stream_id=%u control_channel=%.*s control_stream_id=%u",
+            view.stream_id,
+            view.epoch,
+            view.layout_version,
+            view.use_shm,
+            (int)view.descriptor_channel.length,
+            desc_channel,
+            view.descriptor_stream_id,
+            (int)view.control_channel.length,
+            ctrl_channel,
+            view.control_stream_id);
+
         if (view.consumer_id != consumer->context.consumer_id)
         {
             return;
