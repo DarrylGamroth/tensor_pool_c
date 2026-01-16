@@ -7,6 +7,9 @@ Authoritative references:
 - `docs/SHM_TraceLink_Spec_v1.0.md`
 - `docs/SHM_Join_Barrier_Spec_v1.0.md`
 
+Checklist reference:
+- `docs/REQUIREMENTS_TEST_CHECKLIST.md`
+
 Legend:
 - **Compliant**: Implemented per spec.
 - **Partial**: Core behavior implemented; gaps remain.
