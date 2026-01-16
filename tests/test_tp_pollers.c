@@ -2202,6 +2202,7 @@ void tp_test_activity_liveness(void)
     }
 
     stale_ns = client.context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    consumer.attach_time_ns = now_ns - stale_ns - 1;
     if (now_ns > stale_ns * 2)
     {
         tp_test_update_activity_timestamp(header_fd, now_ns - stale_ns * 2);

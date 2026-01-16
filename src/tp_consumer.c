@@ -76,6 +76,7 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
     consumer->state = TP_CONSUMER_STATE_UNMAPPED;
     consumer->shm_mapped = false;
     consumer->mapped_epoch = 0;
+    consumer->attach_time_ns = 0;
     consumer->last_seq_seen = 0;
     consumer->drops_gap = 0;
     consumer->drops_late = 0;
@@ -154,6 +155,11 @@ static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_
     }
 
     stale_ns = period * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    if (consumer->attach_time_ns != 0 && now_ns > consumer->attach_time_ns &&
+        now_ns - consumer->attach_time_ns <= stale_ns)
+    {
+        return;
+    }
     if (tp_shm_read_activity_timestamp(&consumer->header_region, &activity_ns, &consumer->client->context.base.log) < 0)
     {
         return;
@@ -478,11 +484,18 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
 
     if (!consumer->shm_mapped)
     {
+        tp_log_emit(&consumer->client->context.base.log, TP_LOG_DEBUG, "%s", "descriptor drop: shm not mapped");
         return;
     }
 
     if (consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
     {
+        tp_log_emit(
+            &consumer->client->context.base.log,
+            TP_LOG_DEBUG,
+            "descriptor drop: epoch mismatch desc=%" PRIu64 " mapped=%" PRIu64,
+            tensor_pool_frameDescriptor_epoch(&descriptor),
+            consumer->mapped_epoch);
         tp_consumer_unmap_regions(consumer);
         return;
     }
@@ -1120,6 +1133,7 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     consumer->state = TP_CONSUMER_STATE_MAPPED;
     consumer->shm_mapped = true;
     consumer->mapped_epoch = config->epoch;
+    consumer->attach_time_ns = (uint64_t)tp_clock_now_ns();
     consumer->last_announce_epoch = config->epoch;
     consumer->last_seq_seen = 0;
     consumer->drops_gap = 0;

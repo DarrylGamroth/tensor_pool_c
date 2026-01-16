@@ -125,6 +125,7 @@ typedef struct tp_consumer_stct
     char payload_fallback_uri[TP_URI_MAX_LENGTH];
     bool shm_mapped;
     uint64_t mapped_epoch;
+    uint64_t attach_time_ns;
     uint64_t last_seq_seen;
     uint64_t drops_gap;
     uint64_t drops_late;
