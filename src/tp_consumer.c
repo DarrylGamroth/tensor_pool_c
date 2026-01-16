@@ -657,11 +657,6 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                 (int32_t)view.descriptor_stream_id,
                 &consumer->descriptor_subscription);
         }
-        else if (consumer->descriptor_subscription)
-        {
-            aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
-            consumer->descriptor_subscription = NULL;
-        }
 
         if (view.control_channel.length > 0 && view.control_stream_id > 0)
         {
@@ -685,11 +680,6 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                 channel,
                 (int32_t)view.control_stream_id,
                 &consumer->control_subscription);
-        }
-        else if (consumer->control_subscription)
-        {
-            aeron_subscription_close(consumer->control_subscription, NULL, NULL);
-            consumer->control_subscription = NULL;
         }
 
         return;
