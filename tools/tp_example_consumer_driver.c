@@ -37,6 +37,15 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     }
 
     read_result = tp_consumer_read_frame(state->consumer, desc->seq, &frame);
+    if (state->verbose)
+    {
+        fprintf(stderr,
+            "Descriptor seq=%" PRIu64 " ts=%" PRIu64 " meta=%u trace=%" PRIu64 "\n",
+            desc->seq,
+            desc->timestamp_ns,
+            desc->meta_version,
+            desc->trace_id);
+    }
     if (read_result == 0)
     {
         state->received++;
