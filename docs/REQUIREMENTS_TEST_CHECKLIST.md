@@ -23,6 +23,21 @@ Notes:
 - Cases A-D are automated by `tools/run_driver_matrix.sh` when the driver is available.
 - If the driver is not available, the cases above are manual and should be tracked as such in the traceability matrix.
 
+## Driver Lifecycle/Behavior Integration Tests
+
+These tests exercise runtime behavior that is not covered by the config matrix. They are expected to run when a TensorPool driver is available.
+
+| Case | Purpose | Driver Config | Command | Expected Result |
+| --- | --- | --- | --- | --- |
+| E | FrameProgress on control stream | `config/driver_integration_example.toml` | `DRIVER_CONFIG=config/driver_integration_example.toml tools/run_driver_compliance.sh` | Consumer receives progress updates |
+| F | Lease expiry without keepalive | `config/driver_integration_example.toml` | `DRIVER_CONFIG=config/driver_integration_example.toml tools/run_driver_compliance.sh` | Client observes lease expiry and exits cleanly |
+| G | Epoch increments across driver restart | `config/driver_integration_example.toml` | `DRIVER_CONFIG=config/driver_integration_example.toml tools/run_driver_compliance.sh` | Second attach epoch > first |
+| H | Hugepages requirement rejected when unavailable | `config/driver_integration_example.toml` | `DRIVER_CONFIG=config/driver_integration_example.toml tools/run_driver_compliance.sh` | Attach rejected if `HugePages_Total=0` (skipped if enabled) |
+
+Notes:
+- Cases E-H are automated by `tools/run_driver_compliance.sh`.
+- Case H is skipped automatically if hugepages are enabled on the host.
+
 ## Coverage (optional)
 
 Build with coverage enabled and run the target:
