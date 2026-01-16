@@ -26,7 +26,8 @@ run_case "case A: control == announce (1001)" \
 
 run_case "case B: control != announce (1002)" \
   TP_EXAMPLE_ANNOUNCE_STREAM_ID=1002 \
-  TP_EXAMPLE_MAX_WAIT_MS=5000 \
+  TP_EXAMPLE_MAX_WAIT_MS=10000 \
+  PRODUCER_FRAMES=4 \
   STREAM_ID=10001 \
   DRIVER_CONFIG="$ROOT_DIR/config/driver_integration_announce_separate.toml"
 

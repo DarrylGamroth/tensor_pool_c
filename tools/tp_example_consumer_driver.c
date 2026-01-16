@@ -612,6 +612,10 @@ int main(int argc, char **argv)
             client.control_subscription,
             &ctrl_images,
             &ctrl_status);
+        if (state.received >= state.limit)
+        {
+            break;
+        }
         if (expect_lease_expire && error_state.lease_expired)
         {
             break;

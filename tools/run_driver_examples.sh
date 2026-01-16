@@ -36,6 +36,7 @@ if [[ "${CONSUMER_ID}" -eq "${PRODUCER_ID}" ]]; then
 fi
 READY_CONSUMER_ID_BASE="${READY_CONSUMER_ID_BASE:-$(( (CONSUMER_ID + 1000) & 0xffffffff ))}"
 MAX_FRAMES="${MAX_FRAMES:-1}"
+PRODUCER_FRAMES="${PRODUCER_FRAMES:-$MAX_FRAMES}"
 
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
 CONFIG_FALLBACK="$AERON_TENSORPOOL_DIR/config/driver_integration_example.toml"
@@ -150,7 +151,7 @@ if ! kill -0 "$consumer_pid" 2>/dev/null; then
   exit 1
 fi
 
-"$PRODUCER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$PRODUCER_ID"
+"$PRODUCER_BIN" "$AERON_DIR" "$CONTROL_CHANNEL" "$STREAM_ID" "$PRODUCER_ID" "$PRODUCER_FRAMES"
 producer_status=$?
 
 wait "$consumer_pid"
