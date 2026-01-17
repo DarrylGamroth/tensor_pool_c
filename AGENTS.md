@@ -27,3 +27,4 @@ This repo implements the SHM Tensor Pool wire spec and an Aeron-style C API.
 - A running Aeron Media Driver is expected at `/dev/shm/aeron-dgamroth`.
 - TensorPool driver may be absent; prefer no-driver tests when validating.
 - At all times, you MUST maintain a requirements-to-tests checklist that links each MUST/SHOULD to a test or explicit verification step. You SHOULD maintain a config-matrix integration test suite that exercises all distinct configuration permutations implied by the spec. You MUST flag any spec requirement lacking coverage.
+- Interop audit note: `docs/AUDIT_POSTMORTEM_INTEROP.md`.
