@@ -360,6 +360,8 @@ tp_producer_set_data_source_meta(&producer, &meta);
 
 ```c
 tp_frame_progress_t progress = {
+    .stream_id = stream_id,
+    .epoch = epoch,
     .seq = seq,
     .payload_bytes_filled = bytes,
     .state = TP_PROGRESS_STARTED
