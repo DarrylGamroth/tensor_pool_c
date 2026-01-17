@@ -237,12 +237,16 @@ int tp_sequence_merge_map_decode(
         out->stale_timeout_ns = TP_NULL_U64;
     }
 
-    tensor_pool_sequenceMergeMapAnnounce_rules_wrap_for_decode(
+    if (NULL == tensor_pool_sequenceMergeMapAnnounce_rules_wrap_for_decode(
         &rules_group,
         (char *)buffer,
         tensor_pool_sequenceMergeMapAnnounce_sbe_position_ptr(&announce),
         version,
-        length);
+        length))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_sequence_merge_map_decode: rules truncated");
+        return -1;
+    }
 
     rule_count = (size_t)tensor_pool_sequenceMergeMapAnnounce_rules_count(&rules_group);
     if (rule_count > max_rules)
@@ -261,7 +265,11 @@ int tp_sequence_merge_map_decode(
         int32_t offset;
         uint32_t window;
 
-        tensor_pool_sequenceMergeMapAnnounce_rules_next(&rules_group);
+        if (NULL == tensor_pool_sequenceMergeMapAnnounce_rules_next(&rules_group))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_sequence_merge_map_decode: rules truncated");
+            return -1;
+        }
 
         if (!tensor_pool_sequenceMergeMapAnnounce_rules_ruleType(&rules_group, &rule_type))
         {
@@ -616,12 +624,16 @@ int tp_timestamp_merge_map_decode(
     }
     out->clock_domain = (uint8_t)clock_domain;
 
-    tensor_pool_timestampMergeMapAnnounce_rules_wrap_for_decode(
+    if (NULL == tensor_pool_timestampMergeMapAnnounce_rules_wrap_for_decode(
         &rules_group,
         (char *)buffer,
         tensor_pool_timestampMergeMapAnnounce_sbe_position_ptr(&announce),
         version,
-        length);
+        length))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_timestamp_merge_map_decode: rules truncated");
+        return -1;
+    }
 
     rule_count = (size_t)tensor_pool_timestampMergeMapAnnounce_rules_count(&rules_group);
     if (rule_count > max_rules)
@@ -641,7 +653,11 @@ int tp_timestamp_merge_map_decode(
         int64_t offset;
         uint64_t window;
 
-        tensor_pool_timestampMergeMapAnnounce_rules_next(&rules_group);
+        if (NULL == tensor_pool_timestampMergeMapAnnounce_rules_next(&rules_group))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_timestamp_merge_map_decode: rules truncated");
+            return -1;
+        }
 
         if (!tensor_pool_timestampMergeMapAnnounce_rules_ruleType(&rules_group, &rule_type))
         {

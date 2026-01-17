@@ -36,6 +36,34 @@ static tp_string_view_t tp_string_view_from_parts(const char *data, size_t lengt
     return out;
 }
 
+static int tp_decode_var_data(const char *buffer, size_t length, uint64_t *position, tp_string_view_t *out)
+{
+    uint32_t field_len;
+
+    if (NULL == buffer || NULL == position || NULL == out)
+    {
+        return -1;
+    }
+
+    if (*position + 4 > length)
+    {
+        return -1;
+    }
+
+    memcpy(&field_len, buffer + *position, sizeof(field_len));
+    field_len = SBE_LITTLE_ENDIAN_ENCODE_32(field_len);
+
+    if (*position + 4 + field_len > length)
+    {
+        return -1;
+    }
+
+    out->data = (field_len > 0) ? buffer + *position + 4 : NULL;
+    out->length = field_len;
+    *position += 4 + field_len;
+    return 0;
+}
+
 int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_consumer_hello_view_t *out)
 {
     struct tensor_pool_messageHeader header;
@@ -74,6 +102,18 @@ int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_co
         template_id != tensor_pool_consumerHello_sbe_template_id())
     {
         return 1;
+    }
+
+    if (version > tensor_pool_consumerHello_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_consumerHello_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: block length mismatch");
+        return -1;
     }
 
     tensor_pool_consumerHello_wrap_for_decode(
@@ -131,14 +171,21 @@ int tp_control_decode_consumer_hello(const uint8_t *buffer, size_t length, tp_co
     out->control_stream_id = tensor_pool_consumerHello_controlStreamId(&hello);
 
     {
-        struct tensor_pool_consumerHello_string_view channel_view =
-            tensor_pool_consumerHello_get_descriptorChannel_as_string_view(&hello);
-        out->descriptor_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
-    }
-    {
-        struct tensor_pool_consumerHello_string_view channel_view =
-            tensor_pool_consumerHello_get_controlChannel_as_string_view(&hello);
-        out->control_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+        tp_string_view_t channel_view;
+        uint64_t pos = tensor_pool_consumerHello_sbe_position(&hello);
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &channel_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid descriptor channel");
+            return -1;
+        }
+        out->descriptor_channel = channel_view;
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &channel_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_hello: invalid control channel");
+            return -1;
+        }
+        out->control_channel = channel_view;
     }
 
     return 0;
@@ -228,19 +275,29 @@ int tp_control_decode_consumer_config(const uint8_t *buffer, size_t length, tp_c
     out->control_stream_id = tensor_pool_consumerConfig_controlStreamId(&cfg);
 
     {
-        struct tensor_pool_consumerConfig_string_view uri_view =
-            tensor_pool_consumerConfig_get_payloadFallbackUri_as_string_view(&cfg);
-        out->payload_fallback_uri = tp_string_view_from_parts(uri_view.data, uri_view.length);
-    }
-    {
-        struct tensor_pool_consumerConfig_string_view channel_view =
-            tensor_pool_consumerConfig_get_descriptorChannel_as_string_view(&cfg);
-        out->descriptor_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
-    }
-    {
-        struct tensor_pool_consumerConfig_string_view channel_view =
-            tensor_pool_consumerConfig_get_controlChannel_as_string_view(&cfg);
-        out->control_channel = tp_string_view_from_parts(channel_view.data, channel_view.length);
+        tp_string_view_t uri_view;
+        uint64_t pos = tensor_pool_consumerConfig_sbe_position(&cfg);
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &uri_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid payload uri");
+            return -1;
+        }
+        out->payload_fallback_uri = uri_view;
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &uri_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid descriptor channel");
+            return -1;
+        }
+        out->descriptor_channel = uri_view;
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &uri_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_consumer_config: invalid control channel");
+            return -1;
+        }
+        out->control_channel = uri_view;
     }
 
     return 0;
@@ -299,14 +356,22 @@ int tp_control_decode_data_source_announce(const uint8_t *buffer, size_t length,
     out->epoch = tensor_pool_dataSourceAnnounce_epoch(&announce);
     out->meta_version = tensor_pool_dataSourceAnnounce_metaVersion(&announce);
     {
-        struct tensor_pool_dataSourceAnnounce_string_view view =
-            tensor_pool_dataSourceAnnounce_get_name_as_string_view(&announce);
-        out->name = tp_string_view_from_parts(view.data, view.length);
-    }
-    {
-        struct tensor_pool_dataSourceAnnounce_string_view view =
-            tensor_pool_dataSourceAnnounce_get_summary_as_string_view(&announce);
-        out->summary = tp_string_view_from_parts(view.data, view.length);
+        tp_string_view_t view;
+        uint64_t pos = tensor_pool_dataSourceAnnounce_sbe_position(&announce);
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: invalid name");
+            return -1;
+        }
+        out->name = view;
+
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_announce: invalid summary");
+            return -1;
+        }
+        out->summary = view;
     }
 
     return 0;
@@ -317,7 +382,7 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
     struct tensor_pool_messageHeader header;
     struct tensor_pool_shmPoolAnnounce announce;
     struct tensor_pool_shmPoolAnnounce_payloadPools pools;
-    struct tensor_pool_shmPoolAnnounce_string_view header_uri;
+    tp_string_view_t header_uri;
     uint16_t template_id;
     uint16_t schema_id;
     uint16_t block_length;
@@ -394,12 +459,16 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
         out->announce_clock_domain = (uint8_t)clock_domain;
     }
 
-    tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_decode(
+    if (NULL == tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_decode(
         &pools,
         (char *)buffer,
         tensor_pool_shmPoolAnnounce_sbe_position_ptr(&announce),
         version,
-        length);
+        length))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: payload pools truncated");
+        return -1;
+    }
 
     pool_count = (size_t)tensor_pool_shmPoolAnnounce_payloadPools_count(&pools);
     out->pool_count = pool_count;
@@ -416,25 +485,38 @@ int tp_control_decode_shm_pool_announce(const uint8_t *buffer, size_t length, tp
     for (i = 0; i < pool_count; i++)
     {
         tp_shm_pool_desc_t *pool = &out->pools[i];
-        struct tensor_pool_shmPoolAnnounce_string_view region_uri;
+        tp_string_view_t region_uri;
 
         if (!tensor_pool_shmPoolAnnounce_payloadPools_next(&pools))
         {
-            break;
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: payload pools truncated");
+            tp_control_shm_pool_announce_close(out);
+            return -1;
         }
 
         pool->pool_id = tensor_pool_shmPoolAnnounce_payloadPools_poolId(&pools);
         pool->nslots = tensor_pool_shmPoolAnnounce_payloadPools_poolNslots(&pools);
         pool->stride_bytes = tensor_pool_shmPoolAnnounce_payloadPools_strideBytes(&pools);
 
-        region_uri = tensor_pool_shmPoolAnnounce_payloadPools_get_regionUri_as_string_view(&pools);
-        pool->region_uri.data = region_uri.data;
-        pool->region_uri.length = region_uri.length;
+        if (tp_decode_var_data(pools.buffer, pools.buffer_length, pools.position_ptr, &region_uri) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: invalid pool uri");
+            tp_control_shm_pool_announce_close(out);
+            return -1;
+        }
+        pool->region_uri = region_uri;
     }
 
-    header_uri = tensor_pool_shmPoolAnnounce_get_headerRegionUri_as_string_view(&announce);
-    out->header_region_uri.data = header_uri.data;
-    out->header_region_uri.length = header_uri.length;
+    {
+        uint64_t pos = *tensor_pool_shmPoolAnnounce_sbe_position_ptr(&announce);
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &header_uri) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_shm_pool_announce: invalid header uri");
+            tp_control_shm_pool_announce_close(out);
+            return -1;
+        }
+        out->header_region_uri = header_uri;
+    }
 
     return 0;
 }
@@ -447,7 +529,7 @@ int tp_control_decode_control_response(const uint8_t *buffer, size_t length, tp_
     uint16_t schema_id;
     uint16_t block_length;
     uint16_t version;
-    struct tensor_pool_controlResponse_string_view error_view;
+    tp_string_view_t error_view;
 
     if (NULL == buffer || NULL == out)
     {
@@ -499,9 +581,15 @@ int tp_control_decode_control_response(const uint8_t *buffer, size_t length, tp_
         out->code = (tp_response_code_t)code;
     }
 
-    error_view = tensor_pool_controlResponse_get_errorMessage_as_string_view(&resp);
-    out->error_message.data = error_view.data;
-    out->error_message.length = error_view.length;
+    {
+        uint64_t pos = tensor_pool_controlResponse_sbe_position(&resp);
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &error_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_control_response: invalid error message");
+            return -1;
+        }
+        out->error_message = error_view;
+    }
 
     return 0;
 }
@@ -571,7 +659,7 @@ int tp_control_decode_meta_blob_chunk(const uint8_t *buffer, size_t length, tp_m
     uint16_t schema_id;
     uint16_t block_length;
     uint16_t version;
-    struct tensor_pool_metaBlobChunk_string_view bytes_view;
+    tp_string_view_t bytes_view;
 
     if (NULL == buffer || NULL == out)
     {
@@ -603,6 +691,18 @@ int tp_control_decode_meta_blob_chunk(const uint8_t *buffer, size_t length, tp_m
         return 1;
     }
 
+    if (version > tensor_pool_metaBlobChunk_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_chunk: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_metaBlobChunk_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_chunk: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_metaBlobChunk_wrap_for_decode(
         &msg,
         (char *)buffer,
@@ -615,8 +715,15 @@ int tp_control_decode_meta_blob_chunk(const uint8_t *buffer, size_t length, tp_m
     out->stream_id = tensor_pool_metaBlobChunk_streamId(&msg);
     out->meta_version = tensor_pool_metaBlobChunk_metaVersion(&msg);
     out->offset = tensor_pool_metaBlobChunk_chunkOffset(&msg);
-    bytes_view = tensor_pool_metaBlobChunk_get_bytes_as_string_view(&msg);
-    out->bytes = tp_string_view_from_parts(bytes_view.data, bytes_view.length);
+    {
+        uint64_t pos = tensor_pool_metaBlobChunk_sbe_position(&msg);
+        if (tp_decode_var_data((const char *)buffer, length, &pos, &bytes_view) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_control_decode_meta_blob_chunk: invalid bytes");
+            return -1;
+        }
+        out->bytes = bytes_view;
+    }
 
     return 0;
 }
@@ -736,6 +843,18 @@ int tp_control_decode_data_source_meta(
         return 1;
     }
 
+    if (version > tensor_pool_dataSourceMeta_sbe_schema_version())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: unsupported schema version");
+        return -1;
+    }
+
+    if (block_length != tensor_pool_dataSourceMeta_sbe_block_length())
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: block length mismatch");
+        return -1;
+    }
+
     tensor_pool_dataSourceMeta_wrap_for_decode(
         &meta,
         (char *)buffer,
@@ -749,12 +868,16 @@ int tp_control_decode_data_source_meta(
     out->meta_version = tensor_pool_dataSourceMeta_metaVersion(&meta);
     out->timestamp_ns = tensor_pool_dataSourceMeta_timestampNs(&meta);
 
-    tensor_pool_dataSourceMeta_attributes_wrap_for_decode(
+    if (NULL == tensor_pool_dataSourceMeta_attributes_wrap_for_decode(
         &attrs,
         (char *)buffer,
         tensor_pool_dataSourceMeta_sbe_position_ptr(&meta),
         version,
-        length);
+        length))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: attributes truncated");
+        return -1;
+    }
 
     attr_count = (uint32_t)tensor_pool_dataSourceMeta_attributes_count(&attrs);
     out->attribute_count = attr_count;
@@ -765,25 +888,27 @@ int tp_control_decode_data_source_meta(
         for (i = 0; i < attr_count; i++)
         {
             tp_data_source_meta_attr_view_t attr_view;
-            struct tensor_pool_dataSourceMeta_string_view key_view;
-            struct tensor_pool_dataSourceMeta_string_view fmt_view;
-            struct tensor_pool_dataSourceMeta_string_view val_view;
+            tp_string_view_t key_view;
+            tp_string_view_t fmt_view;
+            tp_string_view_t val_view;
 
             if (NULL == tensor_pool_dataSourceMeta_attributes_next(&attrs))
             {
-                break;
+                TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: attributes truncated");
+                return -1;
             }
 
-            key_view = tensor_pool_dataSourceMeta_attributes_get_key_as_string_view(&attrs);
-            fmt_view = tensor_pool_dataSourceMeta_attributes_get_format_as_string_view(&attrs);
-            val_view = tensor_pool_dataSourceMeta_attributes_get_value_as_string_view(&attrs);
+            if (tp_decode_var_data(attrs.buffer, attrs.buffer_length, attrs.position_ptr, &key_view) < 0 ||
+                tp_decode_var_data(attrs.buffer, attrs.buffer_length, attrs.position_ptr, &fmt_view) < 0 ||
+                tp_decode_var_data(attrs.buffer, attrs.buffer_length, attrs.position_ptr, &val_view) < 0)
+            {
+                TP_SET_ERR(EINVAL, "%s", "tp_control_decode_data_source_meta: invalid attribute");
+                return -1;
+            }
 
-            attr_view.key.data = key_view.data;
-            attr_view.key.length = (uint32_t)key_view.length;
-            attr_view.format.data = fmt_view.data;
-            attr_view.format.length = (uint32_t)fmt_view.length;
-            attr_view.value.data = val_view.data;
-            attr_view.value.length = (uint32_t)val_view.length;
+            attr_view.key = key_view;
+            attr_view.format = fmt_view;
+            attr_view.value = val_view;
 
             on_attr(&attr_view, clientd);
         }

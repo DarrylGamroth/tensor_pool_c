@@ -324,4 +324,6 @@ if (TP_ENABLE_FUZZ)
 
     add_executable(tp_fuzz_seed_gen tools/tp_fuzz_seed_gen.c)
     target_link_libraries(tp_fuzz_seed_gen PRIVATE tensor_pool)
+    add_executable(tp_fuzz_seed_gen_discovery tools/tp_fuzz_seed_gen_discovery.c)
+    target_link_libraries(tp_fuzz_seed_gen_discovery PRIVATE tensor_pool)
 endif ()

@@ -266,12 +266,16 @@ int tp_tracelink_set_decode(
         return -1;
     }
 
-    tensor_pool_traceLinkSet_parents_wrap_for_decode(
+    if (NULL == tensor_pool_traceLinkSet_parents_wrap_for_decode(
         &parents_group,
         (char *)buffer,
         tensor_pool_traceLinkSet_sbe_position_ptr(&msg),
         version,
-        length);
+        length))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_tracelink_set_decode: parents group invalid");
+        return -1;
+    }
 
     parent_count = (size_t)tensor_pool_traceLinkSet_parents_count(&parents_group);
     if (parent_count < 1 || parent_count > max_parents)
@@ -283,7 +287,11 @@ int tp_tracelink_set_decode(
     for (i = 0; i < parent_count; i++)
     {
         size_t j;
-        tensor_pool_traceLinkSet_parents_next(&parents_group);
+        if (NULL == tensor_pool_traceLinkSet_parents_next(&parents_group))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_tracelink_set_decode: parents group truncated");
+            return -1;
+        }
         parents[i] = tensor_pool_traceLinkSet_parents_traceId(&parents_group);
         if (parents[i] == 0)
         {
