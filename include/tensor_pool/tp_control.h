@@ -104,6 +104,31 @@ typedef struct tp_meta_blob_complete_stct
 }
 tp_meta_blob_complete_t;
 
+typedef struct tp_shm_pool_announce_pool_stct
+{
+    uint16_t pool_id;
+    uint32_t pool_nslots;
+    uint32_t stride_bytes;
+    const char *region_uri;
+}
+tp_shm_pool_announce_pool_t;
+
+typedef struct tp_shm_pool_announce_stct
+{
+    uint32_t stream_id;
+    uint32_t producer_id;
+    uint64_t epoch;
+    uint64_t announce_timestamp_ns;
+    uint8_t announce_clock_domain;
+    uint32_t layout_version;
+    uint32_t header_nslots;
+    uint16_t header_slot_bytes;
+    const char *header_region_uri;
+    const tp_shm_pool_announce_pool_t *pools;
+    size_t pool_count;
+}
+tp_shm_pool_announce_t;
+
 typedef struct tp_control_response_stct
 {
     int64_t correlation_id;
@@ -119,6 +144,7 @@ int tp_producer_send_data_source_meta(tp_producer_t *producer, const tp_data_sou
 int tp_producer_send_meta_blob_announce(tp_producer_t *producer, const tp_meta_blob_announce_t *announce);
 int tp_producer_send_meta_blob_chunk(tp_producer_t *producer, const tp_meta_blob_chunk_t *chunk);
 int tp_producer_send_meta_blob_complete(tp_producer_t *producer, const tp_meta_blob_complete_t *complete);
+int tp_producer_send_shm_pool_announce(tp_producer_t *producer, const tp_shm_pool_announce_t *announce);
 int tp_producer_send_control_response(tp_producer_t *producer, const tp_control_response_t *response);
 
 #ifdef __cplusplus

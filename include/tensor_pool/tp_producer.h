@@ -123,7 +123,10 @@ typedef struct tp_producer_stct
     aeron_fragment_assembler_t *control_assembler;
     tp_qos_poller_t *qos_poller;
     tp_shm_region_t header_region;
+    char *header_uri;
     tp_payload_pool_t *pools;
+    char **pool_uris;
+    size_t pool_uri_count;
     size_t pool_count;
     uint32_t stream_id;
     uint32_t producer_id;
@@ -139,6 +142,7 @@ typedef struct tp_producer_stct
     uint64_t last_consumer_sweep_ns;
     uint64_t last_qos_ns;
     uint64_t last_activity_ns;
+    uint64_t last_shm_announce_ns;
     uint64_t last_announce_ns;
     uint64_t last_meta_ns;
     tp_data_source_announce_t cached_announce;

@@ -5,6 +5,7 @@
 #include "tensor_pool/tp_producer.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "tensor_pool/tp_error.h"
@@ -18,6 +19,7 @@
 #include "wire/tensor_pool/metaBlobChunk.h"
 #include "wire/tensor_pool/metaBlobComplete.h"
 #include "wire/tensor_pool/messageHeader.h"
+#include "wire/tensor_pool/shmPoolAnnounce.h"
 
 static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, size_t length)
 {
@@ -27,6 +29,11 @@ static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, siz
         return (int)result;
     }
     return 0;
+}
+
+static size_t tp_control_strlen(const char *value)
+{
+    return value ? strlen(value) : 0;
 }
 
 int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *hello)
@@ -445,6 +452,131 @@ int tp_producer_send_meta_blob_complete(tp_producer_t *producer, const tp_meta_b
     tensor_pool_metaBlobComplete_set_checksum(&msg, complete->checksum);
 
     return tp_offer_message(producer->metadata_publication, buffer, tensor_pool_metaBlobComplete_sbe_position(&msg));
+}
+
+int tp_producer_send_shm_pool_announce(tp_producer_t *producer, const tp_shm_pool_announce_t *announce)
+{
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_shmPoolAnnounce msg;
+    struct tensor_pool_shmPoolAnnounce_payloadPools pools;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_shmPoolAnnounce_sbe_block_length();
+    size_t pool_count;
+    size_t buffer_len;
+    size_t i;
+    uint8_t *buffer = NULL;
+    int result = -1;
+
+    if (NULL == producer || NULL == producer->control_publication || NULL == announce)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: control publication unavailable");
+        return -1;
+    }
+
+    pool_count = announce->pool_count;
+    if (pool_count == 0 || NULL == announce->pools)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: missing payload pools");
+        return -1;
+    }
+
+    if (NULL == announce->header_region_uri || announce->header_region_uri[0] == '\0')
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: missing header region uri");
+        return -1;
+    }
+
+    buffer_len = header_len + body_len +
+        tensor_pool_shmPoolAnnounce_payloadPools_sbe_header_size() +
+        tensor_pool_shmPoolAnnounce_headerRegionUri_header_length() +
+        tp_control_strlen(announce->header_region_uri);
+
+    for (i = 0; i < pool_count; i++)
+    {
+        const tp_shm_pool_announce_pool_t *pool = &announce->pools[i];
+        buffer_len += tensor_pool_shmPoolAnnounce_payloadPools_sbe_block_length() +
+            tensor_pool_shmPoolAnnounce_payloadPools_regionUri_header_length() +
+            tp_control_strlen(pool->region_uri);
+    }
+
+    buffer = calloc(1, buffer_len);
+    if (NULL == buffer)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_send_shm_pool_announce: buffer allocation failed");
+        return -1;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        buffer_len);
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_shmPoolAnnounce_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_shmPoolAnnounce_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_shmPoolAnnounce_sbe_schema_version());
+
+    tensor_pool_shmPoolAnnounce_wrap_for_encode(&msg, (char *)buffer, header_len, buffer_len);
+    tensor_pool_shmPoolAnnounce_set_streamId(&msg, announce->stream_id);
+    tensor_pool_shmPoolAnnounce_set_producerId(&msg, announce->producer_id);
+    tensor_pool_shmPoolAnnounce_set_epoch(&msg, announce->epoch);
+    tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&msg, announce->announce_timestamp_ns);
+    tensor_pool_shmPoolAnnounce_set_layoutVersion(&msg, announce->layout_version);
+    tensor_pool_shmPoolAnnounce_set_headerNslots(&msg, announce->header_nslots);
+    tensor_pool_shmPoolAnnounce_set_headerSlotBytes(&msg, announce->header_slot_bytes);
+    tensor_pool_shmPoolAnnounce_set_announceClockDomain(&msg, (enum tensor_pool_clockDomain)announce->announce_clock_domain);
+
+    if (NULL == tensor_pool_shmPoolAnnounce_payloadPools_wrap_for_encode(
+        &pools,
+        (char *)buffer,
+        (uint16_t)pool_count,
+        tensor_pool_shmPoolAnnounce_sbe_position_ptr(&msg),
+        tensor_pool_shmPoolAnnounce_sbe_schema_version(),
+        buffer_len))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: payload pool wrap failed");
+        goto cleanup;
+    }
+
+    for (i = 0; i < pool_count; i++)
+    {
+        const tp_shm_pool_announce_pool_t *pool = &announce->pools[i];
+
+        if (!tensor_pool_shmPoolAnnounce_payloadPools_next(&pools))
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: payload pool next failed");
+            goto cleanup;
+        }
+
+        tensor_pool_shmPoolAnnounce_payloadPools_set_poolId(&pools, pool->pool_id);
+        tensor_pool_shmPoolAnnounce_payloadPools_set_poolNslots(&pools, pool->pool_nslots);
+        tensor_pool_shmPoolAnnounce_payloadPools_set_strideBytes(&pools, pool->stride_bytes);
+
+        if (tensor_pool_shmPoolAnnounce_payloadPools_put_regionUri(
+            &pools,
+            pool->region_uri ? pool->region_uri : "",
+            tp_control_strlen(pool->region_uri)) < 0)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: payload pool uri encode failed");
+            goto cleanup;
+        }
+    }
+
+    if (tensor_pool_shmPoolAnnounce_put_headerRegionUri(
+        &msg,
+        announce->header_region_uri,
+        tp_control_strlen(announce->header_region_uri)) < 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_send_shm_pool_announce: header uri encode failed");
+        goto cleanup;
+    }
+
+    result = tp_offer_message(producer->control_publication, buffer, tensor_pool_shmPoolAnnounce_sbe_position(&msg));
+
+cleanup:
+    free(buffer);
+    return result;
 }
 
 int tp_producer_send_control_response(tp_producer_t *producer, const tp_control_response_t *response)

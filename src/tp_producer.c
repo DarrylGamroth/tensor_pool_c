@@ -219,6 +219,86 @@ static char *tp_dup_string(const char *value)
     return copy;
 }
 
+static void tp_producer_clear_shm_uris(tp_producer_t *producer)
+{
+    size_t i;
+
+    if (NULL == producer)
+    {
+        return;
+    }
+
+    if (producer->header_uri)
+    {
+        free(producer->header_uri);
+        producer->header_uri = NULL;
+    }
+
+    if (producer->pool_uris)
+    {
+        for (i = 0; i < producer->pool_uri_count; i++)
+        {
+            free(producer->pool_uris[i]);
+        }
+        free(producer->pool_uris);
+        producer->pool_uris = NULL;
+    }
+
+    producer->pool_uri_count = 0;
+}
+
+static int tp_producer_store_shm_uris(tp_producer_t *producer, const tp_producer_config_t *config)
+{
+    size_t i;
+    int result = -1;
+
+    if (NULL == producer || NULL == config)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_store_shm_uris: null input");
+        return -1;
+    }
+
+    tp_producer_clear_shm_uris(producer);
+
+    producer->header_uri = tp_dup_string(config->header_uri);
+    if (NULL == producer->header_uri)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_store_shm_uris: header uri allocation failed");
+        goto cleanup;
+    }
+
+    if (config->pool_count > 0)
+    {
+        producer->pool_uris = calloc(config->pool_count, sizeof(*producer->pool_uris));
+        if (NULL == producer->pool_uris)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_producer_store_shm_uris: pool uri allocation failed");
+            goto cleanup;
+        }
+    }
+
+    producer->pool_uri_count = config->pool_count;
+    for (i = 0; i < config->pool_count; i++)
+    {
+        producer->pool_uris[i] = tp_dup_string(config->pools[i].uri);
+        if (NULL == producer->pool_uris[i])
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_producer_store_shm_uris: pool uri allocation failed");
+            goto cleanup;
+        }
+    }
+
+    producer->last_shm_announce_ns = 0;
+    result = 0;
+
+cleanup:
+    if (result != 0)
+    {
+        tp_producer_clear_shm_uris(producer);
+    }
+    return result;
+}
+
 static int tp_is_power_of_two(uint32_t value)
 {
     return value != 0 && (value & (value - 1)) == 0;
@@ -769,6 +849,61 @@ static void tp_producer_update_activity(tp_producer_t *producer, uint64_t now_ns
     }
 }
 
+static int tp_producer_publish_shm_pool_announce(tp_producer_t *producer, uint64_t now_ns)
+{
+    tp_shm_pool_announce_pool_t *pools = NULL;
+    tp_shm_pool_announce_t announce;
+    size_t i;
+    int result = -1;
+
+    if (NULL == producer || NULL == producer->control_publication)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_shm_pool_announce: control publication unavailable");
+        return -1;
+    }
+
+    if (producer->pool_count == 0 || NULL == producer->pools || NULL == producer->header_uri)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_shm_pool_announce: missing pool configuration");
+        return -1;
+    }
+
+    pools = calloc(producer->pool_count, sizeof(*pools));
+    if (NULL == pools)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_publish_shm_pool_announce: pool allocation failed");
+        return -1;
+    }
+
+    for (i = 0; i < producer->pool_count; i++)
+    {
+        pools[i].pool_id = producer->pools[i].pool_id;
+        pools[i].pool_nslots = producer->pools[i].nslots;
+        pools[i].stride_bytes = producer->pools[i].stride_bytes;
+        pools[i].region_uri = (producer->pool_uris && i < producer->pool_uri_count)
+            ? producer->pool_uris[i]
+            : NULL;
+    }
+
+    memset(&announce, 0, sizeof(announce));
+    announce.stream_id = producer->stream_id;
+    announce.producer_id = producer->producer_id;
+    announce.epoch = producer->epoch;
+    announce.announce_timestamp_ns = now_ns;
+    announce.announce_clock_domain = TP_CLOCK_DOMAIN_MONOTONIC;
+    announce.layout_version = producer->layout_version;
+    announce.header_nslots = producer->header_nslots;
+    announce.header_slot_bytes = TP_HEADER_SLOT_BYTES;
+    announce.header_region_uri = producer->header_uri;
+    announce.pools = pools;
+    announce.pool_count = producer->pool_count;
+
+    result = tp_producer_send_shm_pool_announce(producer, &announce);
+
+    free(pools);
+    return result;
+}
+
 static int tp_producer_poll_qos(tp_producer_t *producer, int fragment_limit)
 {
     tp_qos_handlers_t handlers;
@@ -997,6 +1132,11 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
         }
     }
 
+    if (tp_producer_store_shm_uris(producer, config) < 0)
+    {
+        goto cleanup;
+    }
+
     return 0;
 
 cleanup:
@@ -1012,6 +1152,8 @@ cleanup:
         aeron_free(producer->pools);
         producer->pools = NULL;
     }
+
+    tp_producer_clear_shm_uris(producer);
 
     if (producer->tracelink_entries)
     {
@@ -1719,8 +1861,18 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
         if (producer->qos_publication &&
             (producer->last_qos_ns == 0 || now_ns - producer->last_qos_ns >= period))
         {
-            tp_qos_publish_producer(producer, producer->next_seq, 0);
+            tp_qos_publish_producer(producer, producer->next_seq, TP_NULL_U32);
             producer->last_qos_ns = now_ns;
+        }
+
+        if (!producer->context.use_driver &&
+            producer->control_publication &&
+            (producer->last_shm_announce_ns == 0 || now_ns - producer->last_shm_announce_ns >= period))
+        {
+            if (tp_producer_publish_shm_pool_announce(producer, now_ns) == 0)
+            {
+                producer->last_shm_announce_ns = now_ns;
+            }
         }
 
         if (producer->metadata_publication && producer->has_announce &&
@@ -1928,6 +2080,8 @@ int tp_producer_close(tp_producer_t *producer)
         producer->pools = NULL;
     }
     producer->pool_count = 0;
+
+    tp_producer_clear_shm_uris(producer);
 
     if (producer->consumer_manager)
     {
