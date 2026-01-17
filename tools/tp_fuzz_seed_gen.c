@@ -133,6 +133,62 @@ static size_t tp_fuzz_build_tensor_header(uint8_t *buffer, size_t capacity)
     return header_len + (size_t)tensor_pool_tensorHeader_encoded_length(&tensor);
 }
 
+static int tp_fuzz_seed_tensor_header(const char *dir)
+{
+    uint8_t buffer[256];
+    size_t out_len = tp_fuzz_build_tensor_header(buffer, sizeof(buffer));
+
+    if (out_len == 0)
+    {
+        return -1;
+    }
+
+    return tp_fuzz_write(dir, "tensor_header.bin", buffer, out_len);
+}
+
+static int tp_fuzz_seed_slot_decode(const char *dir)
+{
+    uint8_t buffer[TP_HEADER_SLOT_BYTES];
+    uint8_t header[256];
+    size_t header_len;
+    struct tensor_pool_slotHeader slot;
+
+    memset(buffer, 0, sizeof(buffer));
+
+    header_len = tp_fuzz_build_tensor_header(header, sizeof(header));
+    if (header_len == 0)
+    {
+        return -1;
+    }
+
+    if (NULL == tensor_pool_slotHeader_wrap_for_encode(&slot, (char *)buffer, 0, sizeof(buffer)))
+    {
+        return -1;
+    }
+
+    tensor_pool_slotHeader_set_seqCommit(&slot, tp_seq_committed(0));
+    tensor_pool_slotHeader_set_valuesLenBytes(&slot, (uint32_t)header_len);
+    tensor_pool_slotHeader_set_payloadSlot(&slot, 0);
+    tensor_pool_slotHeader_set_poolId(&slot, 1);
+    tensor_pool_slotHeader_set_payloadOffset(&slot, 0);
+    tensor_pool_slotHeader_set_timestampNs(&slot, 0);
+    tensor_pool_slotHeader_set_metaVersion(&slot, 0);
+
+    if (NULL == tensor_pool_slotHeader_put_headerBytes(&slot, (const char *)header, (uint32_t)header_len))
+    {
+        return -1;
+    }
+
+    return tp_fuzz_write(dir, "slot_header.bin", buffer, sizeof(buffer));
+}
+
+static int tp_fuzz_seed_shm_uri(const char *dir)
+{
+    const char *uri = "shm:file?path=/dev/shm/tensorpool|require_hugepages=false";
+
+    return tp_fuzz_write(dir, "shm_uri.bin", uri, strlen(uri));
+}
+
 static int tp_fuzz_seed_tracelink(const char *dir)
 {
     uint8_t buffer[256];
@@ -795,6 +851,18 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (tp_fuzz_prepare_dir(base, "tp_fuzz_tensor_header", dir, sizeof(dir)) < 0 ||
+        tp_fuzz_seed_tensor_header(dir) < 0)
+    {
+        return 1;
+    }
+
+    if (tp_fuzz_prepare_dir(base, "tp_fuzz_slot_decode", dir, sizeof(dir)) < 0 ||
+        tp_fuzz_seed_slot_decode(dir) < 0)
+    {
+        return 1;
+    }
+
     if (tp_fuzz_prepare_dir(base, "tp_fuzz_qos_poller", dir, sizeof(dir)) < 0 ||
         tp_fuzz_seed_qos(dir) < 0)
     {
@@ -821,6 +889,12 @@ int main(int argc, char **argv)
 
     if (tp_fuzz_prepare_dir(base, "tp_fuzz_shm_superblock", dir, sizeof(dir)) < 0 ||
         tp_fuzz_seed_superblock(dir) < 0)
+    {
+        return 1;
+    }
+
+    if (tp_fuzz_prepare_dir(base, "tp_fuzz_shm_uri", dir, sizeof(dir)) < 0 ||
+        tp_fuzz_seed_shm_uri(dir) < 0)
     {
         return 1;
     }
