@@ -498,3 +498,15 @@ tp_control_poller_init(&control_poller, &client, &handlers);
 - `tp_control_listen`: Inspect control/metadata/qos streams with text or JSON output. Use `--raw` / `--raw-out` to dump hex fragments for offline decoding.
 - `tp_descriptor_listen`: Inspect descriptor stream traffic (FrameDescriptor) with JSON or raw output. Useful for verifying producer publish behavior without SHM mapping.
 - `tp_shm_inspect`: Inspect SHM superblocks and headers for a given region.
+
+Example (descriptor stream):
+
+```sh
+./build/tp_descriptor_listen --json --raw /dev/shm/aeron-dgamroth "aeron:ipc?term-length=4m" 1100
+```
+
+Example (control/metadata/qos):
+
+```sh
+./build/tp_control_listen --json --raw-out /tmp/tp_control.hex /dev/shm/aeron-dgamroth "aeron:ipc?term-length=4m" 1000
+```
