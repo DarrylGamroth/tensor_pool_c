@@ -43,10 +43,34 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
     struct tensor_pool_consumerHello hello_msg;
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_consumerHello_sbe_block_length();
+    size_t descriptor_len = 0;
+    size_t control_len = 0;
 
     if (NULL == consumer || NULL == consumer->control_publication || NULL == hello)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_send_hello: control publication unavailable");
+        return -1;
+    }
+
+    if (hello->descriptor_channel)
+    {
+        descriptor_len = strlen(hello->descriptor_channel);
+    }
+    if ((descriptor_len > 0 && hello->descriptor_stream_id == 0) ||
+        (descriptor_len == 0 && hello->descriptor_stream_id != 0))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_send_hello: invalid descriptor stream request");
+        return -1;
+    }
+
+    if (hello->control_channel)
+    {
+        control_len = strlen(hello->control_channel);
+    }
+    if ((control_len > 0 && hello->control_stream_id == 0) ||
+        (control_len == 0 && hello->control_stream_id != 0))
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_send_hello: invalid control stream request");
         return -1;
     }
 
@@ -105,7 +129,7 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
         if (tensor_pool_consumerHello_put_descriptorChannel(
             &hello_msg,
             hello->descriptor_channel,
-            strlen(hello->descriptor_channel)) < 0)
+            descriptor_len) < 0)
         {
             return -1;
         }
@@ -120,7 +144,7 @@ int tp_consumer_send_hello(tp_consumer_t *consumer, const tp_consumer_hello_t *h
         if (tensor_pool_consumerHello_put_controlChannel(
             &hello_msg,
             hello->control_channel,
-            strlen(hello->control_channel)) < 0)
+            control_len) < 0)
         {
             return -1;
         }

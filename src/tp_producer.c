@@ -358,6 +358,10 @@ int tp_producer_publish_descriptor_to(
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_frameDescriptor_sbe_block_length();
     int64_t result;
+    uint64_t encoded_timestamp =
+        (timestamp_ns == TP_NULL_U64) ? tensor_pool_frameDescriptor_timestampNs_null_value() : timestamp_ns;
+    uint32_t encoded_meta_version =
+        (meta_version == TP_NULL_U32) ? tensor_pool_frameDescriptor_metaVersion_null_value() : meta_version;
     tp_log_t *log = NULL;
 
     if (NULL == producer || NULL == publication)
@@ -393,8 +397,8 @@ int tp_producer_publish_descriptor_to(
     tensor_pool_frameDescriptor_set_streamId(&descriptor, producer->stream_id);
     tensor_pool_frameDescriptor_set_epoch(&descriptor, producer->epoch);
     tensor_pool_frameDescriptor_set_seq(&descriptor, seq);
-    tensor_pool_frameDescriptor_set_timestampNs(&descriptor, timestamp_ns);
-    tensor_pool_frameDescriptor_set_metaVersion(&descriptor, meta_version);
+    tensor_pool_frameDescriptor_set_timestampNs(&descriptor, encoded_timestamp);
+    tensor_pool_frameDescriptor_set_metaVersion(&descriptor, encoded_meta_version);
     tensor_pool_frameDescriptor_set_traceId(&descriptor, trace_id);
 
     if (log)
@@ -406,8 +410,8 @@ int tp_producer_publish_descriptor_to(
             producer->stream_id,
             producer->epoch,
             seq,
-            timestamp_ns,
-            meta_version,
+            encoded_timestamp,
+            encoded_meta_version,
             trace_id);
     }
 
@@ -1569,8 +1573,8 @@ int tp_producer_publish_progress(
 int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta)
 {
     uint64_t seq;
-    uint64_t timestamp_ns = 0;
-    uint32_t meta_version = 0;
+    uint64_t timestamp_ns = TP_NULL_U64;
+    uint32_t meta_version = TP_NULL_U32;
     uint64_t trace_id = 0;
     tp_payload_pool_t *pool;
     int result;
@@ -1701,6 +1705,8 @@ int tp_producer_commit_claim(tp_producer_t *producer, tp_buffer_claim_t *claim, 
     if (NULL == meta)
     {
         memset(&local_meta, 0, sizeof(local_meta));
+        local_meta.timestamp_ns = TP_NULL_U64;
+        local_meta.meta_version = TP_NULL_U32;
         meta = &local_meta;
     }
 

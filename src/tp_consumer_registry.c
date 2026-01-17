@@ -51,6 +51,18 @@ int tp_consumer_request_validate(const tp_consumer_hello_view_t *hello, tp_consu
     control_channel = (hello->control_channel.length > 0 && NULL != hello->control_channel.data);
     control_stream = (hello->control_stream_id != 0);
 
+    if (descriptor_channel != descriptor_stream)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_request_validate: invalid descriptor request");
+        return -1;
+    }
+
+    if (control_channel != control_stream)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_request_validate: invalid control request");
+        return -1;
+    }
+
     if (descriptor_channel && descriptor_stream)
     {
         out->descriptor_requested = true;
