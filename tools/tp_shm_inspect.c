@@ -13,7 +13,7 @@ static void usage(const char *name)
 {
     fprintf(stderr,
         "Usage: %s [--json] --allow <dir> [--allow <dir> ...] <shm-uri>\n"
-        "Example shm-uri: shm:file?path=/dev/shm/tp_header\n",
+        "Example shm-uri: shm:file?path=/dev/shm/tensorpool-${USER}/demo/10000/1/header.ring\n",
         name);
 }
 
