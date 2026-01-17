@@ -492,3 +492,9 @@ tp_control_poller_init(&control_poller, &client, &handlers);
 
 - `init/close/poll` APIs return `0` on success and `-1` on error.
 - Offer/claim/queue functions return `>= 0` on success (position/seq) or negative backpressure/admin codes (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`).
+
+## 12. Tools
+
+- `tp_control_listen`: Inspect control/metadata/qos streams with text or JSON output. Use `--raw` / `--raw-out` to dump hex fragments for offline decoding.
+- `tp_descriptor_listen`: Inspect descriptor stream traffic (FrameDescriptor) with JSON or raw output. Useful for verifying producer publish behavior without SHM mapping.
+- `tp_shm_inspect`: Inspect SHM superblocks and headers for a given region.
