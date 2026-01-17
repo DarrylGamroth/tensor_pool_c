@@ -13,7 +13,9 @@
 static void usage(const char *name)
 {
     fprintf(stderr,
-        "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <max_frames> <header_uri> <pool_uri> <pool_id> <pool_stride> <header_nslots> <epoch> <layout_version>\n",
+        "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> <max_frames> <header_uri> <pool_uri> <pool_id> <pool_stride> <header_nslots> <epoch> <layout_version>\n"
+        "Example header_uri: shm:file?path=/dev/shm/tp_header\n"
+        "Example pool_uri:   shm:file?path=/dev/shm/tp_pool\n",
         name);
 }
 
