@@ -1109,6 +1109,11 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         consumer->header_region.pid = pid;
     }
 
+    if (consumer->progress_poller_initialized)
+    {
+        tp_progress_poller_set_consumer(&consumer->progress_poller, consumer);
+    }
+
     for (i = 0; i < config->pool_count; i++)
     {
         const tp_consumer_pool_config_t *pool_cfg = &config->pools[i];
@@ -1446,7 +1451,8 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
     tp_consumer_pool_t *pool;
     tp_tensor_header_t tensor;
     uint32_t header_index;
-    uint64_t seq_commit;
+    uint64_t seq_commit_begin;
+    uint64_t seq_commit_end;
 
     if (NULL == consumer || NULL == progress)
     {
@@ -1483,15 +1489,31 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
     }
 
     slot = tp_slot_at(consumer->header_region.addr, header_index);
-    seq_commit = tp_atomic_load_u64((uint64_t *)slot);
-    if (tp_seq_value(seq_commit) != progress->seq)
+    seq_commit_begin = tp_atomic_load_u64((uint64_t *)slot);
+    if (!tp_seq_is_committed(seq_commit_begin))
     {
-        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: seq mismatch");
-        return -1;
+        return 1;
     }
 
     if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context.base.log) < 0)
     {
+        return -1;
+    }
+
+    seq_commit_end = tp_atomic_load_u64((uint64_t *)slot);
+    if (seq_commit_end != seq_commit_begin || !tp_seq_is_committed(seq_commit_end))
+    {
+        return 1;
+    }
+
+    if (slot_view.seq_commit != seq_commit_end)
+    {
+        return 1;
+    }
+
+    if (tp_seq_value(seq_commit_end) != progress->seq)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: seq mismatch");
         return -1;
     }
 
@@ -1734,6 +1756,13 @@ int tp_consumer_close(tp_consumer_t *consumer)
         aeron_fragment_assembler_delete(consumer->progress_poller.assembler);
         consumer->progress_poller.assembler = NULL;
         consumer->progress_poller_initialized = false;
+    }
+    if (consumer->progress_poller.tracker)
+    {
+        free(consumer->progress_poller.tracker);
+        consumer->progress_poller.tracker = NULL;
+        consumer->progress_poller.tracker_capacity = 0;
+        consumer->progress_poller.tracker_cursor = 0;
     }
 
     tp_consumer_unmap_regions(consumer);

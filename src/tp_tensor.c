@@ -185,7 +185,8 @@ static int tp_tensor_fill_strides(tp_tensor_header_t *header, size_t elem_size)
 
         for (i = (int32_t)header->ndims - 2; i >= 0; i--)
         {
-            int32_t expected = header->strides[i + 1] * header->dims[i + 1];
+            int32_t dim = header->dims[i + 1] > 0 ? header->dims[i + 1] : 1;
+            int32_t expected = header->strides[i + 1] * dim;
             if (header->strides[i] == 0)
             {
                 header->strides[i] = expected;
@@ -212,7 +213,8 @@ static int tp_tensor_fill_strides(tp_tensor_header_t *header, size_t elem_size)
 
         for (i = 1; i < header->ndims; i++)
         {
-            int32_t expected = header->strides[i - 1] * header->dims[i - 1];
+            int32_t dim = header->dims[i - 1] > 0 ? header->dims[i - 1] : 1;
+            int32_t expected = header->strides[i - 1] * dim;
             if (header->strides[i] == 0)
             {
                 header->strides[i] = expected;

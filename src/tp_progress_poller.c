@@ -1,6 +1,7 @@
 #include "tensor_pool/tp_progress_poller.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "tensor_pool/tp_consumer.h"
@@ -26,7 +27,13 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
         return -1;
     }
 
-    for (i = 0; i < TP_PROGRESS_TRACKER_CAPACITY; i++)
+    if (NULL == poller->tracker || poller->tracker_capacity == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: tracker unavailable");
+        return -1;
+    }
+
+    for (i = 0; i < poller->tracker_capacity; i++)
     {
         tp_progress_tracker_entry_t *entry = &poller->tracker[i];
         if (entry->in_use &&
@@ -66,7 +73,49 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
     poller->tracker[poller->tracker_cursor].seq = view->seq;
     poller->tracker[poller->tracker_cursor].last_bytes = view->payload_bytes_filled;
     poller->tracker[poller->tracker_cursor].in_use = 1;
-    poller->tracker_cursor = (poller->tracker_cursor + 1) % TP_PROGRESS_TRACKER_CAPACITY;
+    poller->tracker_cursor = (poller->tracker_cursor + 1) % poller->tracker_capacity;
+    return 0;
+}
+
+static int tp_progress_poller_resize(tp_progress_poller_t *poller, size_t capacity)
+{
+    tp_progress_tracker_entry_t *next = NULL;
+    size_t i;
+
+    if (NULL == poller || capacity == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_resize: invalid input");
+        return -1;
+    }
+
+    if (poller->tracker_capacity >= capacity)
+    {
+        return 0;
+    }
+
+    next = calloc(capacity, sizeof(*next));
+    if (NULL == next)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_progress_poller_resize: allocation failed");
+        return -1;
+    }
+
+    if (poller->tracker)
+    {
+        for (i = 0; i < poller->tracker_capacity; i++)
+        {
+            next[i] = poller->tracker[i];
+        }
+        free(poller->tracker);
+    }
+
+    poller->tracker = next;
+    poller->tracker_capacity = capacity;
+    if (poller->tracker_cursor >= poller->tracker_capacity)
+    {
+        poller->tracker_cursor = 0;
+    }
+
     return 0;
 }
 
@@ -152,8 +201,20 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
         poller->handlers = *handlers;
     }
 
+    poller->tracker = calloc(TP_PROGRESS_TRACKER_CAPACITY, sizeof(*poller->tracker));
+    if (NULL == poller->tracker)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_progress_poller_init: tracker allocation failed");
+        return -1;
+    }
+    poller->tracker_capacity = TP_PROGRESS_TRACKER_CAPACITY;
+    poller->tracker_cursor = 0;
+
     if (aeron_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
     {
+        free(poller->tracker);
+        poller->tracker = NULL;
+        poller->tracker_capacity = 0;
         return -1;
     }
 
@@ -178,8 +239,20 @@ int tp_progress_poller_init_with_subscription(
         poller->handlers = *handlers;
     }
 
+    poller->tracker = calloc(TP_PROGRESS_TRACKER_CAPACITY, sizeof(*poller->tracker));
+    if (NULL == poller->tracker)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_progress_poller_init_with_subscription: tracker allocation failed");
+        return -1;
+    }
+    poller->tracker_capacity = TP_PROGRESS_TRACKER_CAPACITY;
+    poller->tracker_cursor = 0;
+
     if (aeron_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
     {
+        free(poller->tracker);
+        poller->tracker = NULL;
+        poller->tracker_capacity = 0;
         return -1;
     }
 
@@ -226,6 +299,20 @@ void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t
 
     poller->validator = tp_progress_validate_consumer;
     poller->validator_clientd = consumer;
+
+    if (consumer && consumer->header_nslots > 0)
+    {
+        if (tp_progress_poller_resize(poller, consumer->header_nslots) < 0)
+        {
+            if (poller->tracker)
+            {
+                free(poller->tracker);
+                poller->tracker = NULL;
+            }
+            poller->tracker_capacity = 0;
+            poller->tracker_cursor = 0;
+        }
+    }
 }
 
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)

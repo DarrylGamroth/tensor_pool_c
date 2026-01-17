@@ -40,8 +40,9 @@ typedef struct tp_progress_poller_stct
     aeron_subscription_t *subscription;
     aeron_fragment_assembler_t *assembler;
     tp_progress_handlers_t handlers;
-    tp_progress_tracker_entry_t tracker[TP_PROGRESS_TRACKER_CAPACITY];
-    uint32_t tracker_cursor;
+    tp_progress_tracker_entry_t *tracker;
+    size_t tracker_capacity;
+    size_t tracker_cursor;
     uint64_t max_payload_bytes;
     tp_progress_validator_t validator;
     void *validator_clientd;
