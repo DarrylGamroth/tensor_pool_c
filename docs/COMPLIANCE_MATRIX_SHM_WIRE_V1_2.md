@@ -33,21 +33,21 @@ Legend:
 | 8.2 SlotHeader and TensorHeader | Compliant | Producer validates tensor headers before publish; consumer decodes and validates on read. |
 | 8.3 Commit Encoding via seq_commit | Compliant | Seqlock pattern with optional payload flush hook before commit. |
 | 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation in `src/tp_shm.c`. |
-| 10. Aeron + SBE Messages | Partial | Control/QoS/descriptor/progress implemented, but ShmPoolAnnounce emission and optional-primitive nullValue handling have gaps (see below). |
+| 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented (driver emits in driver mode; producer emits in no-driver mode). |
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
-| 10.1.1 ShmPoolAnnounce | Partial | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`; no producer-side ShmPoolAnnounce encode/publish for no-driver mode (driver emission is external). |
-| 10.1.2 ConsumerHello | Partial | Encode/decode implemented; per-consumer channel/stream validation does not explicitly reject invalid requests (non-empty channel with stream_id=0 is treated as absent). |
+| 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`; producer emits in no-driver mode via `src/tp_control.c` + `src/tp_producer.c`. |
+| 10.1.2 ConsumerHello | Compliant | Encode/decode implemented with explicit rejection of invalid per-consumer channel/stream requests. |
 | 10.1.3 ConsumerConfig | Compliant | Encode/decode implemented; per-consumer declines return empty channel/stream ID; consumers honor `use_shm` and expose `payload_fallback_uri`. |
-| 10.2 Data Availability | Partial | FrameDescriptor/FrameProgress implemented, but optional-field nullValue handling and progress stream_id/epoch validation are incomplete. |
-| 10.2.1 FrameDescriptor | Partial | Published and consumed with trace_id support; consumer drops on epoch mismatch and seq_commit mismatch. Optional `timestampNs`/`metaVersion` are encoded as 0 when metadata is omitted instead of using the nullValue sentinel. |
-| 10.2.2 FrameProgress | Partial | Published with stream_id/epoch; poller validates monotonic/<= but does not surface or validate stream_id/epoch in `tp_frame_progress_t` or `tp_progress_poller.c`. |
+| 10.2 Data Availability | Compliant | FrameDescriptor/FrameProgress implemented with nullValue optional handling and stream_id/epoch validation. |
+| 10.2.1 FrameDescriptor | Compliant | Published and consumed with trace_id support; optional timestamp/meta use nullValue when omitted. |
+| 10.2.2 FrameProgress | Compliant | Published with stream_id/epoch; poller surfaces and validates stream/epoch plus monotonic/<= checks. |
 | 10.3 Per-Data-Source Metadata | Compliant | DataSourceAnnounce/Meta and meta blobs implemented. |
 | 10.3.1 DataSourceAnnounce | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 10.3.2 DataSourceMeta | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 10.3.3 Meta blobs | Compliant | MetaBlob announce/chunk/complete encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
-| 10.4 QoS and Health | Partial | QoS publish/poll implemented with cadence via `announce_period_ns`, but optional watermark nullValue handling is missing. |
+| 10.4 QoS and Health | Compliant | QoS publish/poll implemented with cadence via `announce_period_ns`, watermark uses nullValue when absent. |
 | 10.4.1 QosConsumer | Compliant | Encode/decode plus cadence in consumer poll loop. |
-| 10.4.2 QosProducer | Partial | Encode/decode plus cadence implemented; `watermark` optional field is always set (0 when absent) instead of using the nullValue sentinel. |
+| 10.4.2 QosProducer | Compliant | Encode/decode plus cadence implemented; `watermark` uses nullValue when absent. |
 | 10.5 Supervisor / Unified Management | External | Supervisor role is out of scope for this repo. |
 | 11. Consumer Modes | Compliant | Rate-limited mode honored for per-consumer descriptors; shared stream fallback allowed when declined. |
 
