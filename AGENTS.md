@@ -12,8 +12,8 @@ This repo implements the SHM Tensor Pool wire spec and an Aeron-style C API.
 ## Build and codegen
 - Build with CMake: `cmake --build build`
 - Run tests: `ctest --test-dir build --output-on-failure`
-- SBE codegen tool: `../simple-binary-encoding`
-- Aeron C client source: `../aeron/aeron-client/src/main/c`
+- SBE codegen tool: use the Maven repo release.
+- Aeron source: `https://github.com/aeron-io/aeron` (C client under `aeron-client/src/main/c`).
 
 ## Implementation conventions
 - Match Aeron C client style for API design, error handling, and return codes.
