@@ -282,6 +282,8 @@ target_link_libraries(tp_example_join_barrier PRIVATE tensor_pool)
 
 add_executable(tp_control_listen tools/tp_control_listen.c)
 target_link_libraries(tp_control_listen PRIVATE tensor_pool)
+add_executable(tp_descriptor_listen tools/tp_descriptor_listen.c)
+target_link_libraries(tp_descriptor_listen PRIVATE tensor_pool)
 
 add_executable(tp_example_bgapi tools/tp_example_bgapi.c)
 target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
