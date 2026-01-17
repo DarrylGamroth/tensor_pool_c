@@ -44,8 +44,83 @@ static void tp_handle_sigint(int signo)
 typedef struct tp_listen_state_stct
 {
     int json;
+    int raw;
+    FILE *raw_out;
 }
 tp_listen_state_t;
+
+static void tp_dump_raw_fragment_to(
+    FILE *out,
+    const char *label,
+    const uint8_t *buffer,
+    size_t length)
+{
+    struct tensor_pool_messageHeader msg_header;
+    uint16_t template_id = 0;
+    uint16_t schema_id = 0;
+    uint16_t block_length = 0;
+    uint16_t version = 0;
+    size_t i;
+
+    if (NULL == out || NULL == buffer)
+    {
+        return;
+    }
+
+    if (length >= tensor_pool_messageHeader_encoded_length())
+    {
+        tensor_pool_messageHeader_wrap(
+            &msg_header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            length);
+        template_id = tensor_pool_messageHeader_templateId(&msg_header);
+        schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+        block_length = tensor_pool_messageHeader_blockLength(&msg_header);
+        version = tensor_pool_messageHeader_version(&msg_header);
+        fprintf(out,
+            "RAW %s len=%zu schema=%u template=%u block_length=%u version=%u data=",
+            label ? label : "unknown",
+            length,
+            (unsigned)schema_id,
+            (unsigned)template_id,
+            (unsigned)block_length,
+            (unsigned)version);
+    }
+    else
+    {
+        fprintf(out, "RAW %s len=%zu data=", label ? label : "unknown", length);
+    }
+
+    for (i = 0; i < length; i++)
+    {
+        fprintf(out, "%02x", buffer[i]);
+    }
+    fprintf(out, "\n");
+    fflush(out);
+}
+
+static void tp_dump_raw_fragment(
+    tp_listen_state_t *state,
+    const char *label,
+    const uint8_t *buffer,
+    size_t length)
+{
+    if (NULL == state || (!state->raw && NULL == state->raw_out))
+    {
+        return;
+    }
+
+    if (state->raw)
+    {
+        tp_dump_raw_fragment_to(stderr, label, buffer, length);
+    }
+    if (state->raw_out)
+    {
+        tp_dump_raw_fragment_to(state->raw_out, label, buffer, length);
+    }
+}
 
 static void tp_print_string_view(const char *label, const tp_string_view_t *view)
 {
@@ -133,13 +208,13 @@ static void tp_on_meta_attr(const tp_data_source_meta_attr_view_t *attr, void *c
     }
 }
 
-static void tp_on_control_fragment(
-    void *clientd,
+static void tp_handle_control_fragment(
+    tp_listen_state_t *state,
+    const char *label,
     const uint8_t *buffer,
     size_t length,
     aeron_header_t *header)
 {
-    tp_listen_state_t *state = (tp_listen_state_t *)clientd;
     struct tensor_pool_messageHeader msg_header;
     uint16_t template_id;
     uint16_t schema_id;
@@ -148,7 +223,14 @@ static void tp_on_control_fragment(
 
     (void)header;
 
-    if (NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    if (NULL == buffer)
+    {
+        return;
+    }
+
+    tp_dump_raw_fragment(state, label, buffer, length);
+
+    if (length < tensor_pool_messageHeader_encoded_length())
     {
         return;
     }
@@ -614,6 +696,28 @@ static void tp_on_control_fragment(
     }
 }
 
+static void tp_on_control_fragment(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_listen_state_t *state = (tp_listen_state_t *)clientd;
+
+    tp_handle_control_fragment(state, "control", buffer, length, header);
+}
+
+static void tp_on_metadata_fragment(
+    void *clientd,
+    const uint8_t *buffer,
+    size_t length,
+    aeron_header_t *header)
+{
+    tp_listen_state_t *state = (tp_listen_state_t *)clientd;
+
+    tp_handle_control_fragment(state, "metadata", buffer, length, header);
+}
+
 static void tp_on_qos_fragment(
     void *clientd,
     const uint8_t *buffer,
@@ -629,7 +733,14 @@ static void tp_on_qos_fragment(
 
     (void)header;
 
-    if (NULL == buffer || length < tensor_pool_messageHeader_encoded_length())
+    if (NULL == buffer)
+    {
+        return;
+    }
+
+    tp_dump_raw_fragment(state, "qos", buffer, length);
+
+    if (length < tensor_pool_messageHeader_encoded_length())
     {
         return;
     }
@@ -749,6 +860,25 @@ int main(int argc, char **argv)
         {
             state.json = 1;
         }
+        else if (strcmp(argv[arg_index], "--raw") == 0)
+        {
+            state.raw = 1;
+        }
+        else if (strcmp(argv[arg_index], "--raw-out") == 0)
+        {
+            if (arg_index + 1 >= argc)
+            {
+                fprintf(stderr, "Missing path for --raw-out\n");
+                return 1;
+            }
+            state.raw_out = fopen(argv[arg_index + 1], "w");
+            if (NULL == state.raw_out)
+            {
+                fprintf(stderr, "Failed to open raw output: %s\n", argv[arg_index + 1]);
+                return 1;
+            }
+            arg_index++;
+        }
         else
         {
             fprintf(stderr, "Unknown option: %s\n", argv[arg_index]);
@@ -814,7 +944,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (aeron_fragment_assembler_create(&metadata_assembler, tp_on_control_fragment, &state) < 0)
+    if (aeron_fragment_assembler_create(&metadata_assembler, tp_on_metadata_fragment, &state) < 0)
     {
         fprintf(stderr, "Metadata assembler failed: %s\n", tp_errmsg());
         aeron_fragment_assembler_delete(control_assembler);
@@ -881,6 +1011,10 @@ int main(int argc, char **argv)
     aeron_fragment_assembler_delete(qos_assembler);
     aeron_fragment_assembler_delete(metadata_assembler);
     aeron_fragment_assembler_delete(control_assembler);
+    if (state.raw_out)
+    {
+        fclose(state.raw_out);
+    }
     tp_client_close(&client);
 
     return 0;

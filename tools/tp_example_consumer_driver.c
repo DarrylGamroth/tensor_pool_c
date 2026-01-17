@@ -205,6 +205,7 @@ int main(int argc, char **argv)
     uint32_t request_ctrl_stream_id = 0;
     int max_frames;
     const char *verbose_env;
+    const char *trace_env;
     const char *announce_env;
     const char *per_consumer_env;
     const char *desc_stream_env;
@@ -224,6 +225,7 @@ int main(int argc, char **argv)
     const char *silent_attach_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
+    int trace = 0;
     int require_per_consumer = 0;
     int require_progress = 0;
     int poll_progress = 0;
@@ -258,6 +260,11 @@ int main(int argc, char **argv)
     if (verbose_env && verbose_env[0] != '\0')
     {
         verbose = 1;
+    }
+    trace_env = getenv("TP_EXAMPLE_TRACE");
+    if (trace_env && trace_env[0] != '\0')
+    {
+        trace = 1;
     }
     announce_env = getenv("TP_EXAMPLE_ANNOUNCE_STREAM_ID");
     if (announce_env && announce_env[0] != '\0')
@@ -365,7 +372,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (verbose)
+    if (trace)
+    {
+        tp_log_set_level(&client_context.base.log, TP_LOG_TRACE);
+    }
+    else if (verbose)
     {
         tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
     }

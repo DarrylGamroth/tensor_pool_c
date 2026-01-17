@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp_driver_client.h"
 
+#include <inttypes.h>
 #include <errno.h>
 #include <string.h>
 #include "aeron_alloc.h"
@@ -622,6 +623,19 @@ static void tp_driver_response_handler(
     }
 
     decode_result = tp_driver_decode_attach_response(buffer, length, ctx->correlation_id, ctx->out);
+    if (decode_result == 0 && log)
+    {
+        tp_log_emit(
+            log,
+            TP_LOG_DEBUG,
+            "driver attach response correlation=%" PRIi64 " code=%u lease=%" PRIu64 " stream=%u epoch=%" PRIu64 " layout=%u",
+            ctx->correlation_id,
+            (unsigned)ctx->out->code,
+            ctx->out->lease_id,
+            ctx->out->stream_id,
+            ctx->out->epoch,
+            ctx->out->layout_version);
+    }
     if (decode_result == 0 || decode_result < 0)
     {
         ctx->done = 1;
@@ -923,6 +937,12 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_shmAttachRequest_sbe_block_length();
     int64_t result;
+    tp_log_t *log = NULL;
+
+    if (client && client->client)
+    {
+        log = &client->client->context.base.log;
+    }
 
     tensor_pool_messageHeader_wrap(
         &msg_header,
@@ -959,9 +979,34 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
         tensor_pool_shmAttachRequest_set_desiredNodeId(&attach, request->desired_node_id);
     }
 
+    if (log)
+    {
+        tp_log_emit(
+            log,
+            TP_LOG_DEBUG,
+            "driver attach send correlation=%" PRIi64 " stream=%u client=%u role=%u mode=%u layout=%u hugepages=%u desired_node_id=%u",
+            request->correlation_id,
+            request->stream_id,
+            request->client_id,
+            request->role,
+            request->publish_mode,
+            request->expected_layout_version,
+            request->require_hugepages,
+            request->desired_node_id == TP_NULL_U32 ? 0U : request->desired_node_id);
+    }
+
     result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
     if (result < 0)
     {
+        if (log)
+        {
+            tp_log_emit(
+                log,
+                TP_LOG_DEBUG,
+                "driver attach offer failed correlation=%" PRIi64 " result=%" PRId64,
+                request->correlation_id,
+                result);
+        }
         return (int)result;
     }
 
@@ -1025,11 +1070,17 @@ int tp_driver_attach(
     int64_t last_send_ns = 0;
     const int64_t retry_interval_ns = 200 * 1000 * 1000LL;
     int use_deadline = (timeout_ns > 0);
+    tp_log_t *log = NULL;
 
     if (NULL == client || NULL == request || NULL == out)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_attach: null input");
         return -1;
+    }
+
+    if (client->client)
+    {
+        log = &client->client->context.base.log;
     }
 
     memset(out, 0, sizeof(*out));
@@ -1081,6 +1132,16 @@ int tp_driver_attach(
         if (now_ns - last_send_ns >= retry_interval_ns)
         {
             last_send_ns = now_ns;
+            if (log)
+            {
+                tp_log_emit(
+                    log,
+                    TP_LOG_DEBUG,
+                    "driver attach retry correlation=%" PRIi64 " stream=%u client=%u",
+                    request->correlation_id,
+                    request->stream_id,
+                    request->client_id);
+            }
             (void)tp_driver_send_attach(client, request);
         }
     }

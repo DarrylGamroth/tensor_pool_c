@@ -1,5 +1,6 @@
 #include "tensor_pool/tp_producer.h"
 
+#include <inttypes.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -277,11 +278,17 @@ int tp_producer_publish_descriptor_to(
     const size_t header_len = tensor_pool_messageHeader_encoded_length();
     const size_t body_len = tensor_pool_frameDescriptor_sbe_block_length();
     int64_t result;
+    tp_log_t *log = NULL;
 
     if (NULL == producer || NULL == publication)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_publish_descriptor_to: publication unavailable");
         return -1;
+    }
+
+    if (producer->client)
+    {
+        log = &producer->client->context.base.log;
     }
 
     memset(buffer, 0, header_len + tensor_pool_tensorHeader_sbe_block_length());
@@ -309,6 +316,20 @@ int tp_producer_publish_descriptor_to(
     tensor_pool_frameDescriptor_set_timestampNs(&descriptor, timestamp_ns);
     tensor_pool_frameDescriptor_set_metaVersion(&descriptor, meta_version);
     tensor_pool_frameDescriptor_set_traceId(&descriptor, trace_id);
+
+    if (log)
+    {
+        tp_log_emit(
+            log,
+            TP_LOG_TRACE,
+            "descriptor publish stream=%u epoch=%" PRIu64 " seq=%" PRIu64 " ts=%" PRIu64 " meta=%u trace=%" PRIu64,
+            producer->stream_id,
+            producer->epoch,
+            seq,
+            timestamp_ns,
+            meta_version,
+            trace_id);
+    }
 
     result = aeron_publication_offer(
         publication,

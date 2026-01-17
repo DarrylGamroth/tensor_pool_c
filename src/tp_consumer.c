@@ -441,6 +441,8 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
     tp_frame_descriptor_t view;
     uint16_t template_id;
     uint16_t schema_id;
+    uint32_t stream_id;
+    uint64_t epoch;
 
     (void)header;
 
@@ -477,10 +479,24 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
         tensor_pool_frameDescriptor_sbe_schema_version(),
         length);
 
+    stream_id = tensor_pool_frameDescriptor_streamId(&descriptor);
+    epoch = tensor_pool_frameDescriptor_epoch(&descriptor);
     view.seq = tensor_pool_frameDescriptor_seq(&descriptor);
     view.timestamp_ns = tensor_pool_frameDescriptor_timestampNs(&descriptor);
     view.meta_version = tensor_pool_frameDescriptor_metaVersion(&descriptor);
     view.trace_id = tensor_pool_frameDescriptor_traceId(&descriptor);
+
+    tp_log_emit(
+        &consumer->client->context.base.log,
+        TP_LOG_TRACE,
+        "descriptor recv stream=%u epoch=%" PRIu64 " seq=%" PRIu64 " ts=%" PRIu64 " meta=%u trace=%" PRIu64 " length=%zu",
+        stream_id,
+        epoch,
+        view.seq,
+        view.timestamp_ns,
+        view.meta_version,
+        view.trace_id,
+        length);
 
     if (!consumer->shm_mapped)
     {
@@ -488,13 +504,13 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
         return;
     }
 
-    if (consumer->mapped_epoch != tensor_pool_frameDescriptor_epoch(&descriptor))
+    if (consumer->mapped_epoch != epoch)
     {
         tp_log_emit(
             &consumer->client->context.base.log,
             TP_LOG_DEBUG,
             "descriptor drop: epoch mismatch desc=%" PRIu64 " mapped=%" PRIu64,
-            tensor_pool_frameDescriptor_epoch(&descriptor),
+            epoch,
             consumer->mapped_epoch);
         tp_consumer_unmap_regions(consumer);
         return;
