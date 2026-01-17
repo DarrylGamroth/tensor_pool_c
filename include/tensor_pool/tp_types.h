@@ -70,7 +70,8 @@ typedef enum tp_response_code_enum
     TP_RESPONSE_UNSUPPORTED = tensor_pool_responseCode_UNSUPPORTED,
     TP_RESPONSE_INVALID_PARAMS = tensor_pool_responseCode_INVALID_PARAMS,
     TP_RESPONSE_REJECTED = tensor_pool_responseCode_REJECTED,
-    TP_RESPONSE_INTERNAL_ERROR = tensor_pool_responseCode_INTERNAL_ERROR
+    TP_RESPONSE_INTERNAL_ERROR = tensor_pool_responseCode_INTERNAL_ERROR,
+    TP_RESPONSE_NULL = tensor_pool_responseCode_NULL_VALUE
 }
 tp_response_code_t;
 
@@ -86,13 +87,6 @@ tp_response_code_t;
 #define TP_HUGEPAGES_STANDARD tensor_pool_hugepagesPolicy_STANDARD
 #define TP_HUGEPAGES_HUGEPAGES tensor_pool_hugepagesPolicy_HUGEPAGES
 #define TP_HUGEPAGES_NULL tensor_pool_hugepagesPolicy_NULL_VALUE
-
-#define TP_RESPONSE_OK tensor_pool_responseCode_OK
-#define TP_RESPONSE_UNSUPPORTED tensor_pool_responseCode_UNSUPPORTED
-#define TP_RESPONSE_INVALID_PARAMS tensor_pool_responseCode_INVALID_PARAMS
-#define TP_RESPONSE_REJECTED tensor_pool_responseCode_REJECTED
-#define TP_RESPONSE_INTERNAL_ERROR tensor_pool_responseCode_INTERNAL_ERROR
-#define TP_RESPONSE_NULL tensor_pool_responseCode_NULL_VALUE
 
 #define TP_DTYPE_UNKNOWN tensor_pool_dtype_UNKNOWN
 #define TP_DTYPE_UINT8 tensor_pool_dtype_UINT8
