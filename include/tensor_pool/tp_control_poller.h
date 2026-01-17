@@ -47,6 +47,10 @@ tp_control_poller_t;
 int tp_control_poller_init(tp_control_poller_t *poller, tp_client_t *client, const tp_control_handlers_t *handlers);
 int tp_control_poll(tp_control_poller_t *poller, int fragment_limit);
 
+#ifdef TP_ENABLE_FUZZ
+void tp_control_poller_handle_fragment(tp_control_poller_t *poller, const uint8_t *buffer, size_t length);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

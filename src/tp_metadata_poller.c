@@ -216,6 +216,13 @@ static void tp_metadata_poller_handler(void *clientd, const uint8_t *buffer, siz
     }
 }
 
+#ifdef TP_ENABLE_FUZZ
+void tp_metadata_poller_handle_fragment(tp_metadata_poller_t *poller, const uint8_t *buffer, size_t length)
+{
+    tp_metadata_poller_handler(poller, buffer, length, NULL);
+}
+#endif
+
 int tp_metadata_poller_init(tp_metadata_poller_t *poller, tp_client_t *client, const tp_metadata_handlers_t *handlers)
 {
     if (NULL == poller || NULL == client || NULL == client->metadata_subscription)

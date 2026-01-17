@@ -43,6 +43,10 @@ tp_metadata_poller_t;
 int tp_metadata_poller_init(tp_metadata_poller_t *poller, tp_client_t *client, const tp_metadata_handlers_t *handlers);
 int tp_metadata_poll(tp_metadata_poller_t *poller, int fragment_limit);
 
+#ifdef TP_ENABLE_FUZZ
+void tp_metadata_poller_handle_fragment(tp_metadata_poller_t *poller, const uint8_t *buffer, size_t length);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
