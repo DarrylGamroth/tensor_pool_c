@@ -321,4 +321,7 @@ if (TP_ENABLE_FUZZ)
     tp_add_fuzzer(tp_fuzz_tracelink_decode fuzz/fuzz_tracelink_decode.c)
     tp_add_fuzzer(tp_fuzz_slot_decode fuzz/fuzz_slot_decode.c)
     tp_add_fuzzer(tp_fuzz_shm_uri fuzz/fuzz_shm_uri.c)
+
+    add_executable(tp_fuzz_seed_gen tools/tp_fuzz_seed_gen.c)
+    target_link_libraries(tp_fuzz_seed_gen PRIVATE tensor_pool)
 endif ()
