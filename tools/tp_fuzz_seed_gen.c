@@ -106,6 +106,8 @@ static size_t tp_fuzz_build_tensor_header(uint8_t *buffer, size_t capacity)
         return 0;
     }
 
+    memset(buffer, 0, capacity);
+
     tensor_pool_messageHeader_wrap(
         &msg_header,
         (char *)buffer,
