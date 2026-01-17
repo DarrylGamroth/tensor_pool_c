@@ -8,6 +8,7 @@
 #include <string.h>
 #include "aeron_alloc.h"
 #include "aeron_fragment_assembler.h"
+#include "aeron_agent.h"
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
@@ -31,6 +32,7 @@ typedef struct tp_driver_response_ctx_stct
 {
     int64_t correlation_id;
     tp_driver_attach_info_t *out;
+    tp_driver_client_t *client;
     int done;
 }
 tp_driver_response_ctx_t;
@@ -63,6 +65,8 @@ static void tp_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t s
 }
 
 static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_attach_request_t *request);
+static int tp_driver_client_ready(tp_driver_client_t *client);
+static int tp_driver_wait_connected(tp_driver_client_t *client, int64_t deadline_ns);
 
 int tp_driver_decode_attach_response(
     const uint8_t *buffer,
@@ -583,12 +587,38 @@ static void tp_driver_response_handler(
 {
     tp_driver_response_ctx_t *ctx = (tp_driver_response_ctx_t *)clientd;
     int decode_result;
+    tp_log_t *log = NULL;
 
     (void)header;
 
     if (NULL == ctx || NULL == buffer)
     {
         return;
+    }
+
+    if (ctx->client && ctx->client->client)
+    {
+        log = &ctx->client->client->context.base.log;
+    }
+
+    if (log && log->min_level <= TP_LOG_DEBUG && length >= tensor_pool_messageHeader_encoded_length())
+    {
+        struct tensor_pool_messageHeader msg_header;
+        tensor_pool_messageHeader_wrap(
+            &msg_header,
+            (char *)buffer,
+            0,
+            tensor_pool_messageHeader_sbe_schema_version(),
+            length);
+        tp_log_emit(
+            log,
+            TP_LOG_DEBUG,
+            "driver control fragment schema=%u template=%u block_length=%u version=%u length=%zu",
+            (unsigned)tensor_pool_messageHeader_schemaId(&msg_header),
+            (unsigned)tensor_pool_messageHeader_templateId(&msg_header),
+            (unsigned)tensor_pool_messageHeader_blockLength(&msg_header),
+            (unsigned)tensor_pool_messageHeader_version(&msg_header),
+            length);
     }
 
     decode_result = tp_driver_decode_attach_response(buffer, length, ctx->correlation_id, ctx->out);
@@ -747,6 +777,15 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 
     if (!async->sent)
     {
+        int ready = tp_driver_client_ready(async->client);
+        if (ready < 0)
+        {
+            return -1;
+        }
+        if (ready == 0)
+        {
+            return 0;
+        }
         if (tp_driver_send_attach(async->client, &async->request) < 0)
         {
             return -1;
@@ -929,6 +968,51 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
     return 0;
 }
 
+static int tp_driver_client_ready(tp_driver_client_t *client)
+{
+    if (NULL == client || NULL == client->subscription || NULL == client->publication)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_client_ready: invalid client");
+        return -1;
+    }
+
+    if (!aeron_publication_is_connected(client->publication))
+    {
+        if (client->client)
+        {
+            tp_client_do_work(client->client);
+        }
+        return 0;
+    }
+    if (!aeron_subscription_is_connected(client->subscription))
+    {
+        if (client->client)
+        {
+            tp_client_do_work(client->client);
+        }
+        return 0;
+    }
+
+    return 1;
+}
+
+static int tp_driver_wait_connected(tp_driver_client_t *client, int64_t deadline_ns)
+{
+    int ready;
+
+    while ((ready = tp_driver_client_ready(client)) == 0)
+    {
+        if (deadline_ns > 0 && tp_clock_now_ns() > deadline_ns)
+        {
+            TP_SET_ERR(ETIMEDOUT, "%s", "tp_driver_attach: control stream not connected");
+            return -1;
+        }
+        aeron_idle_strategy_sleeping_idle(NULL, 0);
+    }
+
+    return ready < 0 ? -1 : 0;
+}
+
 int tp_driver_attach(
     tp_driver_client_t *client,
     const tp_driver_attach_request_t *request,
@@ -938,6 +1022,8 @@ int tp_driver_attach(
     tp_driver_response_ctx_t ctx;
     aeron_fragment_assembler_t *assembler = NULL;
     int64_t deadline = 0;
+    int64_t last_send_ns = 0;
+    const int64_t retry_interval_ns = 200 * 1000 * 1000LL;
     int use_deadline = (timeout_ns > 0);
 
     if (NULL == client || NULL == request || NULL == out)
@@ -949,13 +1035,22 @@ int tp_driver_attach(
     memset(out, 0, sizeof(*out));
     out->code = tensor_pool_responseCode_INTERNAL_ERROR;
 
-    if (tp_driver_send_attach(client, request) < 0)
+    if (use_deadline)
+    {
+        deadline = tp_clock_now_ns() + timeout_ns;
+    }
+
+    if (tp_driver_wait_connected(client, deadline) < 0)
     {
         return -1;
     }
 
+    last_send_ns = tp_clock_now_ns();
+    (void)tp_driver_send_attach(client, request);
+
     ctx.correlation_id = request->correlation_id;
     ctx.out = out;
+    ctx.client = client;
     ctx.done = 0;
 
     if (aeron_fragment_assembler_create(&assembler, tp_driver_response_handler, &ctx) < 0)
@@ -970,24 +1065,23 @@ int tp_driver_attach(
             aeron_fragment_assembler_handler,
             assembler,
             10);
+        int64_t now_ns = tp_clock_now_ns();
 
         if (fragments < 0)
         {
             return -1;
         }
 
-        if (use_deadline)
+        if (use_deadline && now_ns > deadline)
         {
-            if (deadline == 0)
-            {
-                deadline = tp_clock_now_ns() + timeout_ns;
-            }
-            if (tp_clock_now_ns() > deadline)
-            {
-                TP_SET_ERR(ETIMEDOUT, "%s", "tp_driver_attach: timeout");
-                aeron_fragment_assembler_delete(assembler);
-                return -1;
-            }
+            TP_SET_ERR(ETIMEDOUT, "%s", "tp_driver_attach: timeout");
+            aeron_fragment_assembler_delete(assembler);
+            return -1;
+        }
+        if (now_ns - last_send_ns >= retry_interval_ns)
+        {
+            last_send_ns = now_ns;
+            (void)tp_driver_send_attach(client, request);
         }
     }
 

@@ -58,6 +58,68 @@ static void log_publication_status(const char *label, aeron_publication_t *publi
         aeron_publication_is_connected(publication) ? 1 : 0);
 }
 
+typedef enum tp_example_pattern_stct
+{
+    TP_EXAMPLE_PATTERN_NONE = 0,
+    TP_EXAMPLE_PATTERN_SEQ,
+    TP_EXAMPLE_PATTERN_INTEROP
+}
+tp_example_pattern_t;
+
+static tp_example_pattern_t tp_example_pattern_from_env(void)
+{
+    const char *env = getenv("TP_PATTERN");
+
+    if (NULL == env || env[0] == '\0')
+    {
+        return TP_EXAMPLE_PATTERN_NONE;
+    }
+
+    if (strcmp(env, "interop") == 0)
+    {
+        return TP_EXAMPLE_PATTERN_INTEROP;
+    }
+
+    return TP_EXAMPLE_PATTERN_SEQ;
+}
+
+static void tp_example_fill_seq_pattern(uint8_t *payload, size_t len, uint64_t seq)
+{
+    uint8_t value = (uint8_t)(seq & 0xffu);
+    if (NULL == payload || len == 0)
+    {
+        return;
+    }
+    memset(payload, value, len);
+}
+
+static void tp_example_fill_interop_pattern(uint8_t *payload, size_t len, uint64_t seq)
+{
+    size_t i;
+    uint64_t inv;
+
+    if (NULL == payload || len == 0)
+    {
+        return;
+    }
+
+    for (i = 0; i < 8 && i < len; i++)
+    {
+        payload[i] = (uint8_t)((seq >> (8 * i)) & 0xffu);
+    }
+
+    inv = ~seq;
+    for (i = 0; i < 8 && (8 + i) < len; i++)
+    {
+        payload[8 + i] = (uint8_t)((inv >> (8 * i)) & 0xffu);
+    }
+
+    for (i = 16; i < len; i++)
+    {
+        payload[i] = (uint8_t)((seq + i) & 0xffu);
+    }
+}
+
 static void wait_for_descriptor_connection(tp_producer_t *producer)
 {
     const char *env = getenv("TP_EXAMPLE_WAIT_CONNECTED_MS");
@@ -170,7 +232,10 @@ int main(int argc, char **argv)
     tp_frame_t frame;
     tp_frame_metadata_t meta;
     tp_tensor_header_t header;
-    float payload[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    float payload_floats[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    uint8_t payload_bytes[16];
+    void *payload_ptr = payload_floats;
+    uint32_t payload_len = (uint32_t)sizeof(payload_floats);
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
@@ -182,10 +247,12 @@ int main(int argc, char **argv)
     const char *keepalive_interval_env;
     const char *print_attach_env;
     const char *require_hugepages_env;
+    const char *attach_timeout_env;
     int32_t announce_stream_id = 1001;
     int verbose = 0;
     int publish_progress = 0;
     int print_attach = 0;
+    int64_t attach_timeout_ns = 2 * 1000 * 1000 * 1000LL;
     size_t i;
 
     if (argc < 5 || argc > 6)
@@ -224,9 +291,14 @@ int main(int argc, char **argv)
     keepalive_interval_env = getenv("TP_EXAMPLE_KEEPALIVE_INTERVAL_MS");
     print_attach_env = getenv("TP_EXAMPLE_PRINT_ATTACH");
     require_hugepages_env = getenv("TP_EXAMPLE_REQUIRE_HUGEPAGES");
+    attach_timeout_env = getenv("TP_EXAMPLE_ATTACH_TIMEOUT_MS");
     if (print_attach_env && print_attach_env[0] != '\0')
     {
         print_attach = 1;
+    }
+    if (attach_timeout_env && attach_timeout_env[0] != '\0')
+    {
+        attach_timeout_ns = (int64_t)strtoll(attach_timeout_env, NULL, 10) * 1000LL * 1000LL;
     }
 
     if (tp_client_context_init(&client_context) < 0)
@@ -283,7 +355,7 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_driver_attach(&driver, &request, &info, attach_timeout_ns) < 0)
     {
         fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
         tp_driver_client_close(&driver);
@@ -406,49 +478,81 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    memset(&header, 0, sizeof(header));
-    header.dtype = TP_DTYPE_FLOAT32;
-    header.major_order = TP_MAJOR_ORDER_ROW;
-    header.ndims = 2;
-    header.progress_unit = TP_PROGRESS_NONE;
-    header.dims[0] = 2;
-    header.dims[1] = 2;
-
-    if (tp_tensor_header_validate(&header, NULL) < 0)
     {
-        fprintf(stderr, "Tensor header invalid: %s\n", tp_errmsg());
-    }
-    memset(&frame, 0, sizeof(frame));
-    frame.tensor = &header;
-    frame.payload = payload;
-    frame.payload_len = sizeof(payload);
-    frame.pool_id = pool_cfg[0].pool_id;
-    meta.timestamp_ns = 0;
-    meta.meta_version = 0;
+        tp_example_pattern_t pattern = tp_example_pattern_from_env();
 
-    for (published = 0; published < frame_count; published++)
-    {
-        tp_frame_progress_t progress;
-        int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
-        if (position < 0)
+        if (pattern != TP_EXAMPLE_PATTERN_NONE)
         {
-            fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
-            break;
+            payload_ptr = payload_bytes;
+            payload_len = (uint32_t)sizeof(payload_bytes);
         }
-        printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
-        if (publish_progress)
+
+        memset(&header, 0, sizeof(header));
+        header.major_order = TP_MAJOR_ORDER_ROW;
+        header.progress_unit = TP_PROGRESS_NONE;
+
+        if (pattern == TP_EXAMPLE_PATTERN_NONE)
         {
-            progress.seq = (uint64_t)position;
-            progress.payload_bytes_filled = (uint64_t)frame.payload_len;
-            progress.state = TP_PROGRESS_COMPLETE;
-            if (tp_producer_offer_progress(&producer, &progress) < 0)
+            header.dtype = TP_DTYPE_FLOAT32;
+            header.ndims = 2;
+            header.dims[0] = 2;
+            header.dims[1] = 2;
+        }
+        else
+        {
+            header.dtype = TP_DTYPE_UINT8;
+            header.ndims = 1;
+            header.dims[0] = (int32_t)payload_len;
+        }
+
+        if (tp_tensor_header_validate(&header, NULL) < 0)
+        {
+            fprintf(stderr, "Tensor header invalid: %s\n", tp_errmsg());
+        }
+
+        memset(&frame, 0, sizeof(frame));
+        frame.tensor = &header;
+        frame.payload = payload_ptr;
+        frame.payload_len = payload_len;
+        frame.pool_id = pool_cfg[0].pool_id;
+        meta.timestamp_ns = 0;
+        meta.meta_version = 0;
+
+        for (published = 0; published < frame_count; published++)
+        {
+            tp_frame_progress_t progress;
+            uint64_t seq = producer.next_seq;
+
+            if (pattern == TP_EXAMPLE_PATTERN_SEQ)
             {
-                fprintf(stderr, "Progress publish failed: %s\n", tp_errmsg());
+                tp_example_fill_seq_pattern(payload_bytes, payload_len, seq);
+            }
+            else if (pattern == TP_EXAMPLE_PATTERN_INTEROP)
+            {
+                tp_example_fill_interop_pattern(payload_bytes, payload_len, seq);
+            }
+
+            int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
+            if (position < 0)
+            {
+                fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
                 break;
             }
+            printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_cfg[0].pool_id, position);
+            if (publish_progress)
+            {
+                progress.seq = (uint64_t)position;
+                progress.payload_bytes_filled = (uint64_t)frame.payload_len;
+                progress.state = TP_PROGRESS_COMPLETE;
+                if (tp_producer_offer_progress(&producer, &progress) < 0)
+                {
+                    fprintf(stderr, "Progress publish failed: %s\n", tp_errmsg());
+                    break;
+                }
+            }
+            tp_producer_poll_control(&producer, 0);
+            tp_client_do_work(&client);
         }
-        tp_producer_poll_control(&producer, 0);
-        tp_client_do_work(&client);
     }
 
     tp_producer_poll_control(&producer, 0);
