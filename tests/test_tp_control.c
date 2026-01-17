@@ -365,7 +365,7 @@ static void test_decode_control_response(void)
     }
 
     assert(view.correlation_id == 42);
-    assert(view.code == TP_RESPONSE_INVALID_PARAMS);
+    assert(view.code == (tp_response_code_t)TP_RESPONSE_INVALID_PARAMS);
     assert(view.error_message.length == 3);
 
     result = 0;

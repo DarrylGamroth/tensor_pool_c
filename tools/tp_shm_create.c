@@ -29,6 +29,7 @@ static void usage(const char *name)
         "       --stride-bytes <stride_bytes> --layout-version <layout_version>\n"
         "  Explicit path (non-canonical, test-only):\n"
         "    %s --allow-noncompliant --noncanonical <path> <region> <stream_id> <epoch> <pool_id> <nslots> <stride_bytes> <layout_version>\n",
+        name,
         name);
 }
 
