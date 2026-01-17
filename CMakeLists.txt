@@ -11,6 +11,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 option(TP_ENABLE_SBE_CODEGEN "Enable SBE code generation" ON)
 option(TP_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+option(TP_ENABLE_FUZZ "Enable libFuzzer targets (requires clang)" OFF)
 
 set(AERON_ROOT "${CMAKE_CURRENT_LIST_DIR}/../aeron" CACHE PATH "Path to Aeron source tree")
 set(SBE_TOOL_JAR "" CACHE FILEPATH "Path to sbe-tool or sbe-all jar")
@@ -290,3 +291,21 @@ target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
 
 add_executable(tp_shm_create tools/tp_shm_create.c)
 target_link_libraries(tp_shm_create PRIVATE tensor_pool)
+
+if (TP_ENABLE_FUZZ)
+    if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "TP_ENABLE_FUZZ requires clang with libFuzzer; configure with CC=clang")
+    endif ()
+
+    function(tp_add_fuzzer name source)
+        add_executable(${name} ${source})
+        target_link_libraries(${name} PRIVATE tensor_pool)
+        target_compile_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
+        target_link_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
+    endfunction()
+
+    tp_add_fuzzer(tp_fuzz_control_decode fuzz/fuzz_control_decode.c)
+    tp_add_fuzzer(tp_fuzz_tensor_header fuzz/fuzz_tensor_header.c)
+    tp_add_fuzzer(tp_fuzz_slot_decode fuzz/fuzz_slot_decode.c)
+    tp_add_fuzzer(tp_fuzz_shm_uri fuzz/fuzz_shm_uri.c)
+endif ()
