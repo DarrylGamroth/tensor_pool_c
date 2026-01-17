@@ -1465,6 +1465,16 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
         return -1;
     }
 
+    if (progress->stream_id != consumer->stream_id)
+    {
+        return 1;
+    }
+
+    if (progress->epoch != consumer->epoch)
+    {
+        return 1;
+    }
+
     header_index = (uint32_t)(progress->seq & (consumer->header_nslots - 1));
     if (header_index >= consumer->header_nslots)
     {

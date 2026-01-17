@@ -555,6 +555,8 @@ int main(int argc, char **argv)
             if (publish_progress)
             {
                 progress.seq = (uint64_t)position;
+                progress.stream_id = producer.stream_id;
+                progress.epoch = producer.epoch;
                 progress.payload_bytes_filled = (uint64_t)frame.payload_len;
                 progress.state = TP_PROGRESS_COMPLETE;
                 if (tp_producer_offer_progress(&producer, &progress) < 0)

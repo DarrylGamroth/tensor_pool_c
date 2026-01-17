@@ -29,7 +29,10 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
     for (i = 0; i < TP_PROGRESS_TRACKER_CAPACITY; i++)
     {
         tp_progress_tracker_entry_t *entry = &poller->tracker[i];
-        if (entry->in_use && entry->seq == view->seq)
+        if (entry->in_use &&
+            entry->seq == view->seq &&
+            entry->stream_id == view->stream_id &&
+            entry->epoch == view->epoch)
         {
             if (view->payload_bytes_filled < entry->last_bytes)
             {
@@ -58,6 +61,8 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
         }
     }
 
+    poller->tracker[poller->tracker_cursor].stream_id = view->stream_id;
+    poller->tracker[poller->tracker_cursor].epoch = view->epoch;
     poller->tracker[poller->tracker_cursor].seq = view->seq;
     poller->tracker[poller->tracker_cursor].last_bytes = view->payload_bytes_filled;
     poller->tracker[poller->tracker_cursor].in_use = 1;
@@ -106,6 +111,8 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
         length);
 
     memset(&view, 0, sizeof(view));
+    view.stream_id = tensor_pool_frameProgress_streamId(&progress);
+    view.epoch = tensor_pool_frameProgress_epoch(&progress);
     view.seq = tensor_pool_frameProgress_seq(&progress);
     view.payload_bytes_filled = tensor_pool_frameProgress_payloadBytesFilled(&progress);
     if (tensor_pool_frameProgress_state(&progress, &state))

@@ -19,6 +19,8 @@ typedef int (*tp_progress_validator_t)(void *clientd, const tp_frame_progress_t 
 
 typedef struct tp_progress_tracker_entry_stct
 {
+    uint32_t stream_id;
+    uint64_t epoch;
     uint64_t seq;
     uint64_t last_bytes;
     uint8_t in_use;

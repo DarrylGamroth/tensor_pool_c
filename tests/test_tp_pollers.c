@@ -2949,6 +2949,8 @@ void tp_test_progress_per_consumer_control(void)
     {
         tp_frame_progress_t progress_view;
         memset(&progress_view, 0, sizeof(progress_view));
+        progress_view.stream_id = consumer.stream_id;
+        progress_view.epoch = consumer.epoch;
         progress_view.seq = seq;
         progress_view.payload_bytes_filled = 32;
         progress_view.state = TP_PROGRESS_COMPLETE;
@@ -3168,6 +3170,8 @@ void tp_test_progress_layout_validation(void)
     }
 
     memset(&progress, 0, sizeof(progress));
+    progress.stream_id = consumer.stream_id;
+    progress.epoch = consumer.epoch;
     progress.seq = seq;
     progress.payload_bytes_filled = 32;
     progress.state = TP_PROGRESS_STARTED;

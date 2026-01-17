@@ -106,6 +106,8 @@ tp_buffer_claim_t;
 
 typedef struct tp_frame_progress_stct
 {
+    uint32_t stream_id;
+    uint64_t epoch;
     uint64_t seq;
     uint64_t payload_bytes_filled;
     tp_progress_state_t state;
