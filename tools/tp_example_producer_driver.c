@@ -126,6 +126,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
     uint64_t wait_ms = 2000;
     struct timespec ts = { 0, 10 * 1000 * 1000 };
     uint64_t deadline;
+    const int poll_limit = 10;
 
     if (env && env[0] != '\0')
     {
@@ -146,7 +147,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
             fprintf(stderr, "Descriptor publication connected\n");
             return;
         }
-        tp_producer_poll_control(producer, 0);
+        tp_producer_poll_control(producer, poll_limit);
         tp_client_do_work(producer->client);
         nanosleep(&ts, NULL);
     }
@@ -533,6 +534,7 @@ int main(int argc, char **argv)
         {
             tp_frame_progress_t progress;
             uint64_t seq = producer.next_seq;
+            const int poll_limit = 10;
 
             if (pattern == TP_EXAMPLE_PATTERN_SEQ)
             {
@@ -561,12 +563,12 @@ int main(int argc, char **argv)
                     break;
                 }
             }
-            tp_producer_poll_control(&producer, 0);
+            tp_producer_poll_control(&producer, poll_limit);
             tp_client_do_work(&client);
         }
     }
 
-    tp_producer_poll_control(&producer, 0);
+    tp_producer_poll_control(&producer, 10);
     drive_keepalives(&client);
 
     tp_producer_close(&producer);
