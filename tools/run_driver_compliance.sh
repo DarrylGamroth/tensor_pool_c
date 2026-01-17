@@ -116,9 +116,15 @@ wait_ready() {
   local ready_sleep="${READY_SLEEP_S:-0.5}"
   local ready=false
   local attempt=0
-  local attach_timeout_ms="${READY_ATTACH_TIMEOUT_MS:-100}"
+  local ready_delay="${READY_INITIAL_DELAY_S:-5}"
+  local attach_timeout_ms="${READY_ATTACH_TIMEOUT_MS:-5000}"
 
-  while (( attempt < ready_timeout )); do
+  if (( ready_delay > 0 )); then
+    sleep "$ready_delay"
+  fi
+
+  local start=$SECONDS
+  while (( SECONDS - start < ready_timeout )); do
     local ready_id=$(( (READY_CONSUMER_ID_BASE + attempt) & 0xffffffff ))
     if [[ $ready_id -eq 0 ]]; then
       ready_id=1
