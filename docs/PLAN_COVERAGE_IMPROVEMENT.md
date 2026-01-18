@@ -8,9 +8,26 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 - Every MUST/SHOULD requirement in the specs has a mapped test or an explicit manual verification note.
 
 ## Phase 0: Baseline and Targeting
-- [ ] Generate a per-file coverage report (gcovr) and save a snapshot under `docs/coverage/` for baseline. (blocked: gcovr missing locally; use CI or install)
-- [ ] Identify bottom 10 files by line coverage and tag each with a test strategy (unit, integration, fuzz seed). (blocked on baseline)
-- [ ] Update the requirements-to-tests checklist with current gaps. (blocked on baseline)
+- [x] Generate a per-file coverage report (gcovr) and save a snapshot under `docs/coverage/` for baseline.
+- [x] Identify bottom 10 files by line coverage and tag each with a test strategy (unit, integration, fuzz seed).
+- [ ] Update the requirements-to-tests checklist with current gaps.
+
+Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
+- lines: 56.7% (3829 / 6759)
+- functions: 71.2% (270 / 379)
+- branches: 44.8% (1983 / 4427)
+
+Bottom 10 files by line coverage (baseline):
+- `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
+- `src/tp_aeron.c` (0.0%) -> unit (wrap Aeron errors + directory resolution)
+- `src/tp_control_poller.c` (0.0%) -> unit/fuzz (direct handler tests)
+- `src/tp_driver_client.c` (28.1%) -> unit (driver attach/reject paths)
+- `src/tp_discovery_client.c` (38.6%) -> unit (error paths + invalid responses)
+- `src/tp_merge_map.c` (42.3%) -> unit (merge rules + map apply)
+- `src/tp_client.c` (42.9%) -> unit (context defaults, subscription errors)
+- `src/tp_tracelink.c` (51.8%) -> unit (trace link edge cases)
+- `src/tp_log.c` (54.2%) -> unit (log routing, levels)
+- `src/tp_client_conductor.c` (56.0%) -> unit (init/start/stop error handling)
 
 ## Phase 1: Core Unit Tests (No Driver)
 - [x] `tp_control_adapter.c`: cover all decode/validate branches, including length, schema/version, and invalid var-data cases.
@@ -37,3 +54,12 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 ## Phase 5: CI Enforcement
 - [x] Add CI coverage thresholds (overall) with progressive enforcement.
 - [x] Document how to reproduce coverage locally in `README.md`.
+
+## Phase 6: Coverage Uplift (Target >= 70% Lines, >= 50% Branches)
+- [ ] Add unit tests for `tp_aeron.c` (directory resolution, error propagation, invalid inputs).
+- [ ] Add unit tests for `tp_control_poller.c` using direct handler entrypoint (valid/invalid headers + template paths).
+- [ ] Expand driver client unit tests to cover attach/keepalive/lease expiry and rejection branches.
+- [ ] Expand discovery client tests for malformed channel strings and missing fields.
+- [ ] Add tests for `tp_client.c` error paths (invalid channels/stream IDs, async add failures).
+- [ ] Add trace/log tests for `tp_log.c` and `tp_error.h` to cover formatting and error propagation.
+- [ ] Add merge map tests to exercise all rule types and edge cases (empty, conflicting, out-of-order).
