@@ -13,14 +13,14 @@ Requirements:
 - A C compiler
 - Java 17+ (for SBE codegen)
 - Aeron installed with pkg-config, or a source checkout (default: `../aeron`)
-- sbe-tool jar (set `SBE_TOOL_JAR` or let CMake fetch it)
+- sbe-all jar (set `SBE_TOOL_JAR` or let CMake fetch it)
 
 Example (use Aeron from source):
 ```
 cmake -S . -B build \
   -DAERON_ROOT=../aeron \
   -DTP_USE_SYSTEM_AERON=OFF \
-  -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar
+  -DSBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar
 cmake --build build
 ```
 
@@ -29,15 +29,22 @@ Example (use system Aeron install):
 cmake -S . -B build \
   -DAERON_INCLUDE_DIR=/path/to/aeron/include \
   -DAERON_LIBRARY=/path/to/aeron/libaeron.so \
-  -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar
+  -DSBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar
 cmake --build build
 ```
 
 If SBE tool auto-detection fails, pass the main class explicitly:
 ```
 cmake -S . -B build \
-  -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar \
+  -DSBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar \
   -DSBE_JAVA_MAIN=uk.co.real_logic.sbe.SbeTool
+```
+
+If you use a non-shaded SBE jar, set `SBE_TOOL_CLASSPATH` explicitly:
+```
+cmake -S . -B build \
+  -DSBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar \
+  -DSBE_TOOL_CLASSPATH=/path/to/sbe-all.jar
 ```
 
 ## Tests
@@ -51,7 +58,7 @@ Some integration paths expect a running Aeron Media Driver (see CI for example s
 ## Fuzz smoke
 
 ```
-SBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar \
+SBE_TOOL_JAR=/path/to/sbe-all-<ver>.jar \
 TP_AERON_ROOT=../aeron \
 TP_FUZZ_RUNS=2000 \
 TP_FUZZ_CLEAN=1 \

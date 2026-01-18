@@ -70,7 +70,7 @@ jobs:
           sbe_group=""
           sbe_version=""
           for group in io.aeron uk.co.real-logic; do
-            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-all/maven-metadata.xml"
             sbe_version="$(get_metadata_value "${meta_url}" "release")"
             if [ -z "${sbe_version}" ]; then
               sbe_version="$(get_metadata_value "${meta_url}" "latest")"
@@ -81,41 +81,20 @@ jobs:
             fi
           done
           if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
-            echo "Unable to resolve sbe-tool version" >&2
+            echo "Unable to resolve sbe-all version" >&2
             exit 1
           fi
 
-          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          sbe_jar="${cache_dir}/sbe-all-${sbe_version}.jar"
           if [ ! -f "${sbe_jar}" ]; then
             curl -fsSL -o "${sbe_jar}" \
-              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
-          fi
-
-          agrona_version=""
-          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
-          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
-          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
-          if [ -z "${agrona_version}" ]; then
-            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
-            if [ -z "${agrona_version}" ]; then
-              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
-            fi
-          fi
-          if [ -z "${agrona_version}" ]; then
-            echo "Unable to resolve agrona version" >&2
-            exit 1
-          fi
-
-          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
-          if [ ! -f "${agrona_jar}" ]; then
-            curl -fsSL -o "${agrona_jar}" \
-              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-all/${sbe_version}/sbe-all-${sbe_version}.jar"
           fi
 
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
-            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Configure
@@ -224,7 +203,7 @@ jobs:
           sbe_group=""
           sbe_version=""
           for group in io.aeron uk.co.real-logic; do
-            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-all/maven-metadata.xml"
             sbe_version="$(get_metadata_value "${meta_url}" "release")"
             if [ -z "${sbe_version}" ]; then
               sbe_version="$(get_metadata_value "${meta_url}" "latest")"
@@ -235,41 +214,20 @@ jobs:
             fi
           done
           if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
-            echo "Unable to resolve sbe-tool version" >&2
+            echo "Unable to resolve sbe-all version" >&2
             exit 1
           fi
 
-          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          sbe_jar="${cache_dir}/sbe-all-${sbe_version}.jar"
           if [ ! -f "${sbe_jar}" ]; then
             curl -fsSL -o "${sbe_jar}" \
-              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
-          fi
-
-          agrona_version=""
-          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
-          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
-          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
-          if [ -z "${agrona_version}" ]; then
-            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
-            if [ -z "${agrona_version}" ]; then
-              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
-            fi
-          fi
-          if [ -z "${agrona_version}" ]; then
-            echo "Unable to resolve agrona version" >&2
-            exit 1
-          fi
-
-          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
-          if [ ! -f "${agrona_jar}" ]; then
-            curl -fsSL -o "${agrona_jar}" \
-              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-all/${sbe_version}/sbe-all-${sbe_version}.jar"
           fi
 
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
-            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Fuzz smoke
@@ -356,7 +314,7 @@ jobs:
           sbe_group=""
           sbe_version=""
           for group in io.aeron uk.co.real-logic; do
-            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-all/maven-metadata.xml"
             sbe_version="$(get_metadata_value "${meta_url}" "release")"
             if [ -z "${sbe_version}" ]; then
               sbe_version="$(get_metadata_value "${meta_url}" "latest")"
@@ -367,41 +325,20 @@ jobs:
             fi
           done
           if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
-            echo "Unable to resolve sbe-tool version" >&2
+            echo "Unable to resolve sbe-all version" >&2
             exit 1
           fi
 
-          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          sbe_jar="${cache_dir}/sbe-all-${sbe_version}.jar"
           if [ ! -f "${sbe_jar}" ]; then
             curl -fsSL -o "${sbe_jar}" \
-              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
-          fi
-
-          agrona_version=""
-          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
-          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
-          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
-          if [ -z "${agrona_version}" ]; then
-            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
-            if [ -z "${agrona_version}" ]; then
-              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
-            fi
-          fi
-          if [ -z "${agrona_version}" ]; then
-            echo "Unable to resolve agrona version" >&2
-            exit 1
-          fi
-
-          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
-          if [ ! -f "${agrona_jar}" ]; then
-            curl -fsSL -o "${agrona_jar}" \
-              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-all/${sbe_version}/sbe-all-${sbe_version}.jar"
           fi
 
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
-            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Configure coverage
