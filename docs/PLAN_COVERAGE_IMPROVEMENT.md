@@ -8,17 +8,17 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 - Every MUST/SHOULD requirement in the specs has a mapped test or an explicit manual verification note.
 
 ## Phase 0: Baseline and Targeting
-- [ ] Generate a per-file coverage report (gcovr) and save a snapshot under `docs/coverage/` for baseline.
-- [ ] Identify bottom 10 files by line coverage and tag each with a test strategy (unit, integration, fuzz seed).
-- [ ] Update the requirements-to-tests checklist with current gaps.
+- [ ] Generate a per-file coverage report (gcovr) and save a snapshot under `docs/coverage/` for baseline. (blocked: gcovr missing locally; use CI or install)
+- [ ] Identify bottom 10 files by line coverage and tag each with a test strategy (unit, integration, fuzz seed). (blocked on baseline)
+- [ ] Update the requirements-to-tests checklist with current gaps. (blocked on baseline)
 
 ## Phase 1: Core Unit Tests (No Driver)
-- [ ] `tp_control_adapter.c`: cover all decode/validate branches, including length, schema/version, and invalid var-data cases.
-- [ ] `tp_discovery_client.c`: cover invalid response filtering (missing control channel/stream).
-- [ ] `tp_tensor.c`: cover dtype/stride/shape validation edge cases (zero dims, invalid strides, bad header version).
+- [x] `tp_control_adapter.c`: cover all decode/validate branches, including length, schema/version, and invalid var-data cases.
+- [x] `tp_discovery_client.c`: cover invalid response filtering (missing control channel/stream). (already covered in tests)
+- [x] `tp_tensor.c`: cover dtype/stride/shape validation edge cases (zero dims, invalid strides, bad header version).
 - [ ] `tp_progress_poller.c` + `tp_consumer.c`: cover progress validation, monotonic checks, and seqlock handling.
-- [ ] `tp_shm.c` + `tp_uri.c`: cover canonical URI parsing, permissions checks, and hugepage negative cases.
-- [ ] `tp_tracelink.c`: cover parent caps, invalid linkages, and trace id generation boundaries.
+- [x] `tp_shm.c` + `tp_uri.c`: cover canonical URI parsing, permissions checks, and hugepage negative cases.
+- [x] `tp_tracelink.c`: cover parent caps, invalid linkages, and trace id generation boundaries.
 
 ## Phase 2: Integration Tests (Media Driver Only)
 - [ ] Add a no-driver producer/consumer integration test that exchanges >= 16 frames and validates payload integrity.
@@ -37,4 +37,3 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 ## Phase 5: CI Enforcement
 - [ ] Add CI coverage thresholds (overall and per-module) with progressive enforcement.
 - [ ] Document how to reproduce coverage locally in `README.md`.
-
