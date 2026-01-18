@@ -13,8 +13,8 @@ static void test_consumer_request_validation(void)
     int result = -1;
 
     memset(&hello, 0, sizeof(hello));
-    hello.descriptor_channel.data = "aeron:ipc";
-    hello.descriptor_channel.length = 9;
+    hello.descriptor_channel.data = "";
+    hello.descriptor_channel.length = 0;
     hello.descriptor_stream_id = 0;
 
     if (tp_consumer_request_validate(&hello, &request) != 0)
@@ -23,6 +23,8 @@ static void test_consumer_request_validation(void)
     }
     assert(request.descriptor_requested == false);
 
+    hello.descriptor_channel.data = "aeron:ipc";
+    hello.descriptor_channel.length = 9;
     hello.descriptor_stream_id = 42;
     if (tp_consumer_request_validate(&hello, &request) != 0)
     {

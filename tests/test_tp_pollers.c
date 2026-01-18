@@ -3332,7 +3332,11 @@ void tp_test_pollers(void)
         tensor_pool_consumerHello_put_descriptorChannel(&hello, "", 0);
         tensor_pool_consumerHello_put_controlChannel(&hello, "", 0);
 
-        if (tp_test_offer(&client, control_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer(
+            &client,
+            control_pub,
+            buffer,
+            (size_t)tensor_pool_consumerHello_sbe_position(&hello)) < 0)
         {
             goto cleanup;
         }

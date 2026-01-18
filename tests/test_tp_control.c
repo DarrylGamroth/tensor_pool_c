@@ -83,6 +83,8 @@ static void test_decode_consumer_config_payload_fallback(void)
     struct tensor_pool_consumerConfig cfg;
     tp_consumer_config_view_t view;
     int result = -1;
+    const char *payload_uri = "aeron:ipc";
+    size_t payload_len = strlen(payload_uri);
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -102,7 +104,9 @@ static void test_decode_consumer_config_payload_fallback(void)
     tensor_pool_consumerConfig_set_mode(&cfg, tensor_pool_mode_STREAM);
     tensor_pool_consumerConfig_set_descriptorStreamId(&cfg, 0);
     tensor_pool_consumerConfig_set_controlStreamId(&cfg, 0);
-    tensor_pool_consumerConfig_put_payloadFallbackUri(&cfg, "aeron:udp?endpoint=10.0.0.2:40125", 39);
+    tensor_pool_consumerConfig_put_payloadFallbackUri(&cfg, payload_uri, payload_len);
+    tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "", 0);
+    tensor_pool_consumerConfig_put_controlChannel(&cfg, "", 0);
 
     if (tp_control_decode_consumer_config(buffer, sizeof(buffer), &view) != 0)
     {
@@ -111,7 +115,7 @@ static void test_decode_consumer_config_payload_fallback(void)
 
     assert(view.consumer_id == 7);
     assert(view.use_shm == 0);
-    assert(view.payload_fallback_uri.length == 39);
+    assert(view.payload_fallback_uri.length == payload_len);
 
     result = 0;
 
