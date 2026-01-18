@@ -8,7 +8,7 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     env:
-      AERON_DIR: ${{ runner.temp }}/aeron-ci
+      AERON_DIR: /tmp/aeron-ci
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
