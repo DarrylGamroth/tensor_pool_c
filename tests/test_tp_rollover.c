@@ -21,6 +21,31 @@
 #include <time.h>
 #include <unistd.h>
 
+static int tp_test_driver_active(const char *aeron_dir)
+{
+    aeron_cnc_t *cnc = NULL;
+    int64_t heartbeat = 0;
+    int64_t now_ms = 0;
+    int64_t age_ms = 0;
+
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return 0;
+    }
+
+    if (aeron_cnc_init(&cnc, aeron_dir, 100) < 0)
+    {
+        return 0;
+    }
+
+    heartbeat = aeron_cnc_to_driver_heartbeat(cnc);
+    now_ms = aeron_epoch_clock();
+    age_ms = now_ms - heartbeat;
+
+    aeron_cnc_close(cnc);
+    return heartbeat > 0 && age_ms <= 1000;
+}
+
 typedef struct tp_rollover_state_stct
 {
     tp_consumer_t *consumer;
@@ -181,6 +206,10 @@ void tp_test_rollover(void)
         }
     }
     if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return;
+    }
+    if (!tp_test_driver_active(aeron_dir))
     {
         return;
     }

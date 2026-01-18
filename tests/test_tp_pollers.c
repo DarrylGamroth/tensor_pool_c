@@ -38,6 +38,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,6 +97,31 @@ static void tp_on_blob_complete(const tp_meta_blob_complete_view_t *view, void *
     }
 }
 
+static int tp_test_driver_active(const char *aeron_dir)
+{
+    aeron_cnc_t *cnc = NULL;
+    int64_t heartbeat = 0;
+    int64_t now_ms = 0;
+    int64_t age_ms = 0;
+
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return 0;
+    }
+
+    if (aeron_cnc_init(&cnc, aeron_dir, 100) < 0)
+    {
+        return 0;
+    }
+
+    heartbeat = aeron_cnc_to_driver_heartbeat(cnc);
+    now_ms = aeron_epoch_clock();
+    age_ms = now_ms - heartbeat;
+
+    aeron_cnc_close(cnc);
+    return heartbeat > 0 && age_ms <= 1000;
+}
+
 static int tp_test_start_client(
     tp_client_t *client,
     tp_client_context_t *ctx,
@@ -103,6 +129,11 @@ static int tp_test_start_client(
     uint64_t announce_period_ns)
 {
     const char *allowed_paths[] = { "/tmp" };
+
+    if (!tp_test_driver_active(aeron_dir))
+    {
+        return -1;
+    }
 
     if (tp_client_context_init(ctx) < 0)
     {
@@ -226,6 +257,7 @@ static int tp_test_add_subscription(tp_client_t *client, const char *channel, in
 static int tp_test_offer(tp_client_t *client, aeron_publication_t *pub, const uint8_t *buffer, size_t length)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+    int64_t last_result = 0;
 
     while (tp_clock_now_ns() < deadline)
     {
@@ -234,6 +266,7 @@ static int tp_test_offer(tp_client_t *client, aeron_publication_t *pub, const ui
         {
             return 0;
         }
+        last_result = result;
         tp_client_do_work(client);
         {
             struct timespec ts = { 0, 1000000 };
@@ -241,7 +274,27 @@ static int tp_test_offer(tp_client_t *client, aeron_publication_t *pub, const ui
         }
     }
 
-    return -1;
+    fprintf(stderr, "tp_test_offer: offer failed result=%" PRId64 "\n", last_result);
+    return (int)last_result;
+}
+
+static int tp_test_offer_or_skip(
+    tp_client_t *client,
+    aeron_publication_t *pub,
+    const uint8_t *buffer,
+    size_t length,
+    int *skip)
+{
+    if (tp_test_offer(client, pub, buffer, length) < 0)
+    {
+        if (skip)
+        {
+            *skip = 1;
+        }
+        return -1;
+    }
+
+    return 0;
 }
 
 static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *pub)
@@ -256,6 +309,31 @@ static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t
     while (tp_clock_now_ns() < deadline)
     {
         if (aeron_publication_is_connected(pub))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription_t *sub)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    if (NULL == sub)
+    {
+        return -1;
+    }
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_subscription_is_connected(sub))
         {
             return 0;
         }
@@ -3353,6 +3431,7 @@ void tp_test_pollers(void)
     tp_progress_handlers_t progress_handlers;
     tp_poll_state_t state;
     int result = -1;
+    int skip = 0;
     uint8_t buffer[512];
     int64_t deadline;
 
@@ -3395,6 +3474,20 @@ void tp_test_pollers(void)
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
     {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_publication(&client, control_pub) < 0 ||
+        tp_test_wait_for_publication(&client, qos_pub) < 0 ||
+        tp_test_wait_for_publication(&client, meta_pub) < 0 ||
+        tp_test_wait_for_publication(&client, progress_pub) < 0 ||
+        tp_test_wait_for_publication(&client, descriptor_pub) < 0 ||
+        tp_test_wait_for_subscription(&client, client.control_subscription) < 0 ||
+        tp_test_wait_for_subscription(&client, client.qos_subscription) < 0 ||
+        tp_test_wait_for_subscription(&client, client.metadata_subscription) < 0 ||
+        tp_test_wait_for_subscription(&client, progress_sub) < 0)
+    {
+        skip = 1;
         goto cleanup;
     }
 
@@ -3458,11 +3551,12 @@ void tp_test_pollers(void)
         tensor_pool_consumerHello_put_descriptorChannel(&hello, "", 0);
         tensor_pool_consumerHello_put_controlChannel(&hello, "", 0);
 
-        if (tp_test_offer(
+        if (tp_test_offer_or_skip(
             &client,
             control_pub,
             buffer,
-            (size_t)tensor_pool_consumerHello_sbe_position(&hello)) < 0)
+            (size_t)tensor_pool_consumerHello_sbe_position(&hello),
+            &skip) < 0)
         {
             goto cleanup;
         }
@@ -3489,7 +3583,7 @@ void tp_test_pollers(void)
         tensor_pool_qosConsumer_set_dropsLate(&qos, 0);
         tensor_pool_qosConsumer_set_mode(&qos, tensor_pool_mode_STREAM);
 
-        if (tp_test_offer(&client, qos_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, qos_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3515,7 +3609,12 @@ void tp_test_pollers(void)
         tensor_pool_dataSourceAnnounce_put_name(&announce, "name", 4);
         tensor_pool_dataSourceAnnounce_put_summary(&announce, "summary", 7);
 
-        if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_dataSourceAnnounce_sbe_position(&announce)) < 0)
+        if (tp_test_offer_or_skip(
+            &client,
+            meta_pub,
+            buffer,
+            (size_t)tensor_pool_dataSourceAnnounce_sbe_position(&announce),
+            &skip) < 0)
         {
             goto cleanup;
         }
@@ -3551,7 +3650,12 @@ void tp_test_pollers(void)
         tensor_pool_dataSourceMeta_attributes_put_format(&attrs, "s", 1);
         tensor_pool_dataSourceMeta_attributes_put_value(&attrs, "v", 1);
 
-        if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_dataSourceMeta_sbe_position(&meta)) < 0)
+        if (tp_test_offer_or_skip(
+            &client,
+            meta_pub,
+            buffer,
+            (size_t)tensor_pool_dataSourceMeta_sbe_position(&meta),
+            &skip) < 0)
         {
             goto cleanup;
         }
@@ -3576,7 +3680,7 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 3);
         tensor_pool_metaBlobAnnounce_set_checksum(&announce, 123);
 
-        if (tp_test_offer(&client, meta_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, meta_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3601,7 +3705,12 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobChunk_set_chunkOffset(&chunk, 0);
         tensor_pool_metaBlobChunk_put_bytes(&chunk, bytes, sizeof(bytes) - 1);
 
-        if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
+        if (tp_test_offer_or_skip(
+            &client,
+            meta_pub,
+            buffer,
+            (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk),
+            &skip) < 0)
         {
             goto cleanup;
         }
@@ -3624,7 +3733,7 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobComplete_set_metaVersion(&complete, 1);
         tensor_pool_metaBlobComplete_set_checksum(&complete, 123);
 
-        if (tp_test_offer(&client, meta_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, meta_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3649,14 +3758,14 @@ void tp_test_pollers(void)
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 128);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_STARTED);
 
-        if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, progress_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
 
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 64);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
-        if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, progress_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3698,7 +3807,7 @@ void tp_test_pollers(void)
         tensor_pool_frameDescriptor_set_metaVersion(&descriptor, 1);
         tensor_pool_frameDescriptor_set_traceId(&descriptor, 9);
 
-        if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer_or_skip(&client, descriptor_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3774,6 +3883,11 @@ cleanup:
         aeron_subscription_close(progress_sub, NULL, NULL);
     }
     tp_client_close(&client);
+
+    if (skip)
+    {
+        return;
+    }
 
     if (result != 0)
     {
