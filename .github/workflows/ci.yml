@@ -91,9 +91,31 @@ jobs:
               "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
           fi
 
+          agrona_version=""
+          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
+          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
+          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
+          if [ -z "${agrona_version}" ]; then
+            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
+            if [ -z "${agrona_version}" ]; then
+              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${agrona_version}" ]; then
+            echo "Unable to resolve agrona version" >&2
+            exit 1
+          fi
+
+          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
+          if [ ! -f "${agrona_jar}" ]; then
+            curl -fsSL -o "${agrona_jar}" \
+              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+          fi
+
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Configure
@@ -101,6 +123,7 @@ jobs:
           cmake -S . -B build
           -DAERON_ROOT=${{ github.workspace }}/aeron
           -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
+          -DSBE_TOOL_CLASSPATH=${{ env.SBE_TOOL_CLASSPATH }}
           -DTP_USE_SYSTEM_AERON=OFF
 
       - name: Build
@@ -222,14 +245,37 @@ jobs:
               "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
           fi
 
+          agrona_version=""
+          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
+          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
+          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
+          if [ -z "${agrona_version}" ]; then
+            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
+            if [ -z "${agrona_version}" ]; then
+              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${agrona_version}" ]; then
+            echo "Unable to resolve agrona version" >&2
+            exit 1
+          fi
+
+          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
+          if [ ! -f "${agrona_jar}" ]; then
+            curl -fsSL -o "${agrona_jar}" \
+              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+          fi
+
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Fuzz smoke
         env:
           SBE_TOOL_JAR: ${{ env.SBE_TOOL_JAR }}
+          SBE_TOOL_CLASSPATH: ${{ env.SBE_TOOL_CLASSPATH }}
           TP_AERON_ROOT: ${{ github.workspace }}/aeron
           TP_USE_SYSTEM_AERON: OFF
           TP_FUZZ_RUNS: 2000
@@ -331,9 +377,31 @@ jobs:
               "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
           fi
 
+          agrona_version=""
+          pom_url="https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.pom"
+          pom_xml="$(curl -fsSL "${pom_url}" | tr -d '\n')"
+          agrona_version="$(echo "${pom_xml}" | sed -n "s:.*<groupId>org.agrona</groupId>.*<artifactId>agrona</artifactId>.*<version>\\([^<]*\\)</version>.*:\\1:p" | head -n 1)"
+          if [ -z "${agrona_version}" ]; then
+            agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "release")"
+            if [ -z "${agrona_version}" ]; then
+              agrona_version="$(get_metadata_value "https://repo1.maven.org/maven2/org/agrona/agrona/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${agrona_version}" ]; then
+            echo "Unable to resolve agrona version" >&2
+            exit 1
+          fi
+
+          agrona_jar="${cache_dir}/agrona-${agrona_version}.jar"
+          if [ ! -f "${agrona_jar}" ]; then
+            curl -fsSL -o "${agrona_jar}" \
+              "https://repo1.maven.org/maven2/org/agrona/agrona/${agrona_version}/agrona-${agrona_version}.jar"
+          fi
+
           {
             echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
+            echo "SBE_TOOL_CLASSPATH=${sbe_jar}:${agrona_jar}"
           } >> "${GITHUB_ENV}"
 
       - name: Configure coverage
@@ -341,6 +409,7 @@ jobs:
           cmake -S . -B build-coverage
           -DAERON_ROOT=${{ github.workspace }}/aeron
           -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
+          -DSBE_TOOL_CLASSPATH=${{ env.SBE_TOOL_CLASSPATH }}
           -DTP_ENABLE_COVERAGE=ON
           -DTP_USE_SYSTEM_AERON=OFF
 
