@@ -155,17 +155,15 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
 {
     const char *allowed_paths[] = { "/tmp" };
 
-    if (NULL == aeron_dir)
-    {
-        return -1;
-    }
-
     if (tp_client_context_init(ctx) < 0)
     {
         return -1;
     }
 
-    tp_client_context_set_aeron_dir(ctx, aeron_dir);
+    if (NULL != aeron_dir && aeron_dir[0] != '\0')
+    {
+        tp_client_context_set_aeron_dir(ctx, aeron_dir);
+    }
     tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
     tp_client_context_set_use_agent_invoker(ctx, true);
     tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
@@ -182,6 +180,40 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     }
 
     return 0;
+}
+
+static int tp_test_start_client_any(tp_client_t *client, tp_client_context_t *ctx)
+{
+    char default_dir[AERON_MAX_PATH];
+    const char *env_dir = getenv("AERON_DIR");
+    const char *candidates[2];
+    size_t candidate_count = 0;
+    size_t i;
+
+    default_dir[0] = '\0';
+    if (aeron_default_path(default_dir, sizeof(default_dir)) < 0)
+    {
+        default_dir[0] = '\0';
+    }
+
+    if (NULL != env_dir && env_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = env_dir;
+    }
+    if (default_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = default_dir;
+    }
+
+    for (i = 0; i < candidate_count; i++)
+    {
+        if (tp_test_start_client(client, ctx, candidates[i]) == 0)
+        {
+            return 0;
+        }
+    }
+
+    return -1;
 }
 
 static int tp_test_init_producer(
@@ -270,25 +302,10 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
 
+    if (tp_test_start_client_any(&client, &ctx) < 0)
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        size_t i;
-        int started = 0;
-
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
-        {
-            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
-            {
-                started = 1;
-                break;
-            }
-        }
-
-        if (!started)
-        {
-            result = 0;
-            goto cleanup;
-        }
+        result = 0;
+        goto cleanup;
     }
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
@@ -487,25 +504,10 @@ static void tp_test_producer_invalid_tensor_header(void)
     snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
 
+    if (tp_test_start_client_any(&client, &ctx) < 0)
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        size_t i;
-        int started = 0;
-
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
-        {
-            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
-            {
-                started = 1;
-                break;
-            }
-        }
-
-        if (!started)
-        {
-            result = 0;
-            goto cleanup;
-        }
+        result = 0;
+        goto cleanup;
     }
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
@@ -613,29 +615,10 @@ static void tp_test_producer_offer_pool_selection(void)
     memset(&client, 0, sizeof(client));
     memset(&producer, 0, sizeof(producer));
 
+    if (tp_test_start_client_any(&client, &ctx) < 0)
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        size_t i;
-        int started = 0;
-
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
-        {
-            if (NULL == candidates[i])
-            {
-                continue;
-            }
-            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
-            {
-                started = 1;
-                break;
-            }
-        }
-
-        if (!started)
-        {
-            result = 0;
-            goto cleanup;
-        }
+        result = 0;
+        goto cleanup;
     }
 
     step = 1;
@@ -845,25 +828,10 @@ static void tp_test_producer_payload_flush(void)
     snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
 
+    if (tp_test_start_client_any(&client, &ctx) < 0)
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        size_t i;
-        int started = 0;
-
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
-        {
-            if (tp_test_start_client(&client, &ctx, candidates[i]) == 0)
-            {
-                started = 1;
-                break;
-            }
-        }
-
-        if (!started)
-        {
-            result = 0;
-            goto cleanup;
-        }
+        result = 0;
+        goto cleanup;
     }
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)

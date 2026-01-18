@@ -104,17 +104,15 @@ static int tp_test_start_client(
 {
     const char *allowed_paths[] = { "/tmp" };
 
-    if (NULL == aeron_dir)
-    {
-        return -1;
-    }
-
     if (tp_client_context_init(ctx) < 0)
     {
         return -1;
     }
 
-    tp_client_context_set_aeron_dir(ctx, aeron_dir);
+    if (NULL != aeron_dir && aeron_dir[0] != '\0')
+    {
+        tp_client_context_set_aeron_dir(ctx, aeron_dir);
+    }
     tp_client_context_set_control_channel(ctx, "aeron:ipc", 1000);
     tp_client_context_set_qos_channel(ctx, "aeron:ipc", 1200);
     tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
@@ -145,10 +143,28 @@ static int tp_test_start_client_any(
     tp_client_context_t *ctx,
     uint64_t announce_period_ns)
 {
-    const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
+    char default_dir[AERON_MAX_PATH];
+    const char *env_dir = getenv("AERON_DIR");
+    const char *candidates[2];
+    size_t candidate_count = 0;
     size_t i;
 
-    for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+    default_dir[0] = '\0';
+    if (aeron_default_path(default_dir, sizeof(default_dir)) < 0)
+    {
+        default_dir[0] = '\0';
+    }
+
+    if (NULL != env_dir && env_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = env_dir;
+    }
+    if (default_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = default_dir;
+    }
+
+    for (i = 0; i < candidate_count; i++)
     {
         if (NULL == candidates[i])
         {

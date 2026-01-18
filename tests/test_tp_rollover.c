@@ -148,6 +148,7 @@ void tp_test_rollover(void)
     tp_rollover_state_t state;
     const char *allowed_paths[] = { "/tmp" };
     const char *aeron_dir = NULL;
+    char default_dir[AERON_MAX_PATH];
     char header_path[] = "/tmp/tp_rollover_headerXXXXXX";
     char pool_path[] = "/tmp/tp_rollover_poolXXXXXX";
     char header_uri[512];
@@ -170,20 +171,18 @@ void tp_test_rollover(void)
     memset(&consumer, 0, sizeof(consumer));
     memset(&state, 0, sizeof(state));
 
+    default_dir[0] = '\0';
+    aeron_dir = getenv("AERON_DIR");
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
     {
-        const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+        if (aeron_default_path(default_dir, sizeof(default_dir)) >= 0 && default_dir[0] != '\0')
         {
-            if (NULL != candidates[i])
-            {
-                aeron_dir = candidates[i];
-                break;
-            }
+            aeron_dir = default_dir;
         }
-        if (NULL == aeron_dir)
-        {
-            return;
-        }
+    }
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return;
     }
 
     header_fd = mkstemp(header_path);
@@ -208,27 +207,18 @@ void tp_test_rollover(void)
     snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
 
     {
-        const char *candidates[] = { aeron_dir, "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
         int started = 0;
-        for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+
+        if (tp_client_context_init(&ctx) < 0)
         {
-            if (NULL == candidates[i])
-            {
-                continue;
-            }
-            if (tp_client_context_init(&ctx) < 0)
-            {
-                goto cleanup;
-            }
-            tp_client_context_set_aeron_dir(&ctx, candidates[i]);
-            tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
-            tp_context_set_allowed_paths(&ctx.base, allowed_paths, 1);
-            if (tp_client_init(&client, &ctx) == 0 && tp_client_start(&client) == 0)
-            {
-                started = 1;
-                break;
-            }
-            tp_client_close(&client);
+            goto cleanup;
+        }
+        tp_client_context_set_aeron_dir(&ctx, aeron_dir);
+        tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
+        tp_context_set_allowed_paths(&ctx.base, allowed_paths, 1);
+        if (tp_client_init(&client, &ctx) == 0 && tp_client_start(&client) == 0)
+        {
+            started = 1;
         }
         if (!started)
         {

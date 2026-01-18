@@ -90,10 +90,28 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
 
 static int tp_test_start_client_any(tp_client_t *client, tp_client_context_t *ctx)
 {
-    const char *candidates[] = { getenv("AERON_DIR"), "/dev/shm/aeron-dgamroth", "/dev/shm/aeron" };
+    char default_dir[AERON_MAX_PATH];
+    const char *env_dir = getenv("AERON_DIR");
+    const char *candidates[2];
+    size_t candidate_count = 0;
     size_t i;
 
-    for (i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++)
+    default_dir[0] = '\0';
+    if (aeron_default_path(default_dir, sizeof(default_dir)) < 0)
+    {
+        default_dir[0] = '\0';
+    }
+
+    if (NULL != env_dir && env_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = env_dir;
+    }
+    if (default_dir[0] != '\0')
+    {
+        candidates[candidate_count++] = default_dir;
+    }
+
+    for (i = 0; i < candidate_count; i++)
     {
         if (NULL == candidates[i])
         {

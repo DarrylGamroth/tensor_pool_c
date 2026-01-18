@@ -18,11 +18,10 @@ static void test_client_conductor_lifecycle(void)
 
     {
         const char *aeron_dir = getenv("AERON_DIR");
-        if (NULL == aeron_dir || aeron_dir[0] == '\0')
+        if (NULL != aeron_dir && aeron_dir[0] != '\0')
         {
-            aeron_dir = "/dev/shm/aeron-dgamroth";
+            tp_context_set_aeron_dir(&context, aeron_dir);
         }
-        tp_context_set_aeron_dir(&context, aeron_dir);
     }
 
     if (tp_client_conductor_init(&conductor, &context, true) != 0)
