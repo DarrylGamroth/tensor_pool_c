@@ -16,7 +16,7 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 - [x] `tp_control_adapter.c`: cover all decode/validate branches, including length, schema/version, and invalid var-data cases.
 - [x] `tp_discovery_client.c`: cover invalid response filtering (missing control channel/stream). (already covered in tests)
 - [x] `tp_tensor.c`: cover dtype/stride/shape validation edge cases (zero dims, invalid strides, bad header version).
-- [ ] `tp_progress_poller.c` + `tp_consumer.c`: cover progress validation, monotonic checks, and seqlock handling.
+- [x] `tp_progress_poller.c` + `tp_consumer.c`: cover progress validation, monotonic checks, and seqlock handling.
 - [x] `tp_shm.c` + `tp_uri.c`: cover canonical URI parsing, permissions checks, and hugepage negative cases.
 - [x] `tp_tracelink.c`: cover parent caps, invalid linkages, and trace id generation boundaries.
 
