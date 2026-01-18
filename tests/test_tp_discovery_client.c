@@ -268,6 +268,69 @@ static void test_decode_discovery_response_version_mismatch(void)
     assert(result == 0);
 }
 
+static void test_decode_discovery_response_error_status(void)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_discoveryResponse response;
+    tp_discovery_response_t out;
+    int result = -1;
+
+    memset(&out, 0, sizeof(out));
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_discoveryResponse_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_discoveryResponse_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_discoveryResponse_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_discoveryResponse_sbe_schema_version());
+
+    tensor_pool_discoveryResponse_wrap_for_encode(&response, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_discoveryResponse_set_requestId(&response, 123);
+    tensor_pool_discoveryResponse_set_status(&response, tensor_pool_discoveryStatus_ERROR);
+    tensor_pool_discoveryResponse_put_errorMessage(&response, "oops", 4);
+
+    if (tp_discovery_decode_response(buffer, sizeof(buffer), 123, &out) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(out.status == tensor_pool_discoveryStatus_ERROR);
+    assert(strstr(out.error_message, "oops") != NULL);
+    result = 0;
+
+cleanup:
+    tp_discovery_response_close(&out);
+    assert(result == 0);
+}
+
+static void test_discovery_result_match_helpers(void)
+{
+    tp_discovery_result_t result;
+    const char *tags[] = { "alpha", "beta" };
+
+    memset(&result, 0, sizeof(result));
+    result.stream_id = 10;
+    result.producer_id = 20;
+    strncpy(result.data_source_name, "camera", sizeof(result.data_source_name) - 1);
+    result.tags = (char **)tags;
+    result.tag_count = 2;
+
+    assert(tp_discovery_result_has_tag(NULL, "alpha") == 0);
+    assert(tp_discovery_result_has_tag(&result, NULL) == 0);
+    assert(tp_discovery_result_has_tag(&result, "alpha") == 1);
+    assert(tp_discovery_result_has_tag(&result, "missing") == 0);
+
+    assert(tp_discovery_result_matches(&result, 10, 20, "camera") == 1);
+    assert(tp_discovery_result_matches(&result, 11, TP_NULL_U32, NULL) == 0);
+    assert(tp_discovery_result_matches(&result, TP_NULL_U32, 21, NULL) == 0);
+    assert(tp_discovery_result_matches(&result, TP_NULL_U32, TP_NULL_U32, "other") == 0);
+}
+
 static void test_discovery_request_requires_response_channel(void)
 {
     tp_discovery_client_t client;
@@ -575,8 +638,10 @@ void tp_test_discovery_client_decoders(void)
     test_decode_discovery_response_with_tags();
     test_decode_discovery_response_invalid_dims();
     test_decode_discovery_response_version_mismatch();
+    test_decode_discovery_response_error_status();
     test_decode_discovery_response_pool_nslots_mismatch();
     test_decode_discovery_response_missing_driver_control();
     test_decode_discovery_response_null_data_source_id();
     test_discovery_request_requires_response_channel();
+    test_discovery_result_match_helpers();
 }

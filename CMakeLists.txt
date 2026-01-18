@@ -276,9 +276,14 @@ add_executable(tensor_pool_tests
     tests/test_tp_smoke.c
     tests/test_tp_control.c
     tests/test_tp_control_listen_json.c
+    tests/test_tp_control_poller.c
+    tests/test_tp_control_poller_driver.c
     tests/test_tp_consumer_registry.c
+    tests/test_tp_aeron.c
+    tests/test_tp_client_errors.c
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c
+    tests/test_tp_merge_map.c
     tests/test_tp_join_barrier.c
     tests/test_tp_tracelink.c
     tests/test_tp_client_conductor.c
@@ -286,9 +291,12 @@ add_executable(tensor_pool_tests
     tests/test_tp_lease_revoked.c
     tests/test_tp_rollover.c
     tests/test_tp_producer_claim.c
+    tests/test_tp_log.c
     tests/test_tp_shm_security.c
     tests/test_tp_consumer_apply.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
+target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
+target_compile_definitions(tensor_pool PRIVATE TP_TESTING=1)
 if (TARGET aeron::aeron_driver_static)
     target_link_libraries(tensor_pool_tests PRIVATE aeron::aeron_driver_static)
     target_compile_definitions(tensor_pool_tests PRIVATE TP_TEST_EMBEDDED_DRIVER=1)
