@@ -57,10 +57,14 @@ if (AERON_TARGET STREQUAL "")
     if (NOT EXISTS "${AERON_ROOT}/aeron-client/src/main/c/CMakeLists.txt")
         message(FATAL_ERROR "Aeron C client not found at ${AERON_ROOT}/aeron-client/src/main/c. Install Aeron or set -DAERON_ROOT=..., -DAERON_INCLUDE_DIR=..., -DAERON_LIBRARY=...")
     endif ()
-        set(AERON_INSTALL_TARGETS OFF CACHE BOOL "Disable Aeron install targets" FORCE)
-        add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY_DIR}/aeron-client")
-        set(AERON_TARGET aeron::aeron_static)
+    set(AERON_INSTALL_TARGETS OFF CACHE BOOL "Disable Aeron install targets" FORCE)
+    add_subdirectory("${AERON_ROOT}/aeron-client/src/main/c" "${CMAKE_CURRENT_BINARY_DIR}/aeron-client")
+    set(AERON_TARGET aeron::aeron_static)
+    set(AERON_C_CLIENT_SOURCE_PATH "${AERON_ROOT}/aeron-client/src/main/c")
+    if (EXISTS "${AERON_ROOT}/aeron-driver/src/main/c/CMakeLists.txt")
+        add_subdirectory("${AERON_ROOT}/aeron-driver/src/main/c" "${CMAKE_CURRENT_BINARY_DIR}/aeron-driver")
     endif ()
+endif ()
 
 set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_aeron.h
@@ -285,6 +289,10 @@ add_executable(tensor_pool_tests
     tests/test_tp_shm_security.c
     tests/test_tp_consumer_apply.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
+if (TARGET aeron::aeron_driver_static)
+    target_link_libraries(tensor_pool_tests PRIVATE aeron::aeron_driver_static)
+    target_compile_definitions(tensor_pool_tests PRIVATE TP_TEST_EMBEDDED_DRIVER=1)
+endif ()
 if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(tensor_pool_tests PRIVATE -O0 -g --coverage)
     target_link_options(tensor_pool_tests PRIVATE --coverage)

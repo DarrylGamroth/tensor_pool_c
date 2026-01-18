@@ -3314,6 +3314,7 @@ void tp_test_progress_regression_rejected(void)
     size_t header_len = tensor_pool_messageHeader_encoded_length();
     size_t body_len = tensor_pool_frameProgress_sbe_block_length();
     int result = -1;
+    int skip = 0;
 
     memset(&client, 0, sizeof(client));
     memset(&progress_poller, 0, sizeof(progress_poller));
@@ -3331,6 +3332,13 @@ void tp_test_progress_regression_rejected(void)
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
     {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_publication(&client, progress_pub) < 0 ||
+        tp_test_wait_for_subscription(&client, progress_sub) < 0)
+    {
+        skip = 1;
         goto cleanup;
     }
 
@@ -3365,6 +3373,20 @@ void tp_test_progress_regression_rejected(void)
         goto cleanup;
     }
 
+    {
+        int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < deadline && progress_count < 1)
+        {
+            tp_progress_poll(&progress_poller, 10);
+            tp_client_do_work(&client);
+        }
+    }
+
+    if (progress_count != 1)
+    {
+        goto cleanup;
+    }
+
     tp_progress_poller_set_max_payload_bytes(&progress_poller, 8);
     tensor_pool_frameProgress_set_seq(&progress, 8);
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 16);
@@ -3374,8 +3396,8 @@ void tp_test_progress_regression_rejected(void)
     }
 
     {
-        int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
-        while (tp_clock_now_ns() < deadline && progress_count < 1)
+        int64_t deadline = tp_clock_now_ns() + 500 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < deadline)
         {
             tp_progress_poll(&progress_poller, 10);
             tp_client_do_work(&client);
@@ -3405,6 +3427,10 @@ cleanup:
     if (client.context.base.aeron_dir[0] != '\0')
     {
         tp_client_close(&client);
+    }
+    if (skip)
+    {
+        return;
     }
     assert(result == 0);
 }

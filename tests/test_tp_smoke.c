@@ -20,6 +20,12 @@
 #include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/tensorHeader.h"
 
+#ifdef TP_TEST_EMBEDDED_DRIVER
+#include "aeronmd.h"
+#include "aeronc.h"
+#include "aeron_common.h"
+#endif
+
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -65,6 +71,125 @@ void tp_test_rollover(void);
 void tp_test_shm_security(void);
 void tp_test_consumer_lease_revoked(void);
 void tp_test_producer_lease_revoked(void);
+
+#ifdef TP_TEST_EMBEDDED_DRIVER
+typedef struct tp_test_driver_state_stct
+{
+    aeron_driver_context_t *context;
+    aeron_driver_t *driver;
+    char dir[AERON_MAX_PATH];
+    char prev_dir[AERON_MAX_PATH];
+    int has_prev;
+}
+tp_test_driver_state_t;
+
+static tp_test_driver_state_t tp_test_driver_state;
+
+static void tp_test_stop_embedded_driver(void)
+{
+    tp_test_driver_state_t *state = &tp_test_driver_state;
+
+    if (state->driver)
+    {
+        aeron_driver_close(state->driver);
+        state->driver = NULL;
+    }
+    if (state->context)
+    {
+        aeron_driver_context_close(state->context);
+        state->context = NULL;
+    }
+    if (state->has_prev)
+    {
+        setenv("AERON_DIR", state->prev_dir, 1);
+    }
+    else
+    {
+        unsetenv("AERON_DIR");
+    }
+    if (state->dir[0] != '\0')
+    {
+        aeron_delete_directory(state->dir);
+        state->dir[0] = '\0';
+    }
+}
+
+static int tp_test_wait_for_driver(const char *dir)
+{
+    aeron_cnc_t *cnc = NULL;
+
+    if (aeron_cnc_init(&cnc, dir, 1000) < 0)
+    {
+        return -1;
+    }
+    aeron_cnc_close(cnc);
+    return 0;
+}
+
+static int tp_test_start_embedded_driver(void)
+{
+    tp_test_driver_state_t *state = &tp_test_driver_state;
+    char dir_template[] = "/tmp/tp_aeron_test_XXXXXX";
+    const char *prev = getenv("AERON_DIR");
+    char *dir = NULL;
+
+    memset(state, 0, sizeof(*state));
+
+    dir = mkdtemp(dir_template);
+    if (NULL == dir)
+    {
+        return -1;
+    }
+    strncpy(state->dir, dir, sizeof(state->dir) - 1);
+
+    if (prev && prev[0] != '\0')
+    {
+        strncpy(state->prev_dir, prev, sizeof(state->prev_dir) - 1);
+        state->has_prev = 1;
+    }
+    if (setenv("AERON_DIR", state->dir, 1) != 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+
+    if (aeron_driver_context_init(&state->context) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+    if (aeron_driver_context_set_dir(state->context, state->dir) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+    if (aeron_driver_context_set_dir_delete_on_start(state->context, true) < 0 ||
+        aeron_driver_context_set_dir_delete_on_shutdown(state->context, true) < 0 ||
+        aeron_driver_context_set_threading_mode(state->context, AERON_THREADING_MODE_SHARED) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+    if (aeron_driver_init(&state->driver, state->context) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+    if (aeron_driver_start(state->driver, false) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+    if (tp_test_wait_for_driver(state->dir) < 0)
+    {
+        tp_test_stop_embedded_driver();
+        return -1;
+    }
+
+    atexit(tp_test_stop_embedded_driver);
+    return 0;
+}
+#endif
 
 static void test_version(void)
 {
@@ -423,6 +548,14 @@ static void test_driver_attach_rejects_manual_config(void)
 
 int main(void)
 {
+#ifdef TP_TEST_EMBEDDED_DRIVER
+    if (tp_test_start_embedded_driver() < 0)
+    {
+        fprintf(stderr, "Failed to start embedded Aeron driver\n");
+        return 1;
+    }
+#endif
+
     test_version();
     test_seqlock();
     test_uri_parse();
