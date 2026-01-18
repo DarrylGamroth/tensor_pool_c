@@ -21,8 +21,8 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 - [x] `tp_tracelink.c`: cover parent caps, invalid linkages, and trace id generation boundaries.
 
 ## Phase 2: Integration Tests (Media Driver Only)
-- [ ] Add a no-driver producer/consumer integration test that exchanges >= 16 frames and validates payload integrity.
-- [ ] Add rollover stress test (header ring wrap) with pacing to avoid false drops.
+- [x] Add a no-driver producer/consumer integration test that exchanges >= 16 frames and validates payload integrity. (covered by `tp_test_rollover`)
+- [x] Add rollover stress test (header ring wrap) with pacing to avoid false drops. (covered by `tp_test_rollover`)
 - [ ] Add a control/metadata/QoS listener test to verify JSON output paths (stderr).
 
 ## Phase 3: Driver Integration (Optional / External)
