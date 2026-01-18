@@ -51,20 +51,20 @@ jobs:
             aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
           fi
           if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
-            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "release")"
             if [ -z "${aeron_version}" ]; then
-              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "latest")"
             fi
           fi
           if [ -z "${aeron_version}" ]; then
-            echo "Unable to resolve aeron-driver version" >&2
+            echo "Unable to resolve aeron-all version" >&2
             exit 1
           fi
 
-          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          aeron_jar="${cache_dir}/aeron-all-${aeron_version}.jar"
           if [ ! -f "${aeron_jar}" ]; then
             curl -fsSL -o "${aeron_jar}" \
-              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+              "https://repo1.maven.org/maven2/io/aeron/aeron-all/${aeron_version}/aeron-all-${aeron_version}.jar"
           fi
 
           sbe_group=""
@@ -194,20 +194,20 @@ jobs:
             aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
           fi
           if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
-            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "release")"
             if [ -z "${aeron_version}" ]; then
-              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "latest")"
             fi
           fi
           if [ -z "${aeron_version}" ]; then
-            echo "Unable to resolve aeron-driver version" >&2
+            echo "Unable to resolve aeron-all version" >&2
             exit 1
           fi
 
-          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          aeron_jar="${cache_dir}/aeron-all-${aeron_version}.jar"
           if [ ! -f "${aeron_jar}" ]; then
             curl -fsSL -o "${aeron_jar}" \
-              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+              "https://repo1.maven.org/maven2/io/aeron/aeron-all/${aeron_version}/aeron-all-${aeron_version}.jar"
           fi
 
           sbe_group=""
@@ -305,20 +305,20 @@ jobs:
             aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
           fi
           if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
-            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "release")"
             if [ -z "${aeron_version}" ]; then
-              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "latest")"
             fi
           fi
           if [ -z "${aeron_version}" ]; then
-            echo "Unable to resolve aeron-driver version" >&2
+            echo "Unable to resolve aeron-all version" >&2
             exit 1
           fi
 
-          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          aeron_jar="${cache_dir}/aeron-all-${aeron_version}.jar"
           if [ ! -f "${aeron_jar}" ]; then
             curl -fsSL -o "${aeron_jar}" \
-              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+              "https://repo1.maven.org/maven2/io/aeron/aeron-all/${aeron_version}/aeron-all-${aeron_version}.jar"
           fi
 
           sbe_group=""
