@@ -359,6 +359,7 @@ jobs:
           -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
           -DSBE_TOOL_CLASSPATH=${{ env.SBE_TOOL_CLASSPATH }}
           -DTP_ENABLE_COVERAGE=ON
+          -DTP_COVERAGE_MIN=50
           -DTP_USE_SYSTEM_AERON=OFF
 
       - name: Start Aeron Media Driver

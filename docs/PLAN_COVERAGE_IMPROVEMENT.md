@@ -31,9 +31,9 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 - [ ] Validate attach/keepalive/lease revoke flows end-to-end.
 
 ## Phase 4: Fuzz Coverage Boost
-- [ ] Add targeted fuzz seeds for edge-case SBE messages and invalid var-data lengths.
-- [ ] Add at least one new fuzz target that exercises URI parsing + SHM validation together.
+- [x] Add targeted fuzz seeds for edge-case SBE messages and invalid var-data lengths.
+- [x] Add at least one new fuzz target that exercises URI parsing + SHM validation together.
 
 ## Phase 5: CI Enforcement
-- [ ] Add CI coverage thresholds (overall and per-module) with progressive enforcement.
-- [ ] Document how to reproduce coverage locally in `README.md`.
+- [x] Add CI coverage thresholds (overall) with progressive enforcement.
+- [x] Document how to reproduce coverage locally in `README.md`.

@@ -55,6 +55,19 @@ ctest --test-dir build --output-on-failure
 
 Some integration paths expect a running Aeron Media Driver (see CI for example setup).
 
+## Coverage
+
+Requirements: `gcovr` installed (e.g., `apt-get install gcovr` or `python -m pip install gcovr`).
+
+```
+cmake -S . -B build-coverage \
+  -DAERON_ROOT=../aeron \
+  -DTP_ENABLE_COVERAGE=ON \
+  -DTP_COVERAGE_MIN=0 \
+  -DTP_USE_SYSTEM_AERON=OFF
+cmake --build build-coverage --target coverage
+```
+
 ## Fuzz smoke
 
 ```
