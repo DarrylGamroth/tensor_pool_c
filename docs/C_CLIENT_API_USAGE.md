@@ -45,6 +45,34 @@ Noncanonical SHM paths from `tools/tp_shm_create --noncanonical` are test-only a
 
 Call `tp_client_do_work(&client)` in your poll loop to drive keepalives and conductor work.
 
+### 1.1 Conductor Execution Model (Agent Invoker)
+
+TensorPool mirrors Aeron’s invoker pattern. Choose one of two modes:
+
+- Default (threaded conductor): do nothing special; Aeron runs its own conductor thread after `tp_client_start`.
+- Agent invoker (single-threaded): set `tp_client_context_set_use_agent_invoker(&ctx, true)` and call `tp_client_do_work` frequently to drive the Aeron conductor in your loop.
+
+Example (agent invoker):
+
+```c
+tp_client_context_t ctx;
+tp_client_t client;
+
+tp_client_context_init(&ctx);
+tp_client_context_set_use_agent_invoker(&ctx, true);
+
+tp_client_init(&client, &ctx);
+tp_client_start(&client);
+
+while (running)
+{
+    tp_client_do_work(&client);
+    tp_control_poll(&control, 10);
+    tp_qos_poll(&qos, 10);
+    tp_metadata_poll(&meta, 10);
+}
+```
+
 ## 2. Discovery → Consumer (Driver Model)
 
 ```c
