@@ -190,6 +190,75 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_tracelink_resolve_parent_limit(void)
+{
+    tp_trace_id_generator_t generator;
+    test_trace_clock_t clock;
+    uint64_t parents[TP_TRACELINK_MAX_PARENTS + 1];
+    uint64_t trace_id = 0;
+    int emit = -1;
+    int result = -1;
+    size_t i;
+
+    memset(&generator, 0, sizeof(generator));
+    clock.now_ms = 61;
+
+    if (tp_trace_id_generator_init(&generator, 2, 2, 3, 0, test_trace_clock_ms, &clock) < 0)
+    {
+        goto cleanup;
+    }
+
+    for (i = 0; i < sizeof(parents) / sizeof(parents[0]); i++)
+    {
+        parents[i] = (uint64_t)(100 + i);
+    }
+
+    if (tp_tracelink_resolve_trace_id(
+        &generator,
+        parents,
+        TP_TRACELINK_MAX_PARENTS + 1,
+        &trace_id,
+        &emit) < 0)
+    {
+        result = 0;
+    }
+
+cleanup:
+    assert(result == 0);
+}
+
+static void test_tracelink_decode_rejects_too_many(void)
+{
+    uint8_t buffer[256];
+    tp_tracelink_set_t set;
+    uint64_t parents[2] = { 10, 20 };
+    tp_tracelink_set_t decoded;
+    uint64_t decoded_parents[1];
+    size_t encoded_len = 0;
+    int result = -1;
+
+    memset(&set, 0, sizeof(set));
+    set.stream_id = 1;
+    set.epoch = 1;
+    set.seq = 1;
+    set.trace_id = 5;
+    set.parents = parents;
+    set.parent_count = 2;
+
+    if (tp_tracelink_set_encode(buffer, sizeof(buffer), &set, &encoded_len) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_set_decode(buffer, encoded_len, &decoded, decoded_parents, 1) < 0)
+    {
+        result = 0;
+    }
+
+cleanup:
+    assert(result == 0);
+}
+
 static void test_tracelink_encode_decode(void)
 {
     uint8_t buffer[256];
@@ -470,10 +539,12 @@ void tp_test_tracelink(void)
     test_tracelink_resolve_single_parent();
     test_tracelink_resolve_multi_parent();
     test_tracelink_resolve_rejects_invalid();
+    test_tracelink_resolve_parent_limit();
     test_tracelink_encode_decode();
     test_tracelink_encode_rejects_duplicate();
     test_tracelink_encode_rejects_empty();
     test_tracelink_decode_rejects_duplicate();
     test_tracelink_decode_rejects_empty();
+    test_tracelink_decode_rejects_too_many();
     test_tracelink_decode_schema_mismatch();
 }

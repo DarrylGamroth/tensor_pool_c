@@ -96,6 +96,14 @@ static void test_uri_parse(void)
     assert(tp_shm_uri_parse(&uri, "shm:mem?path=/dev/shm/test", NULL) < 0);
 }
 
+static void test_shm_stride_alignment(void)
+{
+    assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 128, NULL) == 0);
+    assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 96, NULL) < 0);
+    assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 32, NULL) < 0);
+    assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp|require_hugepages=true", 128, NULL) < 0);
+}
+
 static void write_superblock(int fd, uint32_t stream_id, uint64_t epoch, int16_t region_type, uint16_t pool_id, uint32_t nslots, uint32_t slot_bytes, uint32_t stride_bytes)
 {
     uint8_t buffer[TP_SUPERBLOCK_SIZE_BYTES];
@@ -329,6 +337,35 @@ static void test_tensor_header(void)
 
     assert(tp_tensor_header_validate(&header, NULL) == 0);
 
+    memset(&header, 0, sizeof(header));
+    header.dtype = tensor_pool_dtype_FLOAT32;
+    header.major_order = tensor_pool_majorOrder_ROW;
+    header.ndims = 2;
+    header.progress_unit = tensor_pool_progressUnit_NONE;
+    header.dims[0] = -1;
+    header.dims[1] = 3;
+
+    assert(tp_tensor_header_validate(&header, NULL) < 0);
+
+    memset(&header, 0, sizeof(header));
+    header.dtype = tensor_pool_dtype_FLOAT32;
+    header.major_order = tensor_pool_majorOrder_ROW;
+    header.ndims = 2;
+    header.progress_unit = tensor_pool_progressUnit_ROWS;
+    header.progress_stride_bytes = 8;
+    header.dims[0] = 2;
+    header.dims[1] = 3;
+
+    assert(tp_tensor_header_validate(&header, NULL) < 0);
+
+    memset(&header, 0, sizeof(header));
+    header.dtype = tensor_pool_dtype_FLOAT32;
+    header.major_order = tensor_pool_majorOrder_ROW;
+    header.ndims = 0;
+    header.progress_unit = tensor_pool_progressUnit_NONE;
+
+    assert(tp_tensor_header_validate(&header, NULL) < 0);
+
     memset(buffer, 0, sizeof(buffer));
     tensor_pool_messageHeader_wrap(
         &msg_header,
@@ -387,6 +424,7 @@ int main(void)
     test_version();
     test_seqlock();
     test_uri_parse();
+    test_shm_stride_alignment();
     test_shm_superblock();
     test_shm_superblock_fail_closed();
     test_tensor_header();
