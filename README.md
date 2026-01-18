@@ -27,6 +27,8 @@ cmake --build build
 Example (use system Aeron install):
 ```
 cmake -S . -B build \
+  -DAERON_INCLUDE_DIR=/path/to/aeron/include \
+  -DAERON_LIBRARY=/path/to/aeron/libaeron.so \
   -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar
 cmake --build build
 ```
