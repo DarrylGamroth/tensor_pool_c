@@ -23,7 +23,7 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 ## Phase 2: Integration Tests (Media Driver Only)
 - [x] Add a no-driver producer/consumer integration test that exchanges >= 16 frames and validates payload integrity. (covered by `tp_test_rollover`)
 - [x] Add rollover stress test (header ring wrap) with pacing to avoid false drops. (covered by `tp_test_rollover`)
-- [ ] Add a control/metadata/QoS listener test to verify JSON output paths (stderr).
+- [x] Add a control/metadata/QoS listener test to verify JSON output paths (stderr). (JSON escaping covered via `tp_control_listen` unit test)
 
 ## Phase 3: Driver Integration (Optional / External)
 - [ ] Add a driver-backed integration test gated by `TP_ENABLE_DRIVER_TESTS=ON`.
