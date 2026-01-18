@@ -79,6 +79,7 @@ int tp_aeron_add_publication(
     int32_t stream_id)
 {
     aeron_async_add_publication_t *async_add = NULL;
+    uint64_t sleep_ns = 1;
 
     if (NULL == pub || NULL == client || NULL == client->aeron || NULL == channel)
     {
@@ -94,11 +95,12 @@ int tp_aeron_add_publication(
     *pub = NULL;
     while (NULL == *pub)
     {
-        if (aeron_async_add_publication_poll(pub, async_add) < 0)
+        int work = aeron_async_add_publication_poll(pub, async_add);
+        if (work < 0)
         {
             return -1;
         }
-        aeron_idle_strategy_sleeping_idle(NULL, 0);
+        aeron_idle_strategy_sleeping_idle(&sleep_ns, work);
     }
 
     return 0;
@@ -115,6 +117,7 @@ int tp_aeron_add_subscription(
     void *unavailable_clientd)
 {
     aeron_async_add_subscription_t *async_add = NULL;
+    uint64_t sleep_ns = 1;
 
     if (NULL == sub || NULL == client || NULL == client->aeron || NULL == channel)
     {
@@ -138,11 +141,12 @@ int tp_aeron_add_subscription(
     *sub = NULL;
     while (NULL == *sub)
     {
-        if (aeron_async_add_subscription_poll(sub, async_add) < 0)
+        int work = aeron_async_add_subscription_poll(sub, async_add);
+        if (work < 0)
         {
             return -1;
         }
-        aeron_idle_strategy_sleeping_idle(NULL, 0);
+        aeron_idle_strategy_sleeping_idle(&sleep_ns, work);
     }
 
     return 0;
