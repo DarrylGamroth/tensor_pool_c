@@ -117,7 +117,8 @@ jobs:
             echo "Aeron driver jar not found" >&2
             exit 1
           fi
-          java -Daeron.dir="${AERON_DIR}" -Daeron.dirDeleteOnStart=true \
+          java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
+            -Daeron.dir="${AERON_DIR}" -Daeron.dirDeleteOnStart=true \
             -cp "${AERON_DRIVER_JAR}" io.aeron.driver.MediaDriver \
             > /tmp/aeron-driver.log 2>&1 &
           echo $! > /tmp/aeron-driver.pid
