@@ -3221,6 +3221,116 @@ cleanup:
     assert(result == 0);
 }
 
+void tp_test_progress_regression_rejected(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    aeron_publication_t *progress_pub = NULL;
+    aeron_subscription_t *progress_sub = NULL;
+    tp_progress_poller_t progress_poller;
+    tp_progress_handlers_t progress_handlers;
+    int progress_count = 0;
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_frameProgress progress;
+    size_t header_len = tensor_pool_messageHeader_encoded_length();
+    size_t body_len = tensor_pool_frameProgress_sbe_block_length();
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&progress_poller, 0, sizeof(progress_poller));
+    memset(&progress_handlers, 0, sizeof(progress_handlers));
+
+    if (tp_test_start_client_any(&client, &ctx, 0) < 0)
+    {
+        return;
+    }
+
+    if (tp_test_add_publication(&client, "aeron:ipc", 1003, &progress_pub) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
+    {
+        goto cleanup;
+    }
+
+    progress_handlers.on_progress = tp_on_progress_capture;
+    progress_handlers.clientd = &progress_count;
+    if (tp_progress_poller_init_with_subscription(&progress_poller, progress_sub, &progress_handlers) < 0)
+    {
+        goto cleanup;
+    }
+
+    tensor_pool_messageHeader_wrap(&header, (char *)buffer, 0, tensor_pool_messageHeader_sbe_schema_version(), sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_frameProgress_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_frameProgress_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_frameProgress_sbe_schema_version());
+
+    tensor_pool_frameProgress_wrap_for_encode(&progress, (char *)buffer, header_len, sizeof(buffer));
+    tensor_pool_frameProgress_set_streamId(&progress, 1);
+    tensor_pool_frameProgress_set_epoch(&progress, 1);
+    tensor_pool_frameProgress_set_seq(&progress, 7);
+    tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 32);
+    tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
+
+    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    {
+        goto cleanup;
+    }
+
+    tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 16);
+    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    {
+        goto cleanup;
+    }
+
+    tp_progress_poller_set_max_payload_bytes(&progress_poller, 8);
+    tensor_pool_frameProgress_set_seq(&progress, 8);
+    tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 16);
+    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    {
+        goto cleanup;
+    }
+
+    {
+        int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < deadline && progress_count < 1)
+        {
+            tp_progress_poll(&progress_poller, 10);
+            tp_client_do_work(&client);
+        }
+    }
+
+    if (progress_count != 1)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    if (progress_poller.assembler)
+    {
+        aeron_fragment_assembler_delete(progress_poller.assembler);
+    }
+    if (progress_pub)
+    {
+        aeron_publication_close(progress_pub, NULL, NULL);
+    }
+    if (progress_sub)
+    {
+        aeron_subscription_close(progress_sub, NULL, NULL);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    assert(result == 0);
+}
+
 void tp_test_pollers(void)
 {
     tp_client_context_t ctx;

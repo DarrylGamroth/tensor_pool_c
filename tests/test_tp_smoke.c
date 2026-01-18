@@ -58,6 +58,7 @@ void tp_test_qos_drop_counts(void);
 void tp_test_epoch_remap(void);
 void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
+void tp_test_progress_regression_rejected(void);
 void tp_test_producer_claim_lifecycle(void);
 void tp_test_rollover(void);
 void tp_test_shm_security(void);
@@ -458,6 +459,7 @@ int main(void)
     tp_test_consumer_fallback_layout_version();
     tp_test_progress_per_consumer_control();
     tp_test_progress_layout_validation();
+    tp_test_progress_regression_rejected();
     tp_test_producer_claim_lifecycle();
     tp_test_rollover();
     tp_test_shm_security();
