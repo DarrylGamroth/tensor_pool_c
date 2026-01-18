@@ -56,6 +56,7 @@ fuzzers=(
     tp_fuzz_tracelink_decode
     tp_fuzz_slot_decode
     tp_fuzz_shm_uri
+    tp_fuzz_shm_uri_validate
 )
 
 for fuzzer in "${fuzzers[@]}"; do

@@ -191,6 +191,25 @@ static int tp_fuzz_seed_shm_uri(const char *dir)
     return tp_fuzz_write(dir, "shm_uri.bin", uri, strlen(uri));
 }
 
+static int tp_fuzz_seed_shm_uri_validate(const char *dir)
+{
+    uint8_t buffer[256];
+    size_t offset = 0;
+    const char *uri = "shm:file?path=/tmp|require_hugepages=false";
+    size_t uri_len = strlen(uri);
+
+    if (uri_len + 4 > sizeof(buffer))
+    {
+        return -1;
+    }
+
+    tp_fuzz_store_u32_le(buffer, &offset, 128);
+    memcpy(buffer + offset, uri, uri_len);
+    offset += uri_len;
+
+    return tp_fuzz_write(dir, "shm_uri_validate.bin", buffer, offset);
+}
+
 static int tp_fuzz_seed_tracelink(const char *dir)
 {
     uint8_t buffer[256];
@@ -897,6 +916,12 @@ int main(int argc, char **argv)
 
     if (tp_fuzz_prepare_dir(base, "tp_fuzz_shm_uri", dir, sizeof(dir)) < 0 ||
         tp_fuzz_seed_shm_uri(dir) < 0)
+    {
+        return 1;
+    }
+
+    if (tp_fuzz_prepare_dir(base, "tp_fuzz_shm_uri_validate", dir, sizeof(dir)) < 0 ||
+        tp_fuzz_seed_shm_uri_validate(dir) < 0)
     {
         return 1;
     }

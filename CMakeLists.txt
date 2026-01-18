@@ -13,6 +13,7 @@ option(TP_ENABLE_SBE_CODEGEN "Enable SBE code generation" ON)
 option(TP_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 option(TP_ENABLE_FUZZ "Enable libFuzzer targets (requires clang)" OFF)
 option(TP_USE_SYSTEM_AERON "Prefer system Aeron install when available" ON)
+set(TP_COVERAGE_MIN 0 CACHE STRING "Minimum line coverage percent for coverage target (0 disables)")
 
 set(AERON_ROOT "${CMAKE_CURRENT_LIST_DIR}/../aeron" CACHE PATH "Path to Aeron source tree")
 set(AERON_INCLUDE_DIR "" CACHE PATH "Path to Aeron headers for system installs")
@@ -293,18 +294,22 @@ add_test(NAME tensor_pool_smoke COMMAND tensor_pool_tests)
 if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     find_program(GCOVR_EXECUTABLE gcovr)
     if (GCOVR_EXECUTABLE)
+        set(GCOVR_ARGS
+            -r "${CMAKE_CURRENT_LIST_DIR}"
+            --exclude "${AERON_ROOT}"
+            --exclude ".*CMakeFiles.*"
+            --exclude ".*generated.*"
+            --exclude ".*aeron-client.*"
+            --exclude ".*build.*"
+            --print-summary
+            --xml-pretty -o coverage.xml
+            --html-details -o coverage.html)
+        if (TP_COVERAGE_MIN GREATER 0)
+            list(APPEND GCOVR_ARGS --fail-under-line ${TP_COVERAGE_MIN})
+        endif ()
         add_custom_target(coverage
             COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure
-            COMMAND "${GCOVR_EXECUTABLE}"
-                -r "${CMAKE_CURRENT_LIST_DIR}"
-                --exclude "${AERON_ROOT}"
-                --exclude ".*CMakeFiles.*"
-                --exclude ".*generated.*"
-                --exclude ".*aeron-client.*"
-                --exclude ".*build.*"
-                --print-summary
-                --xml-pretty -o coverage.xml
-                --html-details -o coverage.html
+            COMMAND "${GCOVR_EXECUTABLE}" ${GCOVR_ARGS}
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
             DEPENDS tensor_pool_tests)
     else ()
@@ -370,6 +375,7 @@ if (TP_ENABLE_FUZZ)
     tp_add_fuzzer(tp_fuzz_tracelink_decode fuzz/fuzz_tracelink_decode.c)
     tp_add_fuzzer(tp_fuzz_slot_decode fuzz/fuzz_slot_decode.c)
     tp_add_fuzzer(tp_fuzz_shm_uri fuzz/fuzz_shm_uri.c)
+    tp_add_fuzzer(tp_fuzz_shm_uri_validate fuzz/fuzz_shm_uri_validate.c)
 
     add_executable(tp_fuzz_seed_gen tools/tp_fuzz_seed_gen.c)
     target_link_libraries(tp_fuzz_seed_gen PRIVATE tensor_pool)
