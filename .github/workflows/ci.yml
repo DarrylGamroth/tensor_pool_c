@@ -128,6 +128,104 @@ jobs:
       - name: Test
         run: ./build/tensor_pool_tests
 
+      - name: Stop Aeron Media Driver
+        if: always()
+        run: |
+          if [ -f /tmp/aeron-driver.pid ]; then
+            kill "$(cat /tmp/aeron-driver.pid)" || true
+          fi
+          pkill -f io.aeron.driver.MediaDriver || true
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Aeron
+        uses: actions/checkout@v4
+        with:
+          repository: aeron-io/aeron
+          path: aeron
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Cache Maven jars
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/maven
+          key: maven-jars-${{ runner.os }}-${{ hashFiles('aeron/version.txt') }}
+          restore-keys: |
+            maven-jars-${{ runner.os }}-
+
+      - name: Download Aeron driver and SBE tool
+        run: |
+          set -euo pipefail
+          cache_dir="${RUNNER_TEMP:-/tmp}/maven"
+          mkdir -p "${cache_dir}"
+
+          get_metadata_value() {
+            local url="$1"
+            local key="$2"
+            { curl -fsSL "${url}" 2>/dev/null || true; } \
+              | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
+          }
+
+          aeron_version=""
+          if [ -f "aeron/version.txt" ]; then
+            aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
+          fi
+          if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            if [ -z "${aeron_version}" ]; then
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${aeron_version}" ]; then
+            echo "Unable to resolve aeron-driver version" >&2
+            exit 1
+          fi
+
+          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          if [ ! -f "${aeron_jar}" ]; then
+            curl -fsSL -o "${aeron_jar}" \
+              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+          fi
+
+          sbe_group=""
+          sbe_version=""
+          for group in io.aeron uk.co.real-logic; do
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            sbe_version="$(get_metadata_value "${meta_url}" "release")"
+            if [ -z "${sbe_version}" ]; then
+              sbe_version="$(get_metadata_value "${meta_url}" "latest")"
+            fi
+            if [ -n "${sbe_version}" ]; then
+              sbe_group="${group}"
+              break
+            fi
+          done
+          if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
+            echo "Unable to resolve sbe-tool version" >&2
+            exit 1
+          fi
+
+          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          if [ ! -f "${sbe_jar}" ]; then
+            curl -fsSL -o "${sbe_jar}" \
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
+          fi
+
+          {
+            echo "AERON_DRIVER_JAR=${aeron_jar}"
+            echo "SBE_TOOL_JAR=${sbe_jar}"
+          } >> "${GITHUB_ENV}"
+
       - name: Fuzz smoke
         env:
           SBE_TOOL_JAR: ${{ env.SBE_TOOL_JAR }}
@@ -136,6 +234,136 @@ jobs:
           TP_FUZZ_CLEAN: 1
         run: tools/run_fuzz_smoke.sh
 
+  coverage:
+    runs-on: ubuntu-latest
+    needs: build-test
+    env:
+      AERON_DIR: /dev/shm/aeron-ci
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Aeron
+        uses: actions/checkout@v4
+        with:
+          repository: aeron-io/aeron
+          path: aeron
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install gcovr
+        run: python -m pip install --upgrade pip gcovr
+
+      - name: Cache Maven jars
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/maven
+          key: maven-jars-${{ runner.os }}-${{ hashFiles('aeron/version.txt') }}
+          restore-keys: |
+            maven-jars-${{ runner.os }}-
+
+      - name: Download Aeron driver and SBE tool
+        run: |
+          set -euo pipefail
+          cache_dir="${RUNNER_TEMP:-/tmp}/maven"
+          mkdir -p "${cache_dir}"
+
+          get_metadata_value() {
+            local url="$1"
+            local key="$2"
+            { curl -fsSL "${url}" 2>/dev/null || true; } \
+              | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
+          }
+
+          aeron_version=""
+          if [ -f "aeron/version.txt" ]; then
+            aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
+          fi
+          if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
+            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "release")"
+            if [ -z "${aeron_version}" ]; then
+              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-driver/maven-metadata.xml" "latest")"
+            fi
+          fi
+          if [ -z "${aeron_version}" ]; then
+            echo "Unable to resolve aeron-driver version" >&2
+            exit 1
+          fi
+
+          aeron_jar="${cache_dir}/aeron-driver-${aeron_version}.jar"
+          if [ ! -f "${aeron_jar}" ]; then
+            curl -fsSL -o "${aeron_jar}" \
+              "https://repo1.maven.org/maven2/io/aeron/aeron-driver/${aeron_version}/aeron-driver-${aeron_version}.jar"
+          fi
+
+          sbe_group=""
+          sbe_version=""
+          for group in io.aeron uk.co.real-logic; do
+            meta_url="https://repo1.maven.org/maven2/${group//.//}/sbe-tool/maven-metadata.xml"
+            sbe_version="$(get_metadata_value "${meta_url}" "release")"
+            if [ -z "${sbe_version}" ]; then
+              sbe_version="$(get_metadata_value "${meta_url}" "latest")"
+            fi
+            if [ -n "${sbe_version}" ]; then
+              sbe_group="${group}"
+              break
+            fi
+          done
+          if [ -z "${sbe_group}" ] || [ -z "${sbe_version}" ]; then
+            echo "Unable to resolve sbe-tool version" >&2
+            exit 1
+          fi
+
+          sbe_jar="${cache_dir}/sbe-tool-${sbe_version}.jar"
+          if [ ! -f "${sbe_jar}" ]; then
+            curl -fsSL -o "${sbe_jar}" \
+              "https://repo1.maven.org/maven2/${sbe_group//.//}/sbe-tool/${sbe_version}/sbe-tool-${sbe_version}.jar"
+          fi
+
+          {
+            echo "AERON_DRIVER_JAR=${aeron_jar}"
+            echo "SBE_TOOL_JAR=${sbe_jar}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Configure coverage
+        run: >
+          cmake -S . -B build-coverage
+          -DAERON_ROOT=${{ github.workspace }}/aeron
+          -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
+          -DTP_ENABLE_COVERAGE=ON
+
+      - name: Start Aeron Media Driver
+        run: |
+          set -euo pipefail
+          rm -rf "${AERON_DIR}"
+          if [ -z "${AERON_DRIVER_JAR:-}" ]; then
+            echo "Aeron driver jar not found" >&2
+            exit 1
+          fi
+          java -Daeron.dir="${AERON_DIR}" -cp "${AERON_DRIVER_JAR}" io.aeron.driver.MediaDriver \
+            > /tmp/aeron-driver.log 2>&1 &
+          echo $! > /tmp/aeron-driver.pid
+          for _ in $(seq 1 50); do
+            if [ -f "${AERON_DIR}/CnC.dat" ] || [ -f "${AERON_DIR}/cnc.dat" ]; then
+              exit 0
+            fi
+            sleep 0.1
+          done
+          echo "Aeron driver did not start" >&2
+          exit 1
+
+      - name: Build coverage
+        run: cmake --build build-coverage --target coverage
+
       - name: Stop Aeron Media Driver
         if: always()
         run: |
@@ -143,3 +371,12 @@ jobs:
             kill "$(cat /tmp/aeron-driver.pid)" || true
           fi
           pkill -f io.aeron.driver.MediaDriver || true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: build-coverage/coverage.xml
+          flags: unit
+          name: tensor-pool-c
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
