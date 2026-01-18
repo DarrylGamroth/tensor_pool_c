@@ -270,6 +270,7 @@ enable_testing()
 add_executable(tensor_pool_tests
     tests/test_tp_smoke.c
     tests/test_tp_control.c
+    tests/test_tp_control_listen_json.c
     tests/test_tp_consumer_registry.c
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c

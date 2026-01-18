@@ -35,6 +35,7 @@ void tp_test_decode_data_source_meta(void);
 void tp_test_decode_control_response(void);
 void tp_test_decode_meta_blobs(void);
 void tp_test_decode_shm_pool_announce(void);
+void tp_test_control_listen_json(void);
 void tp_test_consumer_registry(void);
 void tp_test_driver_client_decoders(void);
 void tp_test_discovery_client_decoders(void);
@@ -436,6 +437,7 @@ int main(void)
     tp_test_decode_control_response();
     tp_test_decode_meta_blobs();
     tp_test_decode_shm_pool_announce();
+    tp_test_control_listen_json();
     tp_test_consumer_registry();
     tp_test_driver_client_decoders();
     tp_test_discovery_client_decoders();
