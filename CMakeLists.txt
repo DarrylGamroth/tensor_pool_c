@@ -20,6 +20,8 @@ set(AERON_LIBRARY "" CACHE FILEPATH "Path to Aeron library for system installs")
 set(SBE_TOOL_JAR "" CACHE FILEPATH "Path to sbe-tool or sbe-all jar")
 set(SBE_TOOL_VERSION "" CACHE STRING "SBE tool version to download (empty = latest)")
 set(SBE_TOOL_CACHE_DIR "" CACHE PATH "Cache directory for downloaded sbe-tool jars")
+set(SBE_TOOL_CLASSPATH "" CACHE STRING "Classpath for SBE tool invocation")
+set(SBE_JAVA_MAIN "" CACHE STRING "SBE tool main class (auto-detected if empty)")
 
 set(AERON_TARGET "")
 set(AERON_VERSION_TXT "0.0.0")
@@ -146,7 +148,30 @@ if (TP_ENABLE_SBE_CODEGEN)
     set(SBE_OUTPUT_TRACE "${SBE_OUTPUT_DIR}/trace")
     set(SBE_SCHEMA_DIR "${CMAKE_CURRENT_LIST_DIR}/schemas")
     set(SBE_JAVA_OPTS "--add-opens" "java.base/jdk.internal.misc=ALL-UNNAMED")
-    set(SBE_JAVA_MAIN uk.co.real_logic.sbe.SbeTool)
+    if (SBE_JAVA_MAIN STREQUAL "")
+        find_program(JAR_EXECUTABLE jar)
+        if (JAR_EXECUTABLE)
+            execute_process(
+                COMMAND "${JAR_EXECUTABLE}" tf "${SBE_TOOL_JAR}"
+                RESULT_VARIABLE SBE_JAR_RESULT
+                OUTPUT_VARIABLE SBE_JAR_CONTENTS
+                ERROR_QUIET)
+        else ()
+            set(SBE_JAR_RESULT 1)
+        endif ()
+
+        if (SBE_JAR_RESULT EQUAL 0)
+            if (SBE_JAR_CONTENTS MATCHES "uk/co/real_logic/sbe/SbeTool.class")
+                set(SBE_JAVA_MAIN "uk.co.real_logic.sbe.SbeTool")
+            elseif (SBE_JAR_CONTENTS MATCHES "org/agrona/sbe/SbeTool.class")
+                set(SBE_JAVA_MAIN "org.agrona.sbe.SbeTool")
+            else ()
+                message(FATAL_ERROR "SBE tool main class not found in ${SBE_TOOL_JAR}. Set -DSBE_JAVA_MAIN=...")
+            endif ()
+        else ()
+            set(SBE_JAVA_MAIN "uk.co.real_logic.sbe.SbeTool")
+        endif ()
+    endif ()
 
     add_custom_command(
         OUTPUT "${SBE_OUTPUT_DIR}/tp_codegen.stamp"

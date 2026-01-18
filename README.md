@@ -33,6 +33,13 @@ cmake -S . -B build \
 cmake --build build
 ```
 
+If SBE tool auto-detection fails, pass the main class explicitly:
+```
+cmake -S . -B build \
+  -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar \
+  -DSBE_JAVA_MAIN=uk.co.real_logic.sbe.SbeTool
+```
+
 ## Tests
 
 ```
