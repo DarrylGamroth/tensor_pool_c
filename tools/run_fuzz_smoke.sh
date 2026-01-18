@@ -22,6 +22,9 @@ fi
 if [[ -n "${SBE_TOOL_JAR:-}" ]]; then
     cmake_args+=("-DSBE_TOOL_JAR=${SBE_TOOL_JAR}")
 fi
+if [[ -n "${TP_USE_SYSTEM_AERON:-}" ]]; then
+    cmake_args+=("-DTP_USE_SYSTEM_AERON=${TP_USE_SYSTEM_AERON}")
+fi
 
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}"
 cmake --build "$BUILD_DIR"

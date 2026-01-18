@@ -101,6 +101,7 @@ jobs:
           cmake -S . -B build
           -DAERON_ROOT=${{ github.workspace }}/aeron
           -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
+          -DTP_USE_SYSTEM_AERON=OFF
 
       - name: Build
         run: cmake --build build
@@ -230,6 +231,7 @@ jobs:
         env:
           SBE_TOOL_JAR: ${{ env.SBE_TOOL_JAR }}
           TP_AERON_ROOT: ${{ github.workspace }}/aeron
+          TP_USE_SYSTEM_AERON: OFF
           TP_FUZZ_RUNS: 2000
           TP_FUZZ_CLEAN: 1
         run: tools/run_fuzz_smoke.sh
@@ -340,6 +342,7 @@ jobs:
           -DAERON_ROOT=${{ github.workspace }}/aeron
           -DSBE_TOOL_JAR=${{ env.SBE_TOOL_JAR }}
           -DTP_ENABLE_COVERAGE=ON
+          -DTP_USE_SYSTEM_AERON=OFF
 
       - name: Start Aeron Media Driver
         run: |

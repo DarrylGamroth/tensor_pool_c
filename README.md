@@ -12,13 +12,21 @@ Requirements:
 - CMake 3.24+
 - A C compiler
 - Java 17+ (for SBE codegen)
-- Aeron source checkout (default: `../aeron`)
+- Aeron installed with pkg-config, or a source checkout (default: `../aeron`)
 - sbe-tool jar (set `SBE_TOOL_JAR` or let CMake fetch it)
 
-Example:
+Example (use Aeron from source):
 ```
 cmake -S . -B build \
   -DAERON_ROOT=../aeron \
+  -DTP_USE_SYSTEM_AERON=OFF \
+  -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar
+cmake --build build
+```
+
+Example (use system Aeron install):
+```
+cmake -S . -B build \
   -DSBE_TOOL_JAR=/path/to/sbe-tool-<ver>.jar
 cmake --build build
 ```
