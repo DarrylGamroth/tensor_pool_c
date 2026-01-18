@@ -309,6 +309,9 @@ if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
             --exclude ".*generated.*"
             --exclude ".*aeron-client.*"
             --exclude ".*build.*"
+            --exclude ".*tests/.*"
+            --exclude ".*tools/.*"
+            --exclude ".*fuzz/.*"
             --print-summary
             --xml-pretty -o coverage.xml
             --html-details -o coverage.html)
