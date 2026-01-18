@@ -42,7 +42,8 @@ jobs:
           get_metadata_value() {
             local url="$1"
             local key="$2"
-            curl -fsSL "${url}" | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
+            { curl -fsSL "${url}" 2>/dev/null || true; } \
+              | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
           }
 
           aeron_version=""
