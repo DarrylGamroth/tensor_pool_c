@@ -11,7 +11,19 @@ if ! command -v clang >/dev/null 2>&1; then
     exit 1
 fi
 
-cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DTP_ENABLE_FUZZ=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang
+cmake_args=(
+    -DTP_ENABLE_FUZZ=ON
+    -DCMAKE_BUILD_TYPE=Debug
+    -DCMAKE_C_COMPILER=clang
+)
+if [[ -n "${TP_AERON_ROOT:-}" ]]; then
+    cmake_args+=("-DAERON_ROOT=${TP_AERON_ROOT}")
+fi
+if [[ -n "${SBE_TOOL_JAR:-}" ]]; then
+    cmake_args+=("-DSBE_TOOL_JAR=${SBE_TOOL_JAR}")
+fi
+
+cmake -S "$ROOT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}"
 cmake --build "$BUILD_DIR"
 
 "$BUILD_DIR"/tp_fuzz_seed_gen
