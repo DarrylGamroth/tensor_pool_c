@@ -17,6 +17,11 @@ Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 - functions: 71.2% (270 / 379)
 - branches: 44.8% (1983 / 4427)
 
+Current (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
+- lines: 62.0% (4198 / 6766)
+- functions: 78.7% (299 / 380)
+- branches: 50.3% (2228 / 4427)
+
 Bottom 10 files by line coverage (baseline):
 - `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
 - `src/tp_aeron.c` (0.0%) -> unit (wrap Aeron errors + directory resolution)
@@ -56,10 +61,16 @@ Bottom 10 files by line coverage (baseline):
 - [x] Document how to reproduce coverage locally in `README.md`.
 
 ## Phase 6: Coverage Uplift (Target >= 70% Lines, >= 50% Branches)
-- [ ] Add unit tests for `tp_aeron.c` (directory resolution, error propagation, invalid inputs).
-- [ ] Add unit tests for `tp_control_poller.c` using direct handler entrypoint (valid/invalid headers + template paths).
-- [ ] Expand driver client unit tests to cover attach/keepalive/lease expiry and rejection branches.
-- [ ] Expand discovery client tests for malformed channel strings and missing fields.
-- [ ] Add tests for `tp_client.c` error paths (invalid channels/stream IDs, async add failures).
-- [ ] Add trace/log tests for `tp_log.c` and `tp_error.h` to cover formatting and error propagation.
-- [ ] Add merge map tests to exercise all rule types and edge cases (empty, conflicting, out-of-order).
+- [x] Add unit tests for `tp_aeron.c` (directory resolution, error propagation, invalid inputs).
+- [x] Add unit tests for `tp_control_poller.c` using direct handler entrypoint (valid/invalid headers + template paths).
+- [x] Expand driver client unit tests to cover attach/keepalive/lease expiry and rejection branches.
+- [x] Expand discovery client tests for malformed channel strings and missing fields.
+- [x] Add tests for `tp_client.c` error paths (invalid channels/stream IDs, async add failures).
+- [x] Add trace/log tests for `tp_log.c` and `tp_error.h` to cover formatting and error propagation.
+- [x] Add merge map tests to exercise all rule types and edge cases (empty, conflicting, out-of-order).
+
+## Phase 7: Coverage Targets (>= 70% Lines, >= 55% Branches)
+- [ ] Add consumer/producer error-path tests for descriptor parsing, progress validation, and claim/offer failure branches.
+- [ ] Add QoS/metadata poller tests for invalid messages, empty fragments, and channel mismatch handling.
+- [ ] Expand SHM/URI permission-path tests to hit negative cases (uid/gid/mode mismatches, canonical path rejection).
+- [ ] Add trace + join-barrier edge tests for stale inputs, missing clocks, and latest ordering paths.
