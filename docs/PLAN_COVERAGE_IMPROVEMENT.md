@@ -18,9 +18,9 @@ Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 - branches: 44.8% (1983 / 4427)
 
 Current (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
-- lines: 62.0% (4198 / 6766)
-- functions: 78.7% (299 / 380)
-- branches: 50.3% (2228 / 4427)
+- lines: 63.3% (4284 / 6772)
+- functions: 79.6% (304 / 382)
+- branches: 51.6% (2286 / 4427)
 
 Bottom 10 files by line coverage (baseline):
 - `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
@@ -70,7 +70,7 @@ Bottom 10 files by line coverage (baseline):
 - [x] Add merge map tests to exercise all rule types and edge cases (empty, conflicting, out-of-order).
 
 ## Phase 7: Coverage Targets (>= 70% Lines, >= 55% Branches)
-- [ ] Add consumer/producer error-path tests for descriptor parsing, progress validation, and claim/offer failure branches.
-- [ ] Add QoS/metadata poller tests for invalid messages, empty fragments, and channel mismatch handling.
-- [ ] Expand SHM/URI permission-path tests to hit negative cases (uid/gid/mode mismatches, canonical path rejection).
-- [ ] Add trace + join-barrier edge tests for stale inputs, missing clocks, and latest ordering paths.
+- [x] Add consumer/producer error-path tests for descriptor parsing, progress validation, and claim/offer failure branches.
+- [x] Add QoS/metadata poller tests for invalid messages, empty fragments, and channel mismatch handling.
+- [x] Expand SHM/URI permission-path tests to hit negative cases (uid/gid/mode mismatches, canonical path rejection).
+- [x] Add trace + join-barrier edge tests for stale inputs, missing clocks, and latest ordering paths.
