@@ -155,6 +155,27 @@ static void log_publication_status(const char *label, aeron_publication_t *publi
         aeron_publication_is_connected(publication) ? 1 : 0);
 }
 
+static void tp_example_detach_driver(tp_driver_client_t *driver)
+{
+    if (NULL == driver)
+    {
+        return;
+    }
+    if (driver->active_lease_id != 0 && driver->publication != NULL)
+    {
+        if (tp_driver_detach(
+            driver,
+            0,
+            driver->active_lease_id,
+            driver->active_stream_id,
+            driver->client_id,
+            driver->role) < 0)
+        {
+            fprintf(stderr, "Driver detach failed: %s\n", tp_errmsg());
+        }
+    }
+}
+
 static void drive_keepalives(tp_client_t *client)
 {
     const char *env = getenv("TP_EXAMPLE_KEEPALIVE_MS");
@@ -201,6 +222,7 @@ int main(int argc, char **argv)
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
+    uint32_t resolved_client_id = 0;
     uint32_t request_desc_stream_id = 0;
     uint32_t request_ctrl_stream_id = 0;
     int max_frames;
@@ -414,7 +436,7 @@ int main(int argc, char **argv)
     }
 
     memset(&request, 0, sizeof(request));
-    request.correlation_id = 1;
+    request.correlation_id = 0;
     request.stream_id = stream_id;
     request.client_id = client_id;
     request.role = TP_ROLE_CONSUMER;
@@ -448,9 +470,16 @@ int main(int argc, char **argv)
             fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
         }
         tp_driver_attach_info_close(&info);
+        tp_example_detach_driver(&driver);
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
+    }
+
+    resolved_client_id = driver.client_id;
+    if (resolved_client_id == 0)
+    {
+        resolved_client_id = request.client_id;
     }
 
     pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
@@ -458,6 +487,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Allocation failed\n");
         tp_driver_attach_info_close(&info);
+        tp_example_detach_driver(&driver);
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
@@ -476,15 +506,16 @@ int main(int argc, char **argv)
         fprintf(stderr, "Consumer context init failed: %s\n", tp_errmsg());
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
+        tp_example_detach_driver(&driver);
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
     }
 
     consumer_context.stream_id = info.stream_id;
-    consumer_context.consumer_id = client_id;
+    consumer_context.consumer_id = resolved_client_id;
     consumer_context.hello.stream_id = info.stream_id;
-    consumer_context.hello.consumer_id = client_id;
+    consumer_context.hello.consumer_id = resolved_client_id;
     if (request_desc_stream_id != 0 && request_desc_channel)
     {
         consumer_context.hello.descriptor_stream_id = request_desc_stream_id;
@@ -501,6 +532,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
+        tp_example_detach_driver(&driver);
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
@@ -530,6 +562,7 @@ int main(int argc, char **argv)
         tp_consumer_close(&consumer);
         free(pool_cfg);
         tp_driver_attach_info_close(&info);
+        tp_example_detach_driver(&driver);
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
@@ -667,6 +700,7 @@ int main(int argc, char **argv)
     tp_consumer_close(&consumer);
     free(pool_cfg);
     tp_driver_attach_info_close(&info);
+    tp_example_detach_driver(&driver);
     tp_driver_client_close(&driver);
     tp_client_close(&client);
 
