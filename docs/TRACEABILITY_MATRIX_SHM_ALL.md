@@ -44,6 +44,7 @@ Columns:
 | W-10.1.2-1 | 10.1.2 | ConsumerHello encode + max_rate_hz throttle | `src/tp_consumer_manager.c`, `src/tp_producer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-10.1.3-1 | 10.1.3 | ConsumerConfig decode; per-consumer declines via empty channel/stream; fallback URI when `use_shm=0` | `src/tp_consumer_registry.c`, `src/tp_consumer_manager.c` | `tests/test_tp_consumer_registry.c` | Compliant | |
 | W-10.2.1-1 | 10.2.1 | FrameDescriptor publish/consume; epoch/seq validation; pool/slot routing; trace_id | `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_rollover.c`, `tests/test_tp_smoke.c` | Compliant | |
+| W-10.2.1-2 | 10.2.1 | Timestamp semantics: SlotHeader capture time; FrameDescriptor publish time; do not assume equality | `src/tp_producer.c`, `src/tp_consumer.c` | Manual: inspect descriptor/slot timestamps for divergence | Partial | Producer currently mirrors capture timestamp into descriptor; no publish-time default |
 | W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/tp_progress_poller.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
@@ -55,6 +56,7 @@ Columns:
 | W-15.4-1 | 15.4 | Overwrite/drop accounting | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | |
 | W-15.5-1 | 15.5 | `payload_slot` equals header index; pool_nslots alignment | `src/tp_consumer.c` | `tests/test_tp_rollover.c` | Compliant | |
 | W-15.7-1 | 15.7 | Timebase/clock-domain consistency | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
+| W-15.7-2 | 15.7 | Monotonic timestamp when both SlotHeader and FrameDescriptor timestamps present | `src/tp_producer.c` | Manual: verify monotonic publish vs capture timestamps | Missing | No explicit monotonic enforcement or publish-time timestamp generation |
 | W-15.8-1 | 15.8 | Enum/type registry versioning | `src/tp_tensor.c` | `tests/test_tp_smoke.c` | Compliant | Unknown enums rejected |
 | W-15.10-1 | 15.10 | Path containment and fail-closed validation | `src/tp_shm.c`, `src/tp_context.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | Permission checks enforced with opt-out in context. |
 | W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
