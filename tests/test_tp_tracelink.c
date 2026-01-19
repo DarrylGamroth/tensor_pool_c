@@ -1,11 +1,22 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+#include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_clock.h"
+#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_trace.h"
 #include "tensor_pool/tp_tracelink.h"
 
 #include "trace/tensor_pool/messageHeader.h"
 #include "trace/tensor_pool/traceLinkSet.h"
 
+#include "aeronc.h"
+
 #include <assert.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 typedef struct test_trace_clock_stct
 {
@@ -531,6 +542,240 @@ cleanup:
     assert(result == 0);
 }
 
+static int tp_test_driver_active(const char *aeron_dir)
+{
+    aeron_cnc_t *cnc = NULL;
+    int64_t heartbeat = 0;
+    int64_t now_ms = 0;
+    int64_t age_ms = 0;
+
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return 0;
+    }
+
+    if (aeron_cnc_init(&cnc, aeron_dir, 100) < 0)
+    {
+        return 0;
+    }
+
+    heartbeat = aeron_cnc_to_driver_heartbeat(cnc);
+    now_ms = aeron_epoch_clock();
+    age_ms = now_ms - heartbeat;
+
+    aeron_cnc_close(cnc);
+    return heartbeat > 0 && age_ms <= 1000;
+}
+
+static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_publication_is_connected(publication))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        if (aeron_subscription_is_connected(subscription))
+        {
+            return 0;
+        }
+        tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, aeron_publication_t **out)
+{
+    aeron_async_add_publication_t *async_add = NULL;
+
+    if (tp_client_async_add_publication(client, channel, stream_id, &async_add) < 0)
+    {
+        return -1;
+    }
+
+    *out = NULL;
+    while (NULL == *out)
+    {
+        if (tp_client_async_add_publication_poll(out, async_add) < 0)
+        {
+            return -1;
+        }
+        tp_client_do_work(client);
+    }
+
+    return 0;
+}
+
+static void test_tracelink_set_from_claim(void)
+{
+    tp_producer_t producer;
+    tp_buffer_claim_t claim;
+    tp_tracelink_set_t set;
+    uint64_t parents[2] = { 11, 22 };
+    int result = -1;
+
+    memset(&producer, 0, sizeof(producer));
+    memset(&claim, 0, sizeof(claim));
+    memset(&set, 0, sizeof(set));
+
+    producer.stream_id = 100;
+    producer.epoch = 7;
+    claim.seq = 9;
+    claim.trace_id = 555;
+
+    if (tp_tracelink_set_from_claim(&producer, &claim, parents, 2, &set) != 0)
+    {
+        goto cleanup;
+    }
+
+    assert(set.stream_id == producer.stream_id);
+    assert(set.epoch == producer.epoch);
+    assert(set.seq == claim.seq);
+    assert(set.trace_id == claim.trace_id);
+    assert(set.parent_count == 2);
+
+    claim.trace_id = 0;
+    if (tp_tracelink_set_from_claim(&producer, &claim, parents, 2, &set) == 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_tracelink_set_from_claim(NULL, &claim, parents, 2, &set) == 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
+static int tp_test_tracelink_validator_fail(const tp_tracelink_set_t *set, void *clientd)
+{
+    (void)set;
+    (void)clientd;
+    return -1;
+}
+
+static void test_tracelink_send(void)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_t producer;
+    aeron_publication_t *control_pub = NULL;
+    uint64_t parents[80];
+    tp_tracelink_set_t set;
+    const char *aeron_dir = getenv("AERON_DIR");
+    int result = -1;
+    size_t i;
+
+    if (!tp_test_driver_active(aeron_dir))
+    {
+        return;
+    }
+
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+    memset(&set, 0, sizeof(set));
+
+    if (tp_client_context_init(&ctx) < 0)
+    {
+        return;
+    }
+    tp_client_context_set_aeron_dir(&ctx, aeron_dir);
+    tp_client_context_set_use_agent_invoker(&ctx, true);
+    tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
+    tp_client_context_set_announce_channel(&ctx, "aeron:ipc", 1001);
+    tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
+    tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
+    tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
+
+    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(&client) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_publication(&client, control_pub) < 0 ||
+        tp_test_wait_for_subscription(&client, client.control_subscription) < 0)
+    {
+        goto cleanup;
+    }
+
+    producer.control_publication = control_pub;
+    producer.stream_id = 10000;
+    producer.epoch = 1;
+
+    for (i = 0; i < sizeof(parents) / sizeof(parents[0]); i++)
+    {
+        parents[i] = (uint64_t)(1000 + i);
+    }
+
+    set.stream_id = producer.stream_id;
+    set.epoch = producer.epoch;
+    set.seq = 1;
+    set.trace_id = 42;
+    set.parents = parents;
+    set.parent_count = sizeof(parents) / sizeof(parents[0]);
+
+    if (tp_producer_send_tracelink_set(&producer, &set) != 0)
+    {
+        goto cleanup;
+    }
+
+    set.stream_id = 9999;
+    if (tp_producer_send_tracelink_set(&producer, &set) == 0)
+    {
+        goto cleanup;
+    }
+
+    set.stream_id = producer.stream_id;
+    producer.tracelink_validator = tp_test_tracelink_validator_fail;
+    if (tp_producer_send_tracelink_set(&producer, &set) == 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    if (control_pub)
+    {
+        aeron_publication_close(control_pub, NULL, NULL);
+    }
+    tp_client_close(&client);
+    assert(result == 0);
+}
+
 void tp_test_tracelink(void)
 {
     test_trace_id_generator_basic();
@@ -547,4 +792,6 @@ void tp_test_tracelink(void)
     test_tracelink_decode_rejects_empty();
     test_tracelink_decode_rejects_too_many();
     test_tracelink_decode_schema_mismatch();
+    test_tracelink_set_from_claim();
+    test_tracelink_send();
 }

@@ -95,7 +95,38 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_client_conductor_errors(void)
+{
+    tp_client_conductor_t conductor;
+
+    memset(&conductor, 0, sizeof(conductor));
+
+    assert(tp_client_conductor_init(NULL, NULL, false) < 0);
+    assert(tp_client_conductor_init_with_client_context(NULL, NULL) < 0);
+    assert(tp_client_conductor_init_with_aeron(NULL, NULL, false, false) < 0);
+    assert(tp_client_conductor_start(NULL) < 0);
+    assert(tp_client_conductor_do_work(NULL) < 0);
+    assert(tp_client_conductor_set_idle_sleep_duration_ns(NULL, 1) < 0);
+    assert(tp_client_conductor_async_add_publication(NULL, NULL, "aeron:ipc", 1) < 0);
+    {
+        aeron_async_add_publication_t *async = NULL;
+        assert(tp_client_conductor_async_add_publication(&async, NULL, "aeron:ipc", 1) < 0);
+    }
+    assert(tp_client_conductor_async_add_publication_poll(NULL, NULL) < 0);
+    assert(tp_client_conductor_async_add_subscription(NULL, NULL, "aeron:ipc", 1, NULL, NULL, NULL, NULL) < 0);
+    {
+        aeron_async_add_subscription_t *async = NULL;
+        assert(tp_client_conductor_async_add_subscription(&async, NULL, "aeron:ipc", 1, NULL, NULL, NULL, NULL) < 0);
+    }
+    assert(tp_client_conductor_async_add_subscription_poll(NULL, NULL) < 0);
+
+    assert(tp_client_conductor_start(&conductor) < 0);
+    assert(tp_client_conductor_do_work(&conductor) < 0);
+    assert(tp_client_conductor_set_idle_sleep_duration_ns(&conductor, 1) < 0);
+}
+
 void tp_test_client_conductor_lifecycle(void)
 {
     test_client_conductor_lifecycle();
+    test_client_conductor_errors();
 }
