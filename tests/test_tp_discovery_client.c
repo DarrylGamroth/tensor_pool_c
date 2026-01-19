@@ -349,6 +349,86 @@ static void test_discovery_request_requires_response_channel(void)
     assert(result == 0);
 }
 
+static void test_discovery_request_requires_response_stream(void)
+{
+    tp_discovery_client_t client;
+    tp_discovery_request_t request;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    request.response_channel = "aeron:ipc";
+    request.response_stream_id = 0;
+
+    assert(tp_discovery_request(&client, &request) < 0);
+    result = 0;
+
+    assert(result == 0);
+}
+
+static void test_discovery_request_response_channel_mismatch(void)
+{
+    tp_discovery_client_t client;
+    tp_discovery_request_t request;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    strncpy(client.context.response_channel, "aeron:ipc", sizeof(client.context.response_channel) - 1);
+    request.response_channel = "aeron:udp";
+    request.response_stream_id = 100;
+
+    assert(tp_discovery_request(&client, &request) < 0);
+    result = 0;
+
+    assert(result == 0);
+}
+
+static void test_discovery_request_tags_required(void)
+{
+    tp_discovery_client_t client;
+    tp_discovery_request_t request;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    request.response_channel = "aeron:ipc";
+    request.response_stream_id = 100;
+    request.tag_count = 1;
+    request.tags = NULL;
+
+    assert(tp_discovery_request(&client, &request) < 0);
+    result = 0;
+
+    assert(result == 0);
+}
+
+static void test_discovery_client_init_errors(void)
+{
+    tp_discovery_client_t client;
+    tp_discovery_context_t ctx;
+    tp_client_t base;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&base, 0, sizeof(base));
+
+    assert(tp_discovery_client_init(NULL, NULL, NULL) < 0);
+    assert(tp_discovery_client_init(&client, NULL, &ctx) < 0);
+    assert(tp_discovery_client_init(&client, &base, NULL) < 0);
+
+    assert(tp_discovery_context_init(&ctx) == 0);
+    assert(tp_discovery_client_init(&client, &base, &ctx) < 0);
+
+    result = 0;
+
+    assert(result == 0);
+}
+
 static void test_decode_discovery_response_pool_nslots_mismatch(void)
 {
     uint8_t buffer[1024];
@@ -643,5 +723,9 @@ void tp_test_discovery_client_decoders(void)
     test_decode_discovery_response_missing_driver_control();
     test_decode_discovery_response_null_data_source_id();
     test_discovery_request_requires_response_channel();
+    test_discovery_request_requires_response_stream();
+    test_discovery_request_response_channel_mismatch();
+    test_discovery_request_tags_required();
+    test_discovery_client_init_errors();
     test_discovery_result_match_helpers();
 }
