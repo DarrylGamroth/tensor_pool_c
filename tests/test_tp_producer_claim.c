@@ -12,7 +12,9 @@
 #include "tensor_pool/tp_version.h"
 
 #include "wire/tensor_pool/dtype.h"
+#include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/majorOrder.h"
+#include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/progressUnit.h"
 #include "wire/tensor_pool/regionType.h"
 #include "wire/tensor_pool/shmRegionSuperblock.h"
@@ -29,6 +31,14 @@
 #include <unistd.h>
 
 static size_t tp_payload_flush_last_len = 0;
+
+typedef struct tp_descriptor_capture_state_stct
+{
+    uint64_t expected_seq;
+    uint64_t timestamp_ns;
+    int saw;
+}
+tp_descriptor_capture_state_t;
 
 static void tp_test_payload_flush(void *clientd, void *payload, size_t length)
 {
@@ -111,6 +121,89 @@ static int tp_test_wait_for_connected(tp_client_t *client, aeron_publication_t *
             return 0;
         }
         tp_client_do_work(client);
+        {
+            struct timespec ts = { 0, 1000000 };
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    return -1;
+}
+
+static void tp_on_descriptor_capture(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+{
+    tp_descriptor_capture_state_t *state = (tp_descriptor_capture_state_t *)clientd;
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_frameDescriptor descriptor;
+    uint16_t template_id;
+    uint16_t schema_id;
+    uint64_t seq;
+
+    (void)header;
+
+    if (NULL == state || NULL == buffer)
+    {
+        return;
+    }
+
+    if (length < tensor_pool_messageHeader_encoded_length())
+    {
+        return;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        length);
+    template_id = tensor_pool_messageHeader_templateId(&msg_header);
+    schema_id = tensor_pool_messageHeader_schemaId(&msg_header);
+
+    if (schema_id != tensor_pool_frameDescriptor_sbe_schema_id() ||
+        template_id != tensor_pool_frameDescriptor_sbe_template_id())
+    {
+        return;
+    }
+
+    tensor_pool_frameDescriptor_wrap_for_decode(
+        &descriptor,
+        (char *)buffer,
+        tensor_pool_messageHeader_encoded_length(),
+        tensor_pool_frameDescriptor_sbe_block_length(),
+        tensor_pool_frameDescriptor_sbe_schema_version(),
+        length);
+
+    seq = tensor_pool_frameDescriptor_seq(&descriptor);
+    if (state->expected_seq != 0 && seq != state->expected_seq)
+    {
+        return;
+    }
+
+    state->timestamp_ns = tensor_pool_frameDescriptor_timestampNs(&descriptor);
+    state->saw = 1;
+}
+
+static int tp_test_wait_for_descriptor(
+    tp_client_t *client,
+    aeron_subscription_t *subscription,
+    tp_descriptor_capture_state_t *state)
+{
+    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+
+    if (NULL == client || NULL == subscription || NULL == state)
+    {
+        return -1;
+    }
+
+    while (tp_clock_now_ns() < deadline)
+    {
+        aeron_subscription_poll(subscription, tp_on_descriptor_capture, state, 10);
+        tp_client_do_work(client);
+        if (state->saw)
+        {
+            return 0;
+        }
         {
             struct timespec ts = { 0, 1000000 };
             nanosleep(&ts, NULL);
@@ -813,6 +906,166 @@ cleanup:
     assert(result == 0);
 }
 
+static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timestamp)
+{
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_producer_context_t producer_ctx;
+    tp_producer_t producer;
+    aeron_subscription_t *descriptor_sub = NULL;
+    tp_descriptor_capture_state_t state;
+    tp_tensor_header_t tensor;
+    tp_frame_t frame;
+    tp_frame_metadata_t meta;
+    tp_slot_view_t slot_view;
+    uint32_t header_index;
+    uint64_t seq;
+    int header_fd = -1;
+    int pool_fd = -1;
+    char header_path[] = "/tmp/tp_header_desc_tsXXXXXX";
+    char pool_path[] = "/tmp/tp_pool_desc_tsXXXXXX";
+    char header_uri[512];
+    char pool_uri[512];
+    size_t header_size = TP_SUPERBLOCK_SIZE_BYTES + TP_HEADER_SLOT_BYTES * 4;
+    size_t pool_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
+    uint64_t null_timestamp = tensor_pool_frameDescriptor_timestampNs_null_value();
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&producer, 0, sizeof(producer));
+    memset(&state, 0, sizeof(state));
+
+    header_fd = mkstemp(header_path);
+    pool_fd = mkstemp(pool_path);
+    if (header_fd < 0 || pool_fd < 0)
+    {
+        goto cleanup;
+    }
+
+    if (ftruncate(header_fd, (off_t)header_size) != 0 || ftruncate(pool_fd, (off_t)pool_size) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_test_write_superblock(header_fd, 7, 1, tensor_pool_regionType_HEADER_RING, 0, 4, TP_HEADER_SLOT_BYTES, 0);
+    tp_test_write_superblock(pool_fd, 7, 1, tensor_pool_regionType_PAYLOAD_POOL, 1, 4, TP_NULL_U32, 128);
+
+    snprintf(header_uri, sizeof(header_uri), "shm:file?path=%s", header_path);
+    snprintf(pool_uri, sizeof(pool_uri), "shm:file?path=%s", pool_path);
+
+    if (tp_test_start_client_any(&client, &ctx) < 0)
+    {
+        result = 0;
+        goto cleanup;
+    }
+
+    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_producer_context_init(&producer_ctx) < 0)
+    {
+        goto cleanup;
+    }
+
+    tp_producer_context_set_publish_descriptor_timestamp(&producer_ctx, publish_descriptor_timestamp);
+
+    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&tensor, 0, sizeof(tensor));
+    tensor.dtype = tensor_pool_dtype_FLOAT32;
+    tensor.major_order = tensor_pool_majorOrder_ROW;
+    tensor.ndims = 1;
+    tensor.progress_unit = tensor_pool_progressUnit_NONE;
+    tensor.dims[0] = 4;
+    tensor.strides[0] = 4;
+
+    memset(&frame, 0, sizeof(frame));
+    frame.tensor = &tensor;
+    frame.payload_len = sizeof(float) * 4;
+    frame.payload = (float[4]){ 1.0f, 2.0f, 3.0f, 4.0f };
+
+    memset(&meta, 0, sizeof(meta));
+    meta.timestamp_ns = 123;
+    meta.meta_version = 0;
+
+    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
+    if ((int64_t)seq < 0)
+    {
+        goto cleanup;
+    }
+
+    header_index = (uint32_t)(seq & (producer.header_nslots - 1));
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
+            TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (slot_view.timestamp_ns != meta.timestamp_ns)
+    {
+        goto cleanup;
+    }
+
+    state.expected_seq = seq;
+    if (tp_test_wait_for_descriptor(&client, descriptor_sub, &state) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (publish_descriptor_timestamp)
+    {
+        if (state.timestamp_ns == null_timestamp)
+        {
+            goto cleanup;
+        }
+    }
+    else
+    {
+        if (state.timestamp_ns != null_timestamp)
+        {
+            goto cleanup;
+        }
+    }
+
+    result = 0;
+
+cleanup:
+    if (producer.client)
+    {
+        tp_producer_close(&producer);
+    }
+    if (descriptor_sub)
+    {
+        aeron_subscription_close(descriptor_sub, NULL, NULL);
+    }
+    if (client.context.base.aeron_dir[0] != '\0')
+    {
+        tp_client_close(&client);
+    }
+    if (header_fd >= 0)
+    {
+        close(header_fd);
+        unlink(header_path);
+    }
+    if (pool_fd >= 0)
+    {
+        close(pool_fd);
+        unlink(pool_path);
+    }
+
+    assert(result == 0);
+}
+
 static void tp_test_producer_payload_flush(void)
 {
     tp_client_context_t ctx;
@@ -968,5 +1221,7 @@ void tp_test_producer_claim_lifecycle(void)
     tp_test_claim_lifecycle(false);
     tp_test_producer_invalid_tensor_header();
     tp_test_producer_offer_pool_selection();
+    tp_test_producer_descriptor_timestamp(false);
+    tp_test_producer_descriptor_timestamp(true);
     tp_test_producer_payload_flush();
 }

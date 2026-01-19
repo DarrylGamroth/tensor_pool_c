@@ -624,6 +624,16 @@ void tp_producer_context_set_drop_unconnected_descriptors(tp_producer_context_t 
     ctx->drop_unconnected_descriptors = enabled;
 }
 
+void tp_producer_context_set_publish_descriptor_timestamp(tp_producer_context_t *ctx, bool enabled)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->publish_descriptor_timestamp = enabled;
+}
+
 static void tp_producer_unmap_regions(tp_producer_t *producer)
 {
     size_t i;
@@ -1385,6 +1395,7 @@ int tp_producer_publish_frame(
     uint32_t header_index;
     uint64_t in_progress;
     uint64_t committed;
+    uint64_t slot_timestamp_ns;
     tp_tensor_header_t prepared_tensor;
 
     if (NULL == producer || NULL == tensor || (NULL == payload && payload_len > 0))
@@ -1424,6 +1435,14 @@ int tp_producer_publish_frame(
 
     in_progress = tp_seq_in_progress(seq);
     committed = tp_seq_committed(seq);
+    if (timestamp_ns == 0 || timestamp_ns == TP_NULL_U64)
+    {
+        slot_timestamp_ns = (uint64_t)tp_clock_now_ns();
+    }
+    else
+    {
+        slot_timestamp_ns = timestamp_ns;
+    }
 
     tp_atomic_store_u64((uint64_t *)slot, in_progress);
     if (payload_len > 0)
@@ -1441,7 +1460,7 @@ int tp_producer_publish_frame(
     tensor_pool_slotHeader_set_payloadSlot(&slot_header, header_index);
     tensor_pool_slotHeader_set_poolId(&slot_header, pool_id);
     tensor_pool_slotHeader_set_payloadOffset(&slot_header, 0);
-    tensor_pool_slotHeader_set_timestampNs(&slot_header, timestamp_ns);
+    tensor_pool_slotHeader_set_timestampNs(&slot_header, slot_timestamp_ns);
     tensor_pool_slotHeader_set_metaVersion(&slot_header, meta_version);
     tp_zero_slot_padding(slot);
 
@@ -1469,7 +1488,14 @@ int tp_producer_publish_frame(
     __atomic_thread_fence(__ATOMIC_RELEASE);
     tp_atomic_store_u64((uint64_t *)slot, committed);
 
-    return tp_producer_publish_descriptor(producer, seq, timestamp_ns, meta_version, trace_id);
+    {
+        uint64_t descriptor_timestamp_ns = TP_NULL_U64;
+        if (producer->context.publish_descriptor_timestamp)
+        {
+            descriptor_timestamp_ns = (uint64_t)tp_clock_now_ns();
+        }
+        return tp_producer_publish_descriptor(producer, seq, descriptor_timestamp_ns, meta_version, trace_id);
+    }
 }
 
 int tp_producer_publish_progress_to(
