@@ -123,8 +123,10 @@ typedef struct tp_async_attach_stct
 {
     tp_driver_client_t *client;
     tp_driver_attach_request_t request;
+    int auto_client_id;
     int sent;
     int done;
+    int64_t last_send_ns;
     aeron_fragment_assembler_t *assembler;
     tp_driver_attach_info_t response;
 }
@@ -142,6 +144,9 @@ tp_async_detach_t;
 
 int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base);
 int tp_driver_client_close(tp_driver_client_t *client);
+
+int64_t tp_driver_next_correlation_id(void);
+uint32_t tp_driver_next_client_id(void);
 
 int tp_driver_attach_async(
     tp_driver_client_t *client,

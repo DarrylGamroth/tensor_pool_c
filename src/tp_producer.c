@@ -304,7 +304,7 @@ static int tp_is_power_of_two(uint32_t value)
     return value != 0 && (value & (value - 1)) == 0;
 }
 
-static void tp_producer_fill_driver_request(const tp_producer_t *producer, tp_driver_attach_request_t *out)
+static void tp_producer_fill_driver_request(tp_producer_t *producer, tp_driver_attach_request_t *out)
 {
     if (NULL == producer || NULL == out)
     {
@@ -315,7 +315,7 @@ static void tp_producer_fill_driver_request(const tp_producer_t *producer, tp_dr
 
     if (out->correlation_id == 0)
     {
-        out->correlation_id = tp_clock_now_ns();
+        out->correlation_id = tp_driver_next_correlation_id();
     }
 
     if (out->stream_id == 0)
@@ -326,6 +326,11 @@ static void tp_producer_fill_driver_request(const tp_producer_t *producer, tp_dr
     if (out->client_id == 0)
     {
         out->client_id = producer->context.producer_id;
+        if (out->client_id == 0)
+        {
+            out->client_id = tp_driver_next_client_id();
+            producer->context.producer_id = out->client_id;
+        }
     }
 
     if (out->role == 0)

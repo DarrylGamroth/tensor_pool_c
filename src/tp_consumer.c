@@ -369,7 +369,7 @@ cleanup:
     return result;
 }
 
-static void tp_consumer_fill_driver_request(const tp_consumer_t *consumer, tp_driver_attach_request_t *out)
+static void tp_consumer_fill_driver_request(tp_consumer_t *consumer, tp_driver_attach_request_t *out)
 {
     if (NULL == consumer || NULL == out)
     {
@@ -380,7 +380,7 @@ static void tp_consumer_fill_driver_request(const tp_consumer_t *consumer, tp_dr
 
     if (out->correlation_id == 0)
     {
-        out->correlation_id = tp_clock_now_ns();
+        out->correlation_id = tp_driver_next_correlation_id();
     }
 
     if (out->stream_id == 0)
@@ -391,6 +391,11 @@ static void tp_consumer_fill_driver_request(const tp_consumer_t *consumer, tp_dr
     if (out->client_id == 0)
     {
         out->client_id = consumer->context.consumer_id;
+        if (out->client_id == 0)
+        {
+            out->client_id = tp_driver_next_client_id();
+            consumer->context.consumer_id = out->client_id;
+        }
     }
 
     if (out->role == 0)

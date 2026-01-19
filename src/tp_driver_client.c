@@ -6,6 +6,8 @@
 
 #include <inttypes.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 #include "aeron_alloc.h"
 #include "aeron_fragment_assembler.h"
@@ -65,9 +67,116 @@ static void tp_copy_ascii(char *dst, size_t dst_len, const char *src, uint32_t s
     dst[len] = '\0';
 }
 
+static uint64_t tp_driver_seed_u64(void)
+{
+    uint64_t seed = 0;
+    int fd = open("/dev/urandom", O_RDONLY);
+
+    if (fd >= 0)
+    {
+        ssize_t read_len = read(fd, &seed, sizeof(seed));
+        close(fd);
+        if (read_len != (ssize_t)sizeof(seed))
+        {
+            seed = 0;
+        }
+    }
+
+    if (seed == 0)
+    {
+        seed = tp_clock_now_ns();
+        seed ^= ((uint64_t)getpid() << 32);
+        seed ^= (uint64_t)(uintptr_t)&seed;
+    }
+
+    seed &= 0x7fffffffffffffffULL;
+    if (seed == 0)
+    {
+        seed = 1;
+    }
+
+    return seed;
+}
+
+static uint64_t tp_driver_correlation_counter = 0;
+static uint32_t tp_driver_client_id_counter = 0;
+
+int64_t tp_driver_next_correlation_id(void)
+{
+    uint64_t current = __atomic_load_n(&tp_driver_correlation_counter, __ATOMIC_ACQUIRE);
+    if (current == 0)
+    {
+        uint64_t seed = tp_driver_seed_u64();
+        uint64_t expected = 0;
+        (void)__atomic_compare_exchange_n(
+            &tp_driver_correlation_counter,
+            &expected,
+            seed,
+            false,
+            __ATOMIC_RELEASE,
+            __ATOMIC_RELAXED);
+    }
+
+    current = __atomic_fetch_add(&tp_driver_correlation_counter, 1, __ATOMIC_RELAXED);
+    if (current == 0)
+    {
+        current = __atomic_fetch_add(&tp_driver_correlation_counter, 1, __ATOMIC_RELAXED);
+    }
+
+    return (int64_t)current;
+}
+
+uint32_t tp_driver_next_client_id(void)
+{
+    uint32_t current = __atomic_load_n(&tp_driver_client_id_counter, __ATOMIC_ACQUIRE);
+    if (current == 0)
+    {
+        uint64_t seed = tp_driver_seed_u64();
+        uint32_t seed32 = (uint32_t)(seed ^ (seed >> 32));
+        if (seed32 == 0)
+        {
+            seed32 = 1;
+        }
+        uint32_t expected = 0;
+        (void)__atomic_compare_exchange_n(
+            &tp_driver_client_id_counter,
+            &expected,
+            seed32,
+            false,
+            __ATOMIC_RELEASE,
+            __ATOMIC_RELAXED);
+    }
+
+    current = __atomic_fetch_add(&tp_driver_client_id_counter, 1, __ATOMIC_RELAXED);
+    if (current == 0)
+    {
+        current = __atomic_fetch_add(&tp_driver_client_id_counter, 1, __ATOMIC_RELAXED);
+    }
+
+    return current;
+}
+
 static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_attach_request_t *request);
 static int tp_driver_client_ready(tp_driver_client_t *client);
 static int tp_driver_wait_connected(tp_driver_client_t *client, int64_t deadline_ns);
+
+static void tp_driver_normalize_attach_request(tp_driver_attach_request_t *request)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+
+    if (request->correlation_id == 0)
+    {
+        request->correlation_id = tp_driver_next_correlation_id();
+    }
+
+    if (request->client_id == 0)
+    {
+        request->client_id = tp_driver_next_client_id();
+    }
+}
 
 int tp_driver_decode_attach_response(
     const uint8_t *buffer,
@@ -597,6 +706,11 @@ static void tp_driver_response_handler(
         return;
     }
 
+    if (ctx->done && ctx->out && ctx->out->code == tensor_pool_responseCode_OK)
+    {
+        return;
+    }
+
     if (ctx->client && ctx->client->client)
     {
         log = &ctx->client->client->context.base.log;
@@ -649,6 +763,11 @@ static void tp_driver_async_attach_handler(void *clientd, const uint8_t *buffer,
     (void)header;
 
     if (NULL == async || NULL == buffer)
+    {
+        return;
+    }
+
+    if (async->done && async->response.code == tensor_pool_responseCode_OK)
     {
         return;
     }
@@ -774,6 +893,8 @@ int tp_driver_attach_async(
     memset(async, 0, sizeof(*async));
     async->client = client;
     async->request = *request;
+    async->auto_client_id = (request->client_id == 0);
+    tp_driver_normalize_attach_request(&async->request);
     async->response.code = tensor_pool_responseCode_INTERNAL_ERROR;
     *out = async;
     return 0;
@@ -782,6 +903,7 @@ int tp_driver_attach_async(
 int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out)
 {
     int fragments;
+    const int64_t retry_interval_ns = 200 * 1000 * 1000LL;
 
     if (NULL == async || NULL == out)
     {
@@ -800,11 +922,19 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
         {
             return 0;
         }
+        {
+            int64_t now_ns = tp_clock_now_ns();
+            if (async->last_send_ns != 0 && now_ns - async->last_send_ns < retry_interval_ns)
+            {
+                return 0;
+            }
+        }
         if (tp_driver_send_attach(async->client, &async->request) < 0)
         {
             return -1;
         }
         async->sent = 1;
+        async->last_send_ns = tp_clock_now_ns();
     }
 
     if (NULL == async->assembler)
@@ -828,6 +958,24 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 
     if (!async->done)
     {
+        return 0;
+    }
+
+    if (async->response.code == tensor_pool_responseCode_REJECTED &&
+        async->auto_client_id &&
+        strstr(async->response.error_message, "client_id already attached") != NULL)
+    {
+        async->request.client_id = tp_driver_next_client_id();
+        async->request.correlation_id = tp_driver_next_correlation_id();
+        async->response.code = tensor_pool_responseCode_INTERNAL_ERROR;
+        async->done = 0;
+        async->sent = 0;
+        async->last_send_ns = tp_clock_now_ns();
+        if (async->assembler)
+        {
+            aeron_fragment_assembler_delete(async->assembler);
+            async->assembler = NULL;
+        }
         return 0;
     }
 
@@ -866,7 +1014,7 @@ int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out)
 
     memset(async, 0, sizeof(*async));
     async->client = client;
-    async->response.correlation_id = tp_clock_now_ns();
+    async->response.correlation_id = tp_driver_next_correlation_id();
     *out = async;
     return 0;
 }
@@ -1065,11 +1213,13 @@ int tp_driver_attach(
     int64_t timeout_ns)
 {
     tp_driver_response_ctx_t ctx;
+    tp_driver_attach_request_t normalized;
     aeron_fragment_assembler_t *assembler = NULL;
     int64_t deadline = 0;
     int64_t last_send_ns = 0;
     const int64_t retry_interval_ns = 200 * 1000 * 1000LL;
     int use_deadline = (timeout_ns > 0);
+    int auto_client_id = 0;
     tp_log_t *log = NULL;
 
     if (NULL == client || NULL == request || NULL == out)
@@ -1077,6 +1227,10 @@ int tp_driver_attach(
         TP_SET_ERR(EINVAL, "%s", "tp_driver_attach: null input");
         return -1;
     }
+
+    normalized = *request;
+    auto_client_id = (normalized.client_id == 0);
+    tp_driver_normalize_attach_request(&normalized);
 
     if (client->client)
     {
@@ -1096,61 +1250,88 @@ int tp_driver_attach(
         return -1;
     }
 
-    last_send_ns = tp_clock_now_ns();
-    (void)tp_driver_send_attach(client, request);
-
-    ctx.correlation_id = request->correlation_id;
     ctx.out = out;
     ctx.client = client;
-    ctx.done = 0;
 
     if (aeron_fragment_assembler_create(&assembler, tp_driver_response_handler, &ctx) < 0)
     {
         return -1;
     }
 
-    while (!ctx.done)
+    for (;;)
     {
-        int fragments = aeron_subscription_poll(
-            client->subscription,
-            aeron_fragment_assembler_handler,
-            assembler,
-            10);
-        int64_t now_ns = tp_clock_now_ns();
+        memset(out, 0, sizeof(*out));
+        out->code = tensor_pool_responseCode_INTERNAL_ERROR;
+        ctx.correlation_id = normalized.correlation_id;
+        ctx.done = 0;
 
-        if (fragments < 0)
+        last_send_ns = tp_clock_now_ns();
+        (void)tp_driver_send_attach(client, &normalized);
+
+        while (!ctx.done)
         {
-            return -1;
+            int fragments = aeron_subscription_poll(
+                client->subscription,
+                aeron_fragment_assembler_handler,
+                assembler,
+                10);
+            int64_t now_ns = tp_clock_now_ns();
+
+            if (fragments < 0)
+            {
+                return -1;
+            }
+
+            if (use_deadline && now_ns > deadline)
+            {
+                TP_SET_ERR(ETIMEDOUT, "%s", "tp_driver_attach: timeout");
+                aeron_fragment_assembler_delete(assembler);
+                return -1;
+            }
+            if (now_ns - last_send_ns >= retry_interval_ns)
+            {
+                last_send_ns = now_ns;
+                if (log)
+                {
+                    tp_log_emit(
+                        log,
+                        TP_LOG_DEBUG,
+                        "driver attach retry correlation=%" PRIi64 " stream=%u client=%u",
+                        normalized.correlation_id,
+                        normalized.stream_id,
+                        normalized.client_id);
+                }
+                (void)tp_driver_send_attach(client, &normalized);
+            }
         }
 
-        if (use_deadline && now_ns > deadline)
+        if (out->code == tensor_pool_responseCode_REJECTED &&
+            auto_client_id &&
+            strstr(out->error_message, "client_id already attached") != NULL)
         {
-            TP_SET_ERR(ETIMEDOUT, "%s", "tp_driver_attach: timeout");
-            aeron_fragment_assembler_delete(assembler);
-            return -1;
-        }
-        if (now_ns - last_send_ns >= retry_interval_ns)
-        {
-            last_send_ns = now_ns;
+            normalized.client_id = tp_driver_next_client_id();
+            normalized.correlation_id = tp_driver_next_correlation_id();
             if (log)
             {
                 tp_log_emit(
                     log,
                     TP_LOG_DEBUG,
-                    "driver attach retry correlation=%" PRIi64 " stream=%u client=%u",
-                    request->correlation_id,
-                    request->stream_id,
-                    request->client_id);
+                    "driver attach auto client id retry correlation=%" PRIi64 " stream=%u client=%u",
+                    normalized.correlation_id,
+                    normalized.stream_id,
+                    normalized.client_id);
             }
-            (void)tp_driver_send_attach(client, request);
+            continue;
         }
+
+        break;
     }
 
     aeron_fragment_assembler_delete(assembler);
 
     if (out->code == tensor_pool_responseCode_OK)
     {
-        if (tp_driver_client_update_lease(client, out, request->client_id, request->role) < 0)
+        if (tp_driver_client_update_lease(client, out, normalized.client_id, normalized.role) < 0)
         {
             return -1;
         }
@@ -1219,6 +1400,11 @@ int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_detach: null client");
         return -1;
+    }
+
+    if (correlation_id == 0)
+    {
+        correlation_id = tp_driver_next_correlation_id();
     }
 
     tensor_pool_messageHeader_wrap(
