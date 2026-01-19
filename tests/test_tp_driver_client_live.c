@@ -132,7 +132,12 @@ static int tp_test_offer(tp_client_t *client, aeron_publication_t *publication, 
     return -1;
 }
 
-static size_t tp_test_encode_attach_response(uint8_t *buffer, size_t length, int64_t correlation_id)
+static size_t tp_test_encode_attach_response(
+    uint8_t *buffer,
+    size_t length,
+    int64_t correlation_id,
+    enum tensor_pool_responseCode code,
+    const char *error_message)
 {
     struct tensor_pool_messageHeader msg_header;
     struct tensor_pool_shmAttachResponse response;
@@ -160,7 +165,7 @@ static size_t tp_test_encode_attach_response(uint8_t *buffer, size_t length, int
         header_len,
         length);
     tensor_pool_shmAttachResponse_set_correlationId(&response, correlation_id);
-    tensor_pool_shmAttachResponse_set_code(&response, tensor_pool_responseCode_OK);
+    tensor_pool_shmAttachResponse_set_code(&response, code);
     tensor_pool_shmAttachResponse_set_leaseId(&response, 7);
     tensor_pool_shmAttachResponse_set_leaseExpiryTimestampNs(&response, 100);
     tensor_pool_shmAttachResponse_set_streamId(&response, 10000);
@@ -169,26 +174,50 @@ static size_t tp_test_encode_attach_response(uint8_t *buffer, size_t length, int
     tensor_pool_shmAttachResponse_set_headerNslots(&response, 4);
     tensor_pool_shmAttachResponse_set_headerSlotBytes(&response, TP_HEADER_SLOT_BYTES);
 
-    if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
-        &pools,
-        (char *)buffer,
-        1,
-        tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
-        tensor_pool_shmAttachResponse_sbe_schema_version(),
-        length))
+    if (code == tensor_pool_responseCode_OK)
     {
-        return 0;
-    }
-    if (NULL == tensor_pool_shmAttachResponse_payloadPools_next(&pools))
-    {
-        return 0;
-    }
+        if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
+            &pools,
+            (char *)buffer,
+            1,
+            tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
+            tensor_pool_shmAttachResponse_sbe_schema_version(),
+            length))
+        {
+            return 0;
+        }
+        if (NULL == tensor_pool_shmAttachResponse_payloadPools_next(&pools))
+        {
+            return 0;
+        }
 
-    tensor_pool_shmAttachResponse_payloadPools_set_poolId(&pools, 1);
-    tensor_pool_shmAttachResponse_payloadPools_set_poolNslots(&pools, 4);
-    tensor_pool_shmAttachResponse_payloadPools_set_strideBytes(&pools, 64);
-    tensor_pool_shmAttachResponse_payloadPools_put_regionUri(&pools, pool_uri, (uint32_t)strlen(pool_uri));
-    tensor_pool_shmAttachResponse_put_headerRegionUri(&response, header_uri, (uint32_t)strlen(header_uri));
+        tensor_pool_shmAttachResponse_payloadPools_set_poolId(&pools, 1);
+        tensor_pool_shmAttachResponse_payloadPools_set_poolNslots(&pools, 4);
+        tensor_pool_shmAttachResponse_payloadPools_set_strideBytes(&pools, 64);
+        tensor_pool_shmAttachResponse_payloadPools_put_regionUri(&pools, pool_uri, (uint32_t)strlen(pool_uri));
+        tensor_pool_shmAttachResponse_put_headerRegionUri(&response, header_uri, (uint32_t)strlen(header_uri));
+    }
+    else
+    {
+        if (NULL == tensor_pool_shmAttachResponse_payloadPools_wrap_for_encode(
+            &pools,
+            (char *)buffer,
+            0,
+            tensor_pool_shmAttachResponse_sbe_position_ptr(&response),
+            tensor_pool_shmAttachResponse_sbe_schema_version(),
+            length))
+        {
+            return 0;
+        }
+        tensor_pool_shmAttachResponse_put_headerRegionUri(&response, "", 0);
+    }
+    if (NULL != error_message)
+    {
+        tensor_pool_shmAttachResponse_put_errorMessage(
+            &response,
+            error_message,
+            (uint32_t)strlen(error_message));
+    }
 
     return (size_t)tensor_pool_shmAttachResponse_sbe_position(&response);
 }
@@ -301,9 +330,9 @@ void tp_test_driver_client_attach_detach_live(void)
         goto cleanup;
     }
 
-    request.correlation_id = 101;
+    request.correlation_id = 0;
     request.stream_id = 10000;
-    request.client_id = 7;
+    request.client_id = 0;
     request.role = tensor_pool_role_PRODUCER;
     request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
     request.require_hugepages = tensor_pool_hugepagesPolicy_UNSPECIFIED;
@@ -316,6 +345,11 @@ void tp_test_driver_client_attach_detach_live(void)
         goto cleanup;
     }
 
+    if (attach_async->request.correlation_id == 0 || attach_async->request.client_id == 0)
+    {
+        goto cleanup;
+    }
+
     step = 9;
     if (tp_driver_attach_poll(attach_async, &info) < 0)
     {
@@ -324,7 +358,51 @@ void tp_test_driver_client_attach_detach_live(void)
 
     step = 10;
     {
-        size_t len = tp_test_encode_attach_response(buffer, sizeof(buffer), request.correlation_id);
+        int64_t initial_correlation = attach_async->request.correlation_id;
+        uint32_t initial_client_id = attach_async->request.client_id;
+        size_t len = tp_test_encode_attach_response(
+            buffer,
+            sizeof(buffer),
+            initial_correlation,
+            tensor_pool_responseCode_REJECTED,
+            "client_id already attached");
+        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        {
+            goto cleanup;
+        }
+
+        int saw_retry = 0;
+
+        deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
+        while (tp_clock_now_ns() < deadline)
+        {
+            if (tp_driver_attach_poll(attach_async, &info) < 0)
+            {
+                goto cleanup;
+            }
+            if (attach_async->request.correlation_id != initial_correlation ||
+                attach_async->request.client_id != initial_client_id)
+            {
+                saw_retry = 1;
+                break;
+            }
+            tp_client_do_work(&client);
+        }
+
+        if (!saw_retry)
+        {
+            goto cleanup;
+        }
+    }
+
+    step = 11;
+    {
+        size_t len = tp_test_encode_attach_response(
+            buffer,
+            sizeof(buffer),
+            attach_async->request.correlation_id,
+            tensor_pool_responseCode_OK,
+            NULL);
         if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
@@ -332,7 +410,7 @@ void tp_test_driver_client_attach_detach_live(void)
     }
 
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
-    step = 11;
+    step = 12;
     while (tp_clock_now_ns() < deadline)
     {
         int poll = tp_driver_attach_poll(attach_async, &info);
@@ -352,11 +430,35 @@ void tp_test_driver_client_attach_detach_live(void)
         goto cleanup;
     }
 
-    step = 12;
+    step = 13;
     if (driver.active_lease_id != info.lease_id ||
         driver.active_stream_id != request.stream_id ||
-        driver.client_id != request.client_id ||
+        driver.client_id != attach_async->request.client_id ||
         driver.role != request.role)
+    {
+        goto cleanup;
+    }
+
+    step = 14;
+    {
+        size_t len = tp_test_encode_attach_response(
+            buffer,
+            sizeof(buffer),
+            attach_async->request.correlation_id,
+            tensor_pool_responseCode_REJECTED,
+            "client_id already attached");
+        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        {
+            goto cleanup;
+        }
+    }
+
+    step = 15;
+    if (tp_driver_attach_poll(attach_async, &info) < 0)
+    {
+        goto cleanup;
+    }
+    if (info.code != tensor_pool_responseCode_OK)
     {
         goto cleanup;
     }
@@ -366,13 +468,13 @@ void tp_test_driver_client_attach_detach_live(void)
         goto cleanup;
     }
 
-    step = 13;
+    step = 16;
     if (tp_driver_detach_poll(detach_async, &detach_info) < 0)
     {
         goto cleanup;
     }
 
-    step = 14;
+    step = 17;
     {
         size_t len = tp_test_encode_detach_response(buffer, sizeof(buffer), detach_async->response.correlation_id);
         if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
@@ -382,7 +484,7 @@ void tp_test_driver_client_attach_detach_live(void)
     }
 
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
-    step = 15;
+    step = 18;
     while (tp_clock_now_ns() < deadline)
     {
         int poll = tp_driver_detach_poll(detach_async, &detach_info);

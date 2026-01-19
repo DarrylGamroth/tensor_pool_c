@@ -87,6 +87,10 @@ Columns:
 | D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/tp_consumer.c`, `src/tp_producer.c`, `src/tp_driver_client.c` | `tests/test_tp_lease_revoked.c` | Compliant | Revoke clears mappings and schedules reattach |
 | D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | n/a | n/a | External | Driver responsibility |
 | D-4.9-1 | 4.9 | Detach request/response encode/decode | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
+| D-B.1-1 | Appendix B.1 | Correlation IDs unique/non-reused; seeded per process | `src/tp_driver_client.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_driver_client.c` | Compliant | Generator seeds from urandom/time and increments |
+| D-B.1-2 | Appendix B.1 | Ignore duplicate ShmAttachResponse after OK | `src/tp_driver_client.c` | `tests/test_tp_driver_client_live.c` | Compliant | Post-OK duplicates ignored |
+| D-B.2-1 | Appendix B.2 | Auto-assign non-zero clientId before attach | `src/tp_driver_client.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_driver_client.c` | Compliant | Attach request normalization assigns non-zero IDs |
+| D-B.2-2 | Appendix B.2 | Retry on `client_id already attached` when auto-assigned | `src/tp_driver_client.c` | `tests/test_tp_driver_client_live.c` | Compliant | Auto-assign retries update clientId and correlationId |
 
 ## SHM_Discovery_Service_Spec_v_1.0
 

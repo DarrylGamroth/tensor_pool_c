@@ -421,13 +421,9 @@ Required keys (unless stated otherwise):
 - `driver.control_channel` (string): Aeron channel for control-plane messages. Default: `"aeron:ipc?term-length=4m"`.
 - `driver.control_stream_id` (uint32): control-plane stream ID. Default: `1000`.
 - `shm.base_dir` (string): root directory for SHM backing files. Default: `"/dev/shm/tensorpool"`.
-- `shm.namespace` (string): namespace segment for canonical layout. Default: `"default"`.
 - `profiles.*` (table): at least one profile must be defined.
 - `profiles.<name>.payload_pools` (array): must contain at least one pool entry.
 - `streams.*` (table): if `policies.allow_dynamic_streams=false`, each stream MUST be explicitly defined.
-
-Note: the wire spec refers to `shm_base_dir` (snake_case). Drivers SHOULD accept both
-`shm.base_dir` and `shm_base_dir` (with identical semantics) for interoperability.
 
 Optional keys and defaults:
 
@@ -468,7 +464,7 @@ Stream fields:
 - `streams.<name>.stream_id` (uint32): stream identifier.
 - `streams.<name>.profile` (string): profile name.
 
-See `docs/examples/driver_camera_example.toml` for a concrete example.
+See `config/driver_camera_example.toml` for a concrete example.
 
 ---
 
@@ -624,3 +620,27 @@ See `docs/examples/driver_camera_example.toml` for a concrete example.
   </sbe:message>
 
 </sbe:messageSchema>
+
+---
+
+## Appendix B. Client Correlation and Identity Rules (Normative)
+
+### B.1 Correlation IDs
+
+Clients MUST choose `correlationId` values that do not collide with stale
+responses from prior runs. Clients SHOULD seed correlationId sequences with a
+per-process random value (or another uniqueness source) and MUST NOT reuse a
+correlationId while it is still outstanding.
+
+Clients MUST ignore duplicate `ShmAttachResponse` messages for a given
+correlationId once an `OK` response has been accepted. Non-`OK` duplicates
+MUST NOT override an accepted `OK`.
+
+### B.2 Client ID Auto-Assignment
+
+If a client uses `clientId=0` as an auto-assign sentinel, it MUST choose a
+non-zero clientId before sending any attach request.
+
+If an attach is rejected with `errorMessage="client_id already attached"` and
+the clientId was auto-assigned, the client SHOULD choose a new clientId and
+retry (respecting backoff).

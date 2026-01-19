@@ -11,6 +11,8 @@
 #include "driver/tensor_pool/shutdownReason.h"
 #include "driver/tensor_pool/role.h"
 
+#include "aeron_alloc.h"
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -1042,6 +1044,52 @@ static void test_driver_client_async_errors(void)
     assert(result == 0);
 }
 
+static void test_driver_attach_async_normalizes_ids(void)
+{
+    tp_driver_client_t client;
+    tp_driver_attach_request_t request;
+    tp_async_attach_t *async = NULL;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    request.stream_id = 1;
+    request.role = tensor_pool_role_PRODUCER;
+
+    if (tp_driver_attach_async(&client, &request, &async) < 0 || NULL == async)
+    {
+        goto cleanup;
+    }
+
+    assert(async->request.correlation_id != 0);
+    assert(async->request.client_id != 0);
+
+    result = 0;
+
+cleanup:
+    if (async)
+    {
+        aeron_free(async);
+    }
+    assert(result == 0);
+}
+
+static void test_driver_id_generators(void)
+{
+    int64_t corr_a = tp_driver_next_correlation_id();
+    int64_t corr_b = tp_driver_next_correlation_id();
+    uint32_t client_a = tp_driver_next_client_id();
+    uint32_t client_b = tp_driver_next_client_id();
+
+    assert(corr_a != 0);
+    assert(corr_b != 0);
+    assert(corr_a != corr_b);
+    assert(client_a != 0);
+    assert(client_b != 0);
+    assert(client_a != client_b);
+}
+
 void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
@@ -1066,4 +1114,6 @@ void tp_test_driver_client_decoders(void)
     test_driver_keepalive_errors();
     test_driver_client_init_errors();
     test_driver_client_async_errors();
+    test_driver_attach_async_normalizes_ids();
+    test_driver_id_generators();
 }
