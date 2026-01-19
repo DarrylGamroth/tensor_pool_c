@@ -237,6 +237,7 @@ int main(int argc, char **argv)
     uint8_t payload_bytes[16];
     void *payload_ptr = payload_floats;
     uint32_t payload_len = (uint32_t)sizeof(payload_floats);
+    uint32_t resolved_client_id = 0;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     uint32_t stream_id;
     uint32_t client_id;
@@ -351,7 +352,7 @@ int main(int argc, char **argv)
     }
 
     memset(&request, 0, sizeof(request));
-    request.correlation_id = 1;
+    request.correlation_id = 0;
     request.stream_id = stream_id;
     request.client_id = client_id;
     request.role = TP_ROLE_PRODUCER;
@@ -382,6 +383,11 @@ int main(int argc, char **argv)
         tp_driver_client_close(&driver);
         tp_client_close(&client);
         return 1;
+    }
+    resolved_client_id = driver.client_id;
+    if (resolved_client_id == 0)
+    {
+        resolved_client_id = request.client_id;
     }
     if (print_attach)
     {
@@ -422,7 +428,7 @@ int main(int argc, char **argv)
     }
 
     producer_context.stream_id = info.stream_id;
-    producer_context.producer_id = client_id;
+    producer_context.producer_id = resolved_client_id;
     {
         const char *env = getenv("TP_EXAMPLE_DROP_UNCONNECTED");
         if (env && env[0] != '\0')
@@ -471,7 +477,7 @@ int main(int argc, char **argv)
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer_cfg.stream_id = info.stream_id;
-    producer_cfg.producer_id = client_id;
+    producer_cfg.producer_id = resolved_client_id;
     producer_cfg.epoch = info.epoch;
     producer_cfg.layout_version = info.layout_version;
     producer_cfg.header_nslots = info.header_nslots;
@@ -576,6 +582,19 @@ int main(int argc, char **argv)
     tp_producer_close(&producer);
     free(pool_cfg);
     tp_driver_attach_info_close(&info);
+    if (driver.active_lease_id != 0 && driver.publication != NULL)
+    {
+        if (tp_driver_detach(
+            &driver,
+            0,
+            driver.active_lease_id,
+            driver.active_stream_id,
+            driver.client_id,
+            driver.role) < 0)
+        {
+            fprintf(stderr, "Driver detach failed: %s\n", tp_errmsg());
+        }
+    }
     tp_driver_client_close(&driver);
     tp_client_close(&client);
 
