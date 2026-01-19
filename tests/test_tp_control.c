@@ -527,6 +527,108 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_decode_data_source_meta_truncated_attrs(void)
+{
+    uint8_t buffer[256];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_dataSourceMeta meta;
+    tp_data_source_meta_view_t view;
+    size_t truncated_len;
+    int result = -1;
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_dataSourceMeta_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_dataSourceMeta_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_dataSourceMeta_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_dataSourceMeta_sbe_schema_version());
+
+    tensor_pool_dataSourceMeta_wrap_for_encode(&meta, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_dataSourceMeta_set_streamId(&meta, 2);
+    tensor_pool_dataSourceMeta_set_metaVersion(&meta, 3);
+    tensor_pool_dataSourceMeta_set_timestampNs(&meta, 4);
+
+    truncated_len = (size_t)tensor_pool_dataSourceMeta_sbe_position(&meta);
+    if (tp_control_decode_data_source_meta(buffer, truncated_len, &view, NULL, NULL) < 0)
+    {
+        result = 0;
+    }
+
+    assert(result == 0);
+}
+
+static void test_decode_data_source_meta_invalid_attr(void)
+{
+    uint8_t buffer[512];
+    struct tensor_pool_messageHeader header;
+    struct tensor_pool_dataSourceMeta meta;
+    struct tensor_pool_dataSourceMeta_attributes attrs;
+    tp_data_source_meta_view_t view;
+    test_meta_state_t state;
+    size_t encoded_len;
+    int result = -1;
+
+    memset(&state, 0, sizeof(state));
+
+    tensor_pool_messageHeader_wrap(
+        &header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        sizeof(buffer));
+    tensor_pool_messageHeader_set_blockLength(&header, tensor_pool_dataSourceMeta_sbe_block_length());
+    tensor_pool_messageHeader_set_templateId(&header, tensor_pool_dataSourceMeta_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&header, tensor_pool_dataSourceMeta_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&header, tensor_pool_dataSourceMeta_sbe_schema_version());
+
+    tensor_pool_dataSourceMeta_wrap_for_encode(&meta, (char *)buffer, tensor_pool_messageHeader_encoded_length(), sizeof(buffer));
+    tensor_pool_dataSourceMeta_set_streamId(&meta, 2);
+    tensor_pool_dataSourceMeta_set_metaVersion(&meta, 3);
+    tensor_pool_dataSourceMeta_set_timestampNs(&meta, 4);
+
+    if (NULL == tensor_pool_dataSourceMeta_attributes_wrap_for_encode(
+        &attrs,
+        (char *)buffer,
+        1,
+        tensor_pool_dataSourceMeta_sbe_position_ptr(&meta),
+        tensor_pool_dataSourceMeta_sbe_schema_version(),
+        sizeof(buffer)))
+    {
+        goto cleanup;
+    }
+
+    if (NULL == tensor_pool_dataSourceMeta_attributes_next(&attrs))
+    {
+        goto cleanup;
+    }
+    tensor_pool_dataSourceMeta_attributes_put_key(&attrs, "key", 3);
+    tensor_pool_dataSourceMeta_attributes_put_format(&attrs, "u8", 2);
+    tensor_pool_dataSourceMeta_attributes_put_value(&attrs, "v1", 2);
+
+    encoded_len = (size_t)tensor_pool_dataSourceMeta_attributes_sbe_position(&attrs);
+    if (encoded_len == 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_control_decode_data_source_meta(
+        buffer,
+        encoded_len - 1,
+        &view,
+        test_meta_attr_handler,
+        &state) < 0)
+    {
+        result = 0;
+    }
+
+cleanup:
+    assert(result == 0);
+}
+
 static void test_decode_control_response(void)
 {
     uint8_t buffer[256];
@@ -722,6 +824,8 @@ void tp_test_decode_consumer_config(void)
 void tp_test_decode_data_source_meta(void)
 {
     test_decode_data_source_meta();
+    test_decode_data_source_meta_truncated_attrs();
+    test_decode_data_source_meta_invalid_attr();
 }
 
 void tp_test_decode_control_response(void)

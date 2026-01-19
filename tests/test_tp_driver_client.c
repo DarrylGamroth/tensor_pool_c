@@ -12,6 +12,7 @@
 #include "driver/tensor_pool/role.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 static void test_decode_attach_response_valid(void)
@@ -979,6 +980,68 @@ static void test_driver_keepalive_errors(void)
     assert(client.lease_expiry_timestamp_ns >= 220);
 }
 
+static void test_driver_client_init_errors(void)
+{
+    tp_driver_client_t client;
+    tp_client_t base;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&base, 0, sizeof(base));
+
+    assert(tp_driver_client_init(NULL, NULL) < 0);
+    assert(tp_driver_client_init(&client, NULL) < 0);
+    assert(tp_driver_client_init(NULL, &base) < 0);
+
+    base.context.base.control_stream_id = -1;
+    base.context.base.control_channel[0] = '\0';
+    assert(tp_driver_client_init(&client, &base) < 0);
+
+    base.context.base.control_stream_id = 1000;
+    snprintf(base.context.base.control_channel, sizeof(base.context.base.control_channel), "aeron:ipc");
+    base.control_subscription = NULL;
+    assert(tp_driver_client_init(&client, &base) < 0);
+
+    result = 0;
+
+    assert(result == 0);
+}
+
+static void test_driver_client_async_errors(void)
+{
+    tp_driver_client_t client;
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t attach_info;
+    tp_driver_detach_info_t detach_info;
+    tp_async_attach_t *attach_async = NULL;
+    tp_async_detach_t *detach_async = NULL;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+    memset(&attach_info, 0, sizeof(attach_info));
+    memset(&detach_info, 0, sizeof(detach_info));
+
+    assert(tp_driver_attach_async(NULL, NULL, NULL) < 0);
+    assert(tp_driver_attach_async(&client, NULL, &attach_async) < 0);
+    assert(tp_driver_attach_async(&client, &request, NULL) < 0);
+
+    assert(tp_driver_attach_poll(NULL, NULL) < 0);
+    assert(tp_driver_attach_poll(NULL, &attach_info) < 0);
+    assert(tp_driver_attach_poll(attach_async, NULL) < 0);
+
+    assert(tp_driver_detach_async(NULL, NULL) < 0);
+    assert(tp_driver_detach_async(&client, NULL) < 0);
+
+    assert(tp_driver_detach_poll(NULL, NULL) < 0);
+    assert(tp_driver_detach_poll(NULL, &detach_info) < 0);
+    assert(tp_driver_detach_poll(detach_async, NULL) < 0);
+
+    result = 0;
+
+    assert(result == 0);
+}
+
 void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
@@ -1001,4 +1064,6 @@ void tp_test_driver_client_decoders(void)
     test_decode_shutdown_invalid_reason();
     test_driver_keepalive_helpers();
     test_driver_keepalive_errors();
+    test_driver_client_init_errors();
+    test_driver_client_async_errors();
 }

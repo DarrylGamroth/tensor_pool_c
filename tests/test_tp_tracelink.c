@@ -629,6 +629,40 @@ static int tp_test_add_publication(tp_client_t *client, const char *channel, int
     return 0;
 }
 
+static void test_tracelink_send_errors(void)
+{
+    tp_producer_t producer;
+    tp_tracelink_set_t set;
+    uint64_t parent = 101;
+    int result = -1;
+
+    memset(&producer, 0, sizeof(producer));
+    memset(&set, 0, sizeof(set));
+
+    set.stream_id = 1;
+    set.epoch = 2;
+    set.seq = 3;
+    set.trace_id = 5;
+    set.parents = &parent;
+    set.parent_count = 1;
+
+    assert(tp_producer_send_tracelink_set(NULL, NULL) < 0);
+    assert(tp_producer_send_tracelink_set(&producer, &set) < 0);
+
+    producer.control_publication = (aeron_publication_t *)0x1;
+    producer.stream_id = 10;
+    producer.epoch = 20;
+    assert(tp_producer_send_tracelink_set(&producer, NULL) < 0);
+
+    set.stream_id = producer.stream_id + 1;
+    set.epoch = producer.epoch;
+    assert(tp_producer_send_tracelink_set(&producer, &set) < 0);
+
+    result = 0;
+
+    assert(result == 0);
+}
+
 static void test_tracelink_set_from_claim(void)
 {
     tp_producer_t producer;
@@ -792,6 +826,7 @@ void tp_test_tracelink(void)
     test_tracelink_decode_rejects_empty();
     test_tracelink_decode_rejects_too_many();
     test_tracelink_decode_schema_mismatch();
+    test_tracelink_send_errors();
     test_tracelink_set_from_claim();
     test_tracelink_send();
 }
