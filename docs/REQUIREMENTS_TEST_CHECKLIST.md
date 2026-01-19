@@ -8,6 +8,10 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 - Each entry MUST link to at least one automated test or an explicit manual verification step.
 - Any requirement lacking coverage MUST be flagged for follow-up before changes are considered complete.
 
+## Review Notes
+
+- Coverage uplift tests added for driver attach/detach, discovery live polling, tracelink send, progress poller misc paths, and tensor header validation.
+
 ## Config-Matrix Integration Tests
 
 These tests ensure distinct spec-driven configuration permutations are exercised. They are expected to run when a TensorPool driver is available (Julia driver is acceptable).

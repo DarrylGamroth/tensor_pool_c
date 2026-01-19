@@ -10,7 +10,7 @@ Goal: raise overall coverage above 80% and increase coverage of spec-critical lo
 ## Phase 0: Baseline and Targeting
 - [x] Generate a per-file coverage report (gcovr) and save a snapshot under `docs/coverage/` for baseline.
 - [x] Identify bottom 10 files by line coverage and tag each with a test strategy (unit, integration, fuzz seed).
-- [ ] Update the requirements-to-tests checklist with current gaps.
+- [x] Update the requirements-to-tests checklist with current gaps.
 
 Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 - lines: 56.7% (3829 / 6759)
@@ -18,9 +18,9 @@ Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 - branches: 44.8% (1983 / 4427)
 
 Current (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
-- lines: 63.3% (4284 / 6772)
-- functions: 79.6% (304 / 382)
-- branches: 51.6% (2286 / 4427)
+- lines: 70.3% (4758 / 6772)
+- functions: 90.6% (346 / 382)
+- branches: 57.2% (2532 / 4427)
 
 Bottom 10 files by line coverage (baseline):
 - `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
@@ -74,3 +74,16 @@ Bottom 10 files by line coverage (baseline):
 - [x] Add QoS/metadata poller tests for invalid messages, empty fragments, and channel mismatch handling.
 - [x] Expand SHM/URI permission-path tests to hit negative cases (uid/gid/mode mismatches, canonical path rejection).
 - [x] Add trace + join-barrier edge tests for stale inputs, missing clocks, and latest ordering paths.
+
+## Phase 8: Coverage Uplift (Producer/Consumer + Driver Client)
+- [x] Add a no-driver SHM roundtrip test that publishes a frame into the ring and validates `tp_consumer_read_frame` + progress validation.
+- [x] Add an embedded-driver test that exercises driver attach/detach async polling with real Aeron publications.
+
+## Phase 9: Coverage Uplift (Discovery Client)
+- [x] Add an embedded-driver test that exercises discovery request encoding, response polling, and poller callbacks end-to-end.
+
+## Phase 10: Coverage Finishers
+- [x] Add client context setter coverage and additional conductor error-path tests.
+- [x] Add tracelink send + claim helper tests with embedded Aeron control publication.
+- [x] Add progress poller misc coverage and control poller error-path tests.
+- [x] Add extra tensor header validation cases (including log path).
