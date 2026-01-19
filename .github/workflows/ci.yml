@@ -33,7 +33,7 @@ jobs:
           restore-keys: |
             maven-jars-${{ runner.os }}-
 
-      - name: Download Aeron driver and SBE tool
+      - name: Download SBE tool
         run: |
           set -euo pipefail
           cache_dir="${RUNNER_TEMP:-/tmp}/maven"
@@ -45,27 +45,6 @@ jobs:
             { curl -fsSL "${url}" 2>/dev/null || true; } \
               | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
           }
-
-          aeron_version=""
-          if [ -f "aeron/version.txt" ]; then
-            aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
-          fi
-          if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
-            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "release")"
-            if [ -z "${aeron_version}" ]; then
-              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "latest")"
-            fi
-          fi
-          if [ -z "${aeron_version}" ]; then
-            echo "Unable to resolve aeron-all version" >&2
-            exit 1
-          fi
-
-          aeron_jar="${cache_dir}/aeron-all-${aeron_version}.jar"
-          if [ ! -f "${aeron_jar}" ]; then
-            curl -fsSL -o "${aeron_jar}" \
-              "https://repo1.maven.org/maven2/io/aeron/aeron-all/${aeron_version}/aeron-all-${aeron_version}.jar"
-          fi
 
           sbe_group=""
           sbe_version=""
@@ -92,7 +71,6 @@ jobs:
           fi
 
           {
-            echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
             echo "SBE_TOOL_CLASSPATH=${sbe_jar}"
           } >> "${GITHUB_ENV}"
@@ -108,47 +86,8 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Start Aeron Media Driver
-        run: |
-          set -euo pipefail
-          rm -rf "${AERON_DIR}"
-          mkdir -p "${AERON_DIR}"
-          if [ -z "${AERON_DRIVER_JAR:-}" ]; then
-            echo "Aeron driver jar not found" >&2
-            exit 1
-          fi
-          java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
-            -Daeron.dir="${AERON_DIR}" -Daeron.dirDeleteOnStart=true \
-            -cp "${AERON_DRIVER_JAR}" io.aeron.driver.MediaDriver \
-            > /tmp/aeron-driver.log 2>&1 &
-          echo $! > /tmp/aeron-driver.pid
-          for _ in $(seq 1 100); do
-            if [ -f "${AERON_DIR}/CnC.dat" ] || [ -f "${AERON_DIR}/cnc.dat" ]; then
-              exit 0
-            fi
-            if ! kill -0 "$(cat /tmp/aeron-driver.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 0.1
-          done
-          echo "Aeron driver did not start" >&2
-          if [ -f /tmp/aeron-driver.log ]; then
-            echo "---- Aeron driver log ----" >&2
-            tail -n 200 /tmp/aeron-driver.log >&2 || true
-            echo "--------------------------" >&2
-          fi
-          exit 1
-
       - name: Test
         run: ./build/tensor_pool_tests
-
-      - name: Stop Aeron Media Driver
-        if: always()
-        run: |
-          if [ -f /tmp/aeron-driver.pid ]; then
-            kill "$(cat /tmp/aeron-driver.pid)" || true
-          fi
-          pkill -f io.aeron.driver.MediaDriver || true
 
   fuzz-smoke:
     runs-on: ubuntu-latest
@@ -177,7 +116,7 @@ jobs:
           restore-keys: |
             maven-jars-${{ runner.os }}-
 
-      - name: Download Aeron driver and SBE tool
+      - name: Download SBE tool
         run: |
           set -euo pipefail
           cache_dir="${RUNNER_TEMP:-/tmp}/maven"
@@ -189,27 +128,6 @@ jobs:
             { curl -fsSL "${url}" 2>/dev/null || true; } \
               | sed -n "s:.*<${key}>\\([^<]*\\)</${key}>.*:\\1:p" | head -n 1
           }
-
-          aeron_version=""
-          if [ -f "aeron/version.txt" ]; then
-            aeron_version="$(head -n 1 aeron/version.txt | tr -d '\r')"
-          fi
-          if [ -z "${aeron_version}" ] || echo "${aeron_version}" | grep -q -- "-SNAPSHOT"; then
-            aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "release")"
-            if [ -z "${aeron_version}" ]; then
-              aeron_version="$(get_metadata_value "https://repo1.maven.org/maven2/io/aeron/aeron-all/maven-metadata.xml" "latest")"
-            fi
-          fi
-          if [ -z "${aeron_version}" ]; then
-            echo "Unable to resolve aeron-all version" >&2
-            exit 1
-          fi
-
-          aeron_jar="${cache_dir}/aeron-all-${aeron_version}.jar"
-          if [ ! -f "${aeron_jar}" ]; then
-            curl -fsSL -o "${aeron_jar}" \
-              "https://repo1.maven.org/maven2/io/aeron/aeron-all/${aeron_version}/aeron-all-${aeron_version}.jar"
-          fi
 
           sbe_group=""
           sbe_version=""
@@ -236,7 +154,6 @@ jobs:
           fi
 
           {
-            echo "AERON_DRIVER_JAR=${aeron_jar}"
             echo "SBE_TOOL_JAR=${sbe_jar}"
             echo "SBE_TOOL_CLASSPATH=${sbe_jar}"
           } >> "${GITHUB_ENV}"
@@ -362,47 +279,8 @@ jobs:
           -DTP_COVERAGE_MIN=50
           -DTP_USE_SYSTEM_AERON=OFF
 
-      - name: Start Aeron Media Driver
-        run: |
-          set -euo pipefail
-          rm -rf "${AERON_DIR}"
-          mkdir -p "${AERON_DIR}"
-          if [ -z "${AERON_DRIVER_JAR:-}" ]; then
-            echo "Aeron driver jar not found" >&2
-            exit 1
-          fi
-          java --add-opens java.base/jdk.internal.misc=ALL-UNNAMED \
-            -Daeron.dir="${AERON_DIR}" -Daeron.dirDeleteOnStart=true \
-            -cp "${AERON_DRIVER_JAR}" io.aeron.driver.MediaDriver \
-            > /tmp/aeron-driver.log 2>&1 &
-          echo $! > /tmp/aeron-driver.pid
-          for _ in $(seq 1 100); do
-            if [ -f "${AERON_DIR}/CnC.dat" ] || [ -f "${AERON_DIR}/cnc.dat" ]; then
-              exit 0
-            fi
-            if ! kill -0 "$(cat /tmp/aeron-driver.pid)" 2>/dev/null; then
-              break
-            fi
-            sleep 0.1
-          done
-          echo "Aeron driver did not start" >&2
-          if [ -f /tmp/aeron-driver.log ]; then
-            echo "---- Aeron driver log ----" >&2
-            tail -n 200 /tmp/aeron-driver.log >&2 || true
-            echo "--------------------------" >&2
-          fi
-          exit 1
-
       - name: Build coverage
         run: cmake --build build-coverage --target coverage
-
-      - name: Stop Aeron Media Driver
-        if: always()
-        run: |
-          if [ -f /tmp/aeron-driver.pid ]; then
-            kill "$(cat /tmp/aeron-driver.pid)" || true
-          fi
-          pkill -f io.aeron.driver.MediaDriver || true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
