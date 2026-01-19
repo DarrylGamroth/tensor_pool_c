@@ -216,7 +216,7 @@ static void tp_metadata_poller_handler(void *clientd, const uint8_t *buffer, siz
     }
 }
 
-#ifdef TP_ENABLE_FUZZ
+#if defined(TP_ENABLE_FUZZ) || defined(TP_TESTING)
 void tp_metadata_poller_handle_fragment(tp_metadata_poller_t *poller, const uint8_t *buffer, size_t length)
 {
     tp_metadata_poller_handler(poller, buffer, length, NULL);

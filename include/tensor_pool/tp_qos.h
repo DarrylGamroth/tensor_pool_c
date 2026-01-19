@@ -65,7 +65,7 @@ tp_qos_poller_t;
 int tp_qos_poller_init(tp_qos_poller_t *poller, tp_client_t *client, const tp_qos_handlers_t *handlers);
 int tp_qos_poll(tp_qos_poller_t *poller, int fragment_limit);
 
-#ifdef TP_ENABLE_FUZZ
+#if defined(TP_ENABLE_FUZZ) || defined(TP_TESTING)
 void tp_qos_poller_handle_fragment(tp_qos_poller_t *poller, const uint8_t *buffer, size_t length);
 #endif
 

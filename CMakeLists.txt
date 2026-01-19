@@ -278,9 +278,13 @@ add_executable(tensor_pool_tests
     tests/test_tp_control_listen_json.c
     tests/test_tp_control_poller.c
     tests/test_tp_control_poller_driver.c
+    tests/test_tp_qos_poller.c
+    tests/test_tp_metadata_poller.c
     tests/test_tp_consumer_registry.c
     tests/test_tp_aeron.c
     tests/test_tp_client_errors.c
+    tests/test_tp_consumer_errors.c
+    tests/test_tp_producer_errors.c
     tests/test_tp_driver_client.c
     tests/test_tp_discovery_client.c
     tests/test_tp_merge_map.c

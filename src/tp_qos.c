@@ -187,7 +187,7 @@ static void tp_qos_poller_handler(void *clientd, const uint8_t *buffer, size_t l
     }
 }
 
-#ifdef TP_ENABLE_FUZZ
+#if defined(TP_ENABLE_FUZZ) || defined(TP_TESTING)
 void tp_qos_poller_handle_fragment(tp_qos_poller_t *poller, const uint8_t *buffer, size_t length)
 {
     tp_qos_poller_handler(poller, buffer, length, NULL);
