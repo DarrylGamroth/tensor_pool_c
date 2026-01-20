@@ -243,6 +243,7 @@ static void test_uri_parse(void)
 static void test_shm_stride_alignment(void)
 {
     assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 128, NULL) == 0);
+    assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 192, NULL) == 0);
     assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 96, NULL) < 0);
     assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp", 32, NULL) < 0);
     assert(tp_shm_validate_stride_alignment("shm:file?path=/tmp|require_hugepages=true", 128, NULL) < 0);

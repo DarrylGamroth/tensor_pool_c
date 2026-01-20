@@ -27,7 +27,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
 | Supervisor/unified management | External | Not implemented in this repo. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
-| SHM backend validation | Compliant | URI validation, hugepages/pow2/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
+| SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |
 
 ## SHM_Driver_Model_Spec_v1.0

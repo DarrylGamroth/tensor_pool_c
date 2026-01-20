@@ -38,7 +38,7 @@ Columns:
 | W-8.2-7 | 8.2 | `seq_commit` matches FrameDescriptor/Progress `seq` | `src/tp_consumer.c`, `src/tp_progress_poller.c` | `tests/test_tp_rollover.c` | Compliant | |
 | W-8.3-1a | 8.3 | Seqlock commit bit semantics + stable read | `src/tp_consumer.c`, `src/tp_producer.c`, `src/tp_slot.c` | `tests/test_tp_rollover.c` | Compliant | Release/acquire + stable re-read |
 | W-8.3-1b | 8.3 | Payload visibility/DMA flush before commit | `src/tp_producer.c` | `tests/test_tp_producer_claim.c` | Compliant | Optional flush hook before commit |
-| W-9-1 | 9 | Payload pool `stride_bytes` pow2, >=64, multiple of 64; `pool_nslots == header_nslots` | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_shm_security.c` | Compliant | |
+| W-9-1 | 9 | Payload pool `stride_bytes` >=64, multiple of 64; `pool_nslots == header_nslots` | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_shm_security.c` | Compliant | |
 | W-9-2 | 9 | `headerSlotBytes` fixed at 256 and geometry cross-check | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c` | Compliant | |
 | W-10.1-1 | 10.1 | ShmPoolAnnounce decode, layout/epoch validation, remap on epoch change | `src/tp_control_adapter.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-10.1.2-1 | 10.1.2 | ConsumerHello encode + max_rate_hz throttle | `src/tp_consumer_manager.c`, `src/tp_producer.c` | `tests/test_tp_pollers.c` | Compliant | |
@@ -68,7 +68,7 @@ Columns:
 | W-15.20-1 | 15.20 | Compatibility matrix (layout/wire) | n/a | n/a | N/A | Spec evolution guidance |
 | W-15.21-1 | 15.21 | Protocol state machines | `src/tp_consumer.c` | `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | Compliant | Mapping transitions validated |
 | W-15.21a-1 | 15.21a | Canonical layout + path containment validation | `src/tp_shm.c`, `tools/tp_shm_create.c` | `tests/test_tp_shm_security.c` | Compliant | |
-| W-15.22-1 | 15.22 | SHM backend validation (hugepages/pow2/stride) | `src/tp_shm.c` | `tests/test_tp_smoke.c` | Compliant | |
+| W-15.22-1 | 15.22 | SHM backend validation (hugepages/stride alignment) | `src/tp_shm.c` | `tests/test_tp_smoke.c` | Compliant | |
 | W-16-1 | 16 | Control-plane SBE schema usage | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
 
 ## SHM_Driver_Model_Spec_v1.0

@@ -716,12 +716,6 @@ int tp_shm_validate_stride_alignment(const char *uri, uint32_t stride_bytes, tp_
         return -1;
     }
 
-    if (stride_bytes == 0 || (stride_bytes & (stride_bytes - 1)) != 0)
-    {
-        TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not power of two");
-        return -1;
-    }
-
     if (stride_bytes < 64 || (stride_bytes % 64) != 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_shm_validate_stride_alignment: stride not aligned to 64 bytes");

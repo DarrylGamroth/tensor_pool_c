@@ -32,7 +32,7 @@ Legend:
 | 8.1 Slot Layout | Compliant | Payload offset enforced to 0 and header length validated; producer writes `payload_slot` and `pool_id` explicitly. |
 | 8.2 SlotHeader and TensorHeader | Compliant | Producer validates tensor headers before publish; consumer decodes and validates on read. |
 | 8.3 Commit Encoding via seq_commit | Compliant | Seqlock pattern with optional payload flush hook before commit. |
-| 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation in `src/tp_shm.c`. |
+| 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation (64-byte multiple) in `src/tp_shm.c`. |
 | 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented (driver emits in driver mode; producer emits in no-driver mode). |
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
 | 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`; producer emits in no-driver mode via `src/tp_control.c` + `src/tp_producer.c`. |
@@ -86,7 +86,7 @@ Legend:
 | 15.20 Compatibility Matrix | N/A | Spec evolution guidance. |
 | 15.21 Protocol State Machines | Compliant | Mapping transitions and fallback recovery exercised in tests. |
 | 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/tp_shm.c`. |
-| 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and stride power-of-two/64-byte multiple checks in `src/tp_shm.c`. |
+| 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and 64-byte stride alignment checks in `src/tp_shm.c`. |
 
 ## Section 16 (Normative)
 
