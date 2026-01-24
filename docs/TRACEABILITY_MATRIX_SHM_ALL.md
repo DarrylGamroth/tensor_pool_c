@@ -42,10 +42,11 @@ Columns:
 | W-9-2 | 9 | `headerSlotBytes` fixed at 256 and geometry cross-check | `src/tp_shm.c`, `src/tp_consumer.c` | `tests/test_tp_smoke.c` | Compliant | |
 | W-10.1-1 | 10.1 | ShmPoolAnnounce decode, layout/epoch validation, remap on epoch change | `src/tp_control_adapter.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
 | W-10.1.2-1 | 10.1.2 | ConsumerHello encode + max_rate_hz throttle | `src/tp_consumer_manager.c`, `src/tp_producer.c` | `tests/test_tp_pollers.c` | Compliant | |
+| W-10.1.2-2 | 10.1.2 | ConsumerHello per-consumer request validity (channel/stream must be both set or both absent) | `src/tp_consumer.c`, `src/tp_consumer_registry.c` | n/a | Partial | Producer validates inbound requests; consumer does not validate outbound requests before send |
 | W-10.1.3-1 | 10.1.3 | ConsumerConfig decode; per-consumer declines via empty channel/stream; fallback URI when `use_shm=0` | `src/tp_consumer_registry.c`, `src/tp_consumer_manager.c` | `tests/test_tp_consumer_registry.c` | Compliant | |
 | W-10.2.1-1 | 10.2.1 | FrameDescriptor publish/consume; epoch/seq validation; pool/slot routing; trace_id | `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_rollover.c`, `tests/test_tp_smoke.c` | Compliant | |
 | W-10.2.1-2 | 10.2.1 | Timestamp semantics: SlotHeader capture time; FrameDescriptor publish time; do not assume equality | `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_producer_claim.c` | Compliant | SlotHeader uses capture timestamp; descriptor defaults to null unless publish-time flag enabled |
-| W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/tp_progress_poller.c` | `tests/test_tp_pollers.c` | Compliant | |
+| W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/tp_progress_poller.c` | `tests/test_tp_pollers.c` | Partial | Monotonic tracking uses fixed-capacity tracker (64), which can miss regressions when more frames are in flight |
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
 | W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | External | External supervisor not implemented |

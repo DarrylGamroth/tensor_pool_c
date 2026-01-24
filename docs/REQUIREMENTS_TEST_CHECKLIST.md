@@ -11,6 +11,7 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 ## Review Notes
 
 - Coverage uplift tests added for driver attach/detach, discovery live polling, tracelink send, progress poller misc paths, and tensor header validation.
+- Open gaps: ConsumerHello outbound per-consumer request validation and FrameProgress monotonic tracking capacity (see `docs/TRACEABILITY_MATRIX_SHM_ALL.md`).
 
 ## Config-Matrix Integration Tests
 
