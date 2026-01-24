@@ -63,6 +63,7 @@ Columns:
 | W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
 | W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/test_tp_smoke.c`, `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | n/a | Compliant | Added fail-closed superblock tests, QoS drop counts, and epoch remap coverage. |
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/tp_consumer.c`, `src/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
+| W-15.15-1 | 15.15 | Supervisor/consumer coordination layer ≈ client conductor | n/a | n/a | Missing | Informative guidance; implement Aeron-style client conductor |
 | W-15.16a-1 | 15.16a | File-backed SHM prefault/lock/fsync policy | n/a | n/a | N/A | Informative guidance |
 | W-15.17-1 | 15.17 | ControlResponse error codes | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
 | W-15.18-1 | 15.18 | Normative algorithms (per role) | `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_producer_claim.c` | Compliant | Commit protocol, header validation, and payload flush hook implemented |
