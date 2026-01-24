@@ -43,6 +43,7 @@ typedef struct tp_progress_poller_stct
     tp_progress_tracker_entry_t *tracker;
     size_t tracker_capacity;
     size_t tracker_cursor;
+    uint32_t header_nslots;
     uint64_t max_payload_bytes;
     tp_progress_validator_t validator;
     void *validator_clientd;
@@ -61,6 +62,10 @@ void tp_progress_poller_set_validator(
     void *clientd);
 void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t *consumer);
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit);
+
+#if defined(TP_ENABLE_FUZZ) || defined(TP_TESTING)
+void tp_progress_poller_handle_fragment(tp_progress_poller_t *poller, const uint8_t *buffer, size_t length);
+#endif
 
 #ifdef __cplusplus
 }

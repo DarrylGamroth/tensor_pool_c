@@ -1,4 +1,5 @@
 #include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
@@ -377,9 +378,42 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_consumer_hello_request_validation(void)
+{
+    tp_consumer_t consumer;
+    tp_consumer_hello_t hello;
+
+    memset(&consumer, 0, sizeof(consumer));
+    memset(&hello, 0, sizeof(hello));
+
+    consumer.control_publication = (aeron_publication_t *)0x1;
+
+    hello.stream_id = 1;
+    hello.consumer_id = 2;
+
+    hello.descriptor_channel = "aeron:ipc";
+    hello.descriptor_stream_id = 0;
+    assert(tp_consumer_send_hello(&consumer, &hello) < 0);
+
+    hello.descriptor_channel = "";
+    hello.descriptor_stream_id = 100;
+    assert(tp_consumer_send_hello(&consumer, &hello) < 0);
+
+    hello.descriptor_channel = "";
+    hello.descriptor_stream_id = 0;
+    hello.control_channel = "aeron:ipc";
+    hello.control_stream_id = 0;
+    assert(tp_consumer_send_hello(&consumer, &hello) < 0);
+
+    hello.control_channel = "";
+    hello.control_stream_id = 42;
+    assert(tp_consumer_send_hello(&consumer, &hello) < 0);
+}
+
 void tp_test_consumer_errors(void)
 {
     test_consumer_read_frame_errors();
     test_consumer_read_frame_validation_failures();
     test_consumer_validate_progress_errors();
+    test_consumer_hello_request_validation();
 }

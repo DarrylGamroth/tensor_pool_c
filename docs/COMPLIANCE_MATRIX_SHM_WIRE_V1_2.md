@@ -36,11 +36,11 @@ Legend:
 | 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented (driver emits in driver mode; producer emits in no-driver mode). |
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/tp_consumer.c`). |
 | 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/tp_control_adapter.c` + `src/tp_consumer.c`; producer emits in no-driver mode via `src/tp_control.c` + `src/tp_producer.c`. |
-| 10.1.2 ConsumerHello | Partial | Encode/decode implemented; producer rejects invalid per-consumer channel/stream requests, but consumer does not validate outbound requests. |
+| 10.1.2 ConsumerHello | Compliant | Encode/decode implemented; both producer and consumer validate per-consumer channel/stream requests. |
 | 10.1.3 ConsumerConfig | Compliant | Encode/decode implemented; per-consumer declines return empty channel/stream ID; consumers honor `use_shm` and expose `payload_fallback_uri`. |
 | 10.2 Data Availability | Compliant | FrameDescriptor/FrameProgress implemented with nullValue optional handling and stream_id/epoch validation. |
 | 10.2.1 FrameDescriptor | Compliant | Published and consumed with trace_id support; optional timestamp/meta use nullValue when omitted. |
-| 10.2.2 FrameProgress | Partial | Published with stream_id/epoch; monotonic tracking is fixed-capacity (64) and can miss regressions under high concurrency. |
+| 10.2.2 FrameProgress | Compliant | Published with stream_id/epoch; monotonic tracking sized to header ring when consumer is set. |
 | 10.3 Per-Data-Source Metadata | Compliant | DataSourceAnnounce/Meta and meta blobs implemented. |
 | 10.3.1 DataSourceAnnounce | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | 10.3.2 DataSourceMeta | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |

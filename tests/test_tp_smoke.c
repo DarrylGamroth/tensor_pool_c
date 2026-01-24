@@ -82,6 +82,7 @@ void tp_test_progress_per_consumer_control(void);
 void tp_test_progress_layout_validation(void);
 void tp_test_progress_regression_rejected(void);
 void tp_test_progress_poller_misc(void);
+void tp_test_progress_poller_monotonic_capacity(void);
 void tp_test_producer_claim_lifecycle(void);
 void tp_test_shm_roundtrip(void);
 void tp_test_rollover(void);
@@ -629,6 +630,7 @@ int main(void)
     tp_test_progress_layout_validation();
     tp_test_progress_regression_rejected();
     tp_test_progress_poller_misc();
+    tp_test_progress_poller_monotonic_capacity();
     tp_test_producer_claim_lifecycle();
     tp_test_shm_roundtrip();
     tp_test_rollover();

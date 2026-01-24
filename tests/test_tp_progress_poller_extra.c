@@ -1,6 +1,9 @@
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_progress_poller.h"
 
+#include "wire/tensor_pool/frameProgress.h"
+#include "wire/tensor_pool/messageHeader.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +44,114 @@ void tp_test_progress_poller_misc(void)
     result = 0;
 
 cleanup:
+    free(poller.tracker);
+    assert(result == 0);
+}
+
+static void tp_on_progress_count(void *clientd, const tp_frame_progress_t *progress)
+{
+    int *count = (int *)clientd;
+    (void)progress;
+    if (count)
+    {
+        (*count)++;
+    }
+}
+
+static size_t tp_test_encode_progress(
+    uint8_t *buffer,
+    size_t capacity,
+    uint32_t stream_id,
+    uint64_t epoch,
+    uint64_t seq,
+    uint64_t payload_bytes_filled)
+{
+    struct tensor_pool_messageHeader msg_header;
+    struct tensor_pool_frameProgress progress;
+    const size_t header_len = tensor_pool_messageHeader_encoded_length();
+    const size_t body_len = tensor_pool_frameProgress_sbe_block_length();
+
+    if (capacity < header_len + body_len)
+    {
+        return 0;
+    }
+
+    tensor_pool_messageHeader_wrap(
+        &msg_header,
+        (char *)buffer,
+        0,
+        tensor_pool_messageHeader_sbe_schema_version(),
+        capacity);
+    tensor_pool_messageHeader_set_blockLength(&msg_header, (uint16_t)body_len);
+    tensor_pool_messageHeader_set_templateId(&msg_header, tensor_pool_frameProgress_sbe_template_id());
+    tensor_pool_messageHeader_set_schemaId(&msg_header, tensor_pool_frameProgress_sbe_schema_id());
+    tensor_pool_messageHeader_set_version(&msg_header, tensor_pool_frameProgress_sbe_schema_version());
+
+    tensor_pool_frameProgress_wrap_for_encode(&progress, (char *)buffer, header_len, capacity);
+    tensor_pool_frameProgress_set_streamId(&progress, stream_id);
+    tensor_pool_frameProgress_set_epoch(&progress, epoch);
+    tensor_pool_frameProgress_set_seq(&progress, seq);
+    tensor_pool_frameProgress_set_payloadBytesFilled(&progress, payload_bytes_filled);
+    tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
+
+    return header_len + body_len;
+}
+
+void tp_test_progress_poller_monotonic_capacity(void)
+{
+    tp_progress_poller_t poller;
+    tp_progress_handlers_t handlers;
+    tp_consumer_t consumer;
+    uint8_t buffer[128];
+    uint32_t stream_id = 1;
+    uint64_t epoch = 1;
+    uint64_t seq;
+    size_t len;
+    int count = 0;
+    int result = -1;
+
+    memset(&poller, 0, sizeof(poller));
+    memset(&handlers, 0, sizeof(handlers));
+    memset(&consumer, 0, sizeof(consumer));
+
+    handlers.on_progress = tp_on_progress_count;
+    handlers.clientd = &count;
+
+    if (tp_progress_poller_init_with_subscription(&poller, (aeron_subscription_t *)0x1, &handlers) < 0)
+    {
+        goto cleanup;
+    }
+
+    consumer.header_nslots = 128;
+    tp_progress_poller_set_consumer(&poller, &consumer);
+    tp_progress_poller_set_validator(&poller, NULL, NULL);
+
+    for (seq = 0; seq < consumer.header_nslots; seq++)
+    {
+        len = tp_test_encode_progress(buffer, sizeof(buffer), stream_id, epoch, seq, 10);
+        assert(len > 0);
+        tp_progress_poller_handle_fragment(&poller, buffer, len);
+    }
+
+    assert(count == (int)consumer.header_nslots);
+
+    len = tp_test_encode_progress(buffer, sizeof(buffer), stream_id, epoch, 0, 5);
+    assert(len > 0);
+    tp_progress_poller_handle_fragment(&poller, buffer, len);
+
+    if (count != (int)consumer.header_nslots)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    if (poller.assembler)
+    {
+        aeron_fragment_assembler_delete(poller.assembler);
+        poller.assembler = NULL;
+    }
     free(poller.tracker);
     assert(result == 0);
 }

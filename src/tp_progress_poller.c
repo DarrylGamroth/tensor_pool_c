@@ -33,6 +33,50 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
         return -1;
     }
 
+    if (poller->header_nslots > 0 && poller->tracker_capacity >= poller->header_nslots)
+    {
+        size_t index = (size_t)(view->seq & (poller->header_nslots - 1));
+        tp_progress_tracker_entry_t *entry = &poller->tracker[index];
+
+        if (entry->in_use &&
+            entry->seq == view->seq &&
+            entry->stream_id == view->stream_id &&
+            entry->epoch == view->epoch)
+        {
+            if (view->payload_bytes_filled < entry->last_bytes)
+            {
+                TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: payload bytes regressed");
+                return -1;
+            }
+            if (poller->validator)
+            {
+                validation = poller->validator(poller->validator_clientd, view);
+                if (validation != 0)
+                {
+                    return -1;
+                }
+            }
+            entry->last_bytes = view->payload_bytes_filled;
+            return 0;
+        }
+
+        if (poller->validator)
+        {
+            validation = poller->validator(poller->validator_clientd, view);
+            if (validation != 0)
+            {
+                return -1;
+            }
+        }
+
+        entry->stream_id = view->stream_id;
+        entry->epoch = view->epoch;
+        entry->seq = view->seq;
+        entry->last_bytes = view->payload_bytes_filled;
+        entry->in_use = 1;
+        return 0;
+    }
+
     for (i = 0; i < poller->tracker_capacity; i++)
     {
         tp_progress_tracker_entry_t *entry = &poller->tracker[i];
@@ -195,6 +239,7 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
     memset(poller, 0, sizeof(*poller));
     poller->client = client;
     poller->subscription = client->control_subscription;
+    poller->header_nslots = 0;
 
     if (handlers)
     {
@@ -234,6 +279,7 @@ int tp_progress_poller_init_with_subscription(
 
     memset(poller, 0, sizeof(*poller));
     poller->subscription = subscription;
+    poller->header_nslots = 0;
     if (handlers)
     {
         poller->handlers = *handlers;
@@ -302,6 +348,7 @@ void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t
 
     if (consumer && consumer->header_nslots > 0)
     {
+        poller->header_nslots = consumer->header_nslots;
         if (tp_progress_poller_resize(poller, consumer->header_nslots) < 0)
         {
             if (poller->tracker)
@@ -311,7 +358,12 @@ void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t
             }
             poller->tracker_capacity = 0;
             poller->tracker_cursor = 0;
+            poller->header_nslots = 0;
         }
+    }
+    else
+    {
+        poller->header_nslots = 0;
     }
 }
 
@@ -346,3 +398,10 @@ int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)
         poller->assembler,
         fragment_limit);
 }
+
+#if defined(TP_ENABLE_FUZZ) || defined(TP_TESTING)
+void tp_progress_poller_handle_fragment(tp_progress_poller_t *poller, const uint8_t *buffer, size_t length)
+{
+    tp_progress_poller_handler(poller, buffer, length, NULL);
+}
+#endif
