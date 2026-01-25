@@ -47,6 +47,6 @@ clear lifecycle semantics and consistent naming.
 - Provide a migration guide with old→new mapping.
 
 ## Open Questions
-- Do we want a single `tp_driver_attach_async` + `tp_driver_attach_poll` that returns
-  attach info only, and then separate config/attach helpers? Or keep producer/consumer
-  attach wrappers as the primary user-facing API?
+- Primary API should mirror Aeron: a single `tp_driver_attach_async` + `tp_driver_attach_poll`
+  that returns `tp_driver_attach_info_t`. Producer/consumer attach wrappers are optional
+  convenience built on top and are not the primary API.
