@@ -44,12 +44,13 @@ Related design docs:
 - [ ] Serve DiscoveryRequest/DiscoveryResponse with filter semantics.
 - [ ] Respect authority rules (driver authoritative, discovery advisory).
 - [ ] Provide `tp_discoveryd` executable and JSON output tooling.
+- [ ] Allow optional embedded mode (agent can run inside driver).
 
 ## Phase 5: Supervisor / Unified Management
 - [ ] Implement supervisor/console agent.
 - [ ] Subscribe to announce/QoS/metadata/health streams.
 - [ ] Emit ConsumerConfig for per-consumer streams and rate limits.
-- [ ] Provide `tp_supervisord` executable or integrate into driver.
+- [ ] Provide `tp_supervisord` executable; allow optional embedded mode.
 
 ## Phase 6: Integration + Interop
 - [ ] Add integration tests for driver + discovery + client conductor.

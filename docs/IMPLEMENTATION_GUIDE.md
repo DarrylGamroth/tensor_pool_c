@@ -154,9 +154,11 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 ### Discovery
 - DONE: DiscoveryRequest encode + response decode + poller API.
 - MISSING: Discovery provider/registry service.
+  - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
 ### Supervisor / Unified Management
 - MISSING: Supervisor/console policy layer (recommended by spec).
+  - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
 ### TraceLink
 - DONE: Snowflake trace IDs and TraceLinkSet encode/decode.
