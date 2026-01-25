@@ -742,15 +742,45 @@ static int tp_discovery_encode_response(
 
         for (j = 0; j < result->tag_count; j++)
         {
+            struct tensor_pool_varAsciiEncoding tag_codec;
+            size_t len;
+            const char *tag = result->tags[j] ? result->tags[j] : "";
+            len = strlen(tag);
+
             if (!tensor_pool_discoveryResponse_results_tags_next(&tags))
             {
                 TP_SET_ERR(EINVAL, "%s", "tp_discovery_encode_response: tags next failed");
                 return -1;
             }
-            if (tensor_pool_discoveryResponse_results_tags_put_tag(&tags, result->tags[j],
-                strlen(result->tags[j])) < 0)
+
+            if (NULL == tensor_pool_discoveryResponse_results_tags_tag(&tags, &tag_codec))
             {
-                TP_SET_ERR(EINVAL, "%s", "tp_discovery_encode_response: tag encode failed");
+                TP_SET_ERR(EINVAL, "%s", "tp_discovery_encode_response: tag wrap failed");
+                return -1;
+            }
+
+            if (tensor_pool_varAsciiEncoding_set_length(&tag_codec, (uint32_t)len) == NULL)
+            {
+                TP_SET_ERR(EINVAL, "%s", "tp_discovery_encode_response: tag length encode failed");
+                return -1;
+            }
+
+            if (len > 0)
+            {
+                memcpy(
+                    (char *)tensor_pool_varAsciiEncoding_mut_buffer(&tag_codec) +
+                        tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                        tensor_pool_varAsciiEncoding_varData_encoding_offset(),
+                    tag,
+                    len);
+            }
+
+            if (!tensor_pool_discoveryResponse_results_tags_set_sbe_position(
+                &tags,
+                tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                    tensor_pool_varAsciiEncoding_varData_encoding_offset() + len))
+            {
+                TP_SET_ERR(EINVAL, "%s", "tp_discovery_encode_response: tag position update failed");
                 return -1;
             }
         }
@@ -928,21 +958,33 @@ static int tp_discovery_decode_request(
 
         for (i = 0; i < out->tag_count; i++)
         {
+            struct tensor_pool_varAsciiEncoding tag_codec;
             uint32_t len;
             const char *val;
 
             if (!tensor_pool_discoveryRequest_tags_next(&tags))
             {
-                break;
+                TP_SET_ERR(EINVAL, "%s", "tp_discovery_decode_request: tags next failed");
+                return -1;
             }
 
-            len = tensor_pool_discoveryRequest_tags_tag_length(&tags);
-            val = tensor_pool_discoveryRequest_tags_tag(&tags);
-            out->tags[i] = (const char *)calloc(len + 1, 1);
-            if (out->tags[i])
+            if (NULL == tensor_pool_discoveryRequest_tags_tag(&tags, &tag_codec))
             {
-                memcpy((void *)out->tags[i], val, len);
+                TP_SET_ERR(EINVAL, "%s", "tp_discovery_decode_request: tag wrap failed");
+                return -1;
             }
+
+            len = tensor_pool_varAsciiEncoding_length(&tag_codec);
+            val = tensor_pool_varAsciiEncoding_buffer(&tag_codec) +
+                tensor_pool_varAsciiEncoding_offset(&tag_codec) +
+                tensor_pool_varAsciiEncoding_varData_encoding_offset();
+            out->tags[i] = (const char *)calloc(len + 1, 1);
+            if (NULL == out->tags[i])
+            {
+                TP_SET_ERR(ENOMEM, "%s", "tp_discovery_decode_request: tag alloc failed");
+                return -1;
+            }
+            memcpy((void *)out->tags[i], val, len);
         }
     }
 
