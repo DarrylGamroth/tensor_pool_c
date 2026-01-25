@@ -2,6 +2,7 @@
 #define TENSOR_POOL_TP_H
 
 #include "tensor_pool/client/tp_client.h"
+#include "tensor_pool/client/tp_client_conductor_agent.h"
 #include "tensor_pool/client/tp_consumer.h"
 #include "tensor_pool/client/tp_control.h"
 #include "tensor_pool/client/tp_control_adapter.h"
@@ -13,6 +14,7 @@
 #include "tensor_pool/client/tp_progress_poller.h"
 #include "tensor_pool/client/tp_qos.h"
 #include "tensor_pool/common/tp_clock.h"
+#include "tensor_pool/common/tp_agent.h"
 #include "tensor_pool/common/tp_error.h"
 #include "tensor_pool/common/tp_join_barrier.h"
 #include "tensor_pool/common/tp_log.h"
@@ -25,6 +27,7 @@
 #include "tensor_pool/common/tp_uri.h"
 #include "tensor_pool/common/tp_version.h"
 #include "tensor_pool/driver/tp_driver.h"
+#include "tensor_pool/driver/tp_driver_agent.h"
 #include "tensor_pool/discovery/tp_discovery_service.h"
 #include "tensor_pool/supervisor/tp_supervisor.h"
 

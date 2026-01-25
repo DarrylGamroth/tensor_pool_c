@@ -42,6 +42,7 @@ void tp_test_decode_control_response(void);
 void tp_test_decode_meta_blobs(void);
 void tp_test_decode_shm_pool_announce(void);
 void tp_test_control_listen_json(void);
+void tp_test_agent_runner(void);
 void tp_test_consumer_registry(void);
 void tp_test_aeron_client(void);
 void tp_test_client_errors(void);
@@ -600,6 +601,7 @@ int main(void)
     tp_test_decode_meta_blobs();
     tp_test_decode_shm_pool_announce();
     tp_test_control_listen_json();
+    tp_test_agent_runner();
     tp_test_consumer_registry();
     tp_test_aeron_client();
     tp_test_client_errors();

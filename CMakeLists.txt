@@ -84,6 +84,7 @@ endif ()
 set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp.h
     include/tensor_pool/tp_driver.h
+    include/tensor_pool/common/tp_agent.h
     include/tensor_pool/common/tp_clock.h
     include/tensor_pool/common/tp_context.h
     include/tensor_pool/common/tp_error.h
@@ -101,12 +102,14 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/common/tp_uri.h
     include/tensor_pool/common/tp_version.h
     include/tensor_pool/driver/tp_driver.h
+    include/tensor_pool/driver/tp_driver_agent.h
     include/tensor_pool/discovery/tp_discovery_service.h
     include/tensor_pool/tp_discovery_service.h
     include/tensor_pool/supervisor/tp_supervisor.h
     include/tensor_pool/tp_supervisor.h
     include/tensor_pool/client/tp_aeron.h
     include/tensor_pool/client/tp_client.h
+    include/tensor_pool/client/tp_client_conductor_agent.h
     include/tensor_pool/client/tp_client_conductor.h
     include/tensor_pool/client/tp_consumer.h
     include/tensor_pool/client/tp_consumer_manager.h
@@ -123,6 +126,7 @@ set(TP_PUBLIC_HEADERS
 )
 
 set(TP_SOURCES
+    src/common/tp_agent.c
     src/common/tp_aeron.c
     src/common/tp_aeron_wrap.c
     src/common/tp_clock.c
@@ -139,6 +143,7 @@ set(TP_SOURCES
     src/common/tp_uri.c
     src/common/tp_version.c
     src/client/tp_client.c
+    src/client/tp_client_conductor_agent.c
     src/client/tp_client_conductor.c
     src/client/tp_consumer.c
     src/client/tp_consumer_manager.c
@@ -153,6 +158,7 @@ set(TP_SOURCES
     src/client/tp_progress_poller.c
     src/client/tp_qos.c
     src/driver/tp_driver.c
+    src/driver/tp_driver_agent.c
     src/driver/tp_driver_config.c
     src/discovery/tp_discovery_service.c
     src/discovery/tp_discovery_config.c
@@ -318,6 +324,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_consumer_registry.c
     tests/test_tp_tensor_extra.c
     tests/test_tp_aeron.c
+    tests/test_tp_agent.c
     tests/test_tp_client_errors.c
     tests/test_tp_client_context.c
     tests/test_tp_consumer_errors.c
@@ -370,6 +377,7 @@ if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
             --exclude ".*tests/.*"
             --exclude ".*tools/.*"
             --exclude ".*fuzz/.*"
+            --gcov-ignore-errors=no_working_dir_found
             --print-summary
             --xml-pretty -o coverage.xml
             --html-details -o coverage.html)

@@ -1,5 +1,6 @@
 /build/
 /build-coverage/
+/build-fuzz-smoke/
 /generated/
 /.idea/
 /.vscode/

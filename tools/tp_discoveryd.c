@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "aeron_agent.h"
-
 static volatile sig_atomic_t tp_discovery_running = 1;
 
 static void tp_discovery_handle_signal(int sig)
@@ -62,7 +60,7 @@ int main(int argc, char **argv)
 {
     tp_discovery_service_config_t config;
     tp_discovery_service_t service;
-    uint64_t sleep_ns = 1000000ULL;
+    tp_agent_runner_t *agent = NULL;
     const char *config_path = NULL;
     int opt;
 
@@ -125,11 +123,26 @@ int main(int argc, char **argv)
     signal(SIGINT, tp_discovery_handle_signal);
     signal(SIGTERM, tp_discovery_handle_signal);
 
+    if (tp_agent_runner_init(
+            &agent,
+            "tp-discovery",
+            &service,
+            (tp_agent_do_work_func_t)tp_discovery_service_do_work,
+            NULL,
+            1000000ULL) < 0)
+    {
+        fprintf(stderr, "Discovery agent init failed: %s\n", tp_errmsg());
+        tp_discovery_service_close(&service);
+        return 1;
+    }
+
     while (tp_discovery_running)
     {
-        int work = tp_discovery_service_do_work(&service);
-        aeron_idle_strategy_sleeping_idle(&sleep_ns, work);
+        int work = tp_agent_runner_do_work(agent);
+        tp_agent_runner_idle(agent, work);
     }
+
+    tp_agent_runner_close(agent);
 
     tp_discovery_service_close(&service);
     return 0;

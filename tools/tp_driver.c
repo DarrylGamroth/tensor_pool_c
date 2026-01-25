@@ -10,8 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "aeron_agent.h"
-
 static volatile sig_atomic_t tp_driver_running = 1;
 
 static void tp_driver_handle_signal(int sig)
@@ -63,7 +61,7 @@ int main(int argc, char **argv)
 {
     tp_driver_config_t config;
     tp_driver_t driver;
-    uint64_t sleep_ns = 1000000ULL;
+    tp_driver_agent_t agent;
     const char *config_path = NULL;
     int opt;
 
@@ -126,11 +124,20 @@ int main(int argc, char **argv)
     signal(SIGINT, tp_driver_handle_signal);
     signal(SIGTERM, tp_driver_handle_signal);
 
+    if (tp_driver_agent_init(&agent, &driver, 1000000ULL) < 0)
+    {
+        fprintf(stderr, "Driver agent init failed: %s\n", tp_errmsg());
+        tp_driver_close(&driver);
+        return 1;
+    }
+
     while (tp_driver_running)
     {
-        int work = tp_driver_do_work(&driver);
-        aeron_idle_strategy_sleeping_idle(&sleep_ns, work);
+        int work = tp_driver_agent_do_work(&agent);
+        tp_driver_agent_idle(&agent, work);
     }
+
+    tp_driver_agent_close(&agent);
 
     tp_driver_close(&driver);
     return 0;
