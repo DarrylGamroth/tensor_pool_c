@@ -83,8 +83,8 @@ Columns:
 | D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/client/tp_driver_client.c`, `src/driver/tp_driver.c` | `tests/test_tp_driver_client.c`, `tests/test_tp_driver_integration.c` | Compliant | Driver-side attach handling exercised end-to-end |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/client/tp_driver_client.c`, `src/common/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
-| D-4.2-4 | 4.2 | Driver assigns `nodeId` when absent, stable per lease | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Node ID assigned on attach when not provided |
-| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Partial | Layout version mismatch covered; publishMode/hugepages still need integration coverage |
+| D-4.2-4 | 4.2 | Driver assigns `nodeId` when absent, stable per lease | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Node ID assigned on attach when not provided; reuse cooldown enforced |
+| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Layout mismatch, publishMode EXISTING, and hugepages policy covered |
 | D-4.4-1 | 4.4 | Lease keepalive send/expiry handling | `src/client/tp_driver_client.c`, `src/client/tp_client.c` | `tests/test_tp_driver_client.c` | Compliant | `tp_client_do_work` schedules keepalives |
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
@@ -115,7 +115,7 @@ Columns:
 | --- | --- | --- | --- | --- | --- | --- |
 | TL-5-1 | 5 | TraceLink is best-effort and non-blocking | `src/common/tp_tracelink.c`, `src/client/tp_producer.c` | `tests/test_tp_tracelink.c` | Compliant | No flow-control coupling |
 | TL-6.1-1 | 6.1 | 64-bit Snowflake-style trace IDs | `src/common/tp_trace.c` | `tests/test_tp_tracelink.c` | Compliant | Agrona-style generator |
-| TL-6.2-1 | 6.2 | Node ID unique per deployment | `src/driver/tp_driver.c` | n/a | Partial | Unique among active leases; no reuse cooldown test |
+| TL-6.2-1 | 6.2 | Node ID unique per deployment | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Cooldown enforced for node ID reuse |
 | TL-6.3-1 | 6.3 | Propagation rules for root/derived frames | `src/client/tp_producer.c`, `src/common/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | Helper enforces root/1→1/N→1 rules and flags when to emit TraceLinkSet. |
 | TL-8.1-1 | 8.1 | FrameDescriptor `trace_id` field (null sentinel 0) | `src/client/tp_producer.c`, `src/client/tp_consumer.c` | `tests/test_tp_tracelink.c` | Compliant | |
 | TL-9-1 | 9 | TraceLinkSet encode/decode, parent uniqueness, schema gating | `src/common/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | |

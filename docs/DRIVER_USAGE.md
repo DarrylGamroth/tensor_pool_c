@@ -51,6 +51,7 @@ Key sections:
 - `announce_period_ms`: `ShmPoolAnnounce` cadence.
 - `lease_keepalive_interval_ms`: keepalive cadence.
 - `lease_expiry_grace_intervals`: missed keepalives before expiry.
+- `node_id_reuse_cooldown_ms`: cooldown before reusing a released `nodeId`.
 - `prefault_shm`: prefault/zero SHM regions on create.
 - `mlock_shm`: lock SHM pages in RAM (fatal on failure if enabled).
 - `epoch_gc_enabled`: enable old epoch cleanup.

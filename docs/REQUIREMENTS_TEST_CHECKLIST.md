@@ -14,9 +14,11 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 - Client conductor is implemented and covered by `tests/test_tp_client_conductor.c`.
 - Discovery provider filtering/registry coverage added in `tests/test_tp_discovery_service.c` (AND semantics + tags).
 - Supervisor policy handling covered by `tests/test_tp_supervisor.c` (ConsumerHello -> ConsumerConfig).
-- Driver server-side behavior now has end-to-end coverage for exclusive producer, node ID assignment, and attach semantics (see `tests/test_tp_driver_integration.c`).
-- Attach layout-version mismatch is covered; publishMode/hugepages integration coverage remains pending (Traceability row D-4.3-1).
+- Driver server-side behavior now has end-to-end coverage for exclusive producer, node ID assignment, publishMode, and hugepages semantics (see `tests/test_tp_driver_integration.c`).
+- Attach layout-version mismatch is covered in `tests/test_tp_driver_integration.c`.
 - Lease expiry is covered via client-side expiry detection in `tests/test_tp_driver_integration.c`.
+- Config-matrix coverage is exercised in-process via `tests/test_tp_driver_integration.c` (announce-separate + dynamic stream cases).
+- Coverage and fuzz smoke runs should be executed for new driver/supervisor/integration code paths (CI jobs: `coverage`, `fuzz-smoke`).
 
 ## Config-Matrix Integration Tests
 

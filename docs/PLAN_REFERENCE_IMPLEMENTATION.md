@@ -76,6 +76,6 @@ Related design docs:
 
 ## Checklist (Specs → Tests)
 - [x] Add integration coverage for driver server-side requirements (D-2.1, D-4.8-1, D-4.2-4/TL-6.2-1) via `tests/test_tp_driver_integration.c`.
-- [ ] Add integration coverage for D-4.3-1 publishMode/hugepages semantics (not yet exercised in integration tests).
-- [ ] Add node ID reuse cooldown policy (TraceLink §6.2) or document explicit verification.
-- [ ] Expand config-matrix integration tests beyond external driver availability.
+- [x] Add integration coverage for D-4.3-1 publishMode/hugepages semantics.
+- [x] Add node ID reuse cooldown policy (TraceLink §6.2) with tests.
+- [x] Expand config-matrix integration tests beyond external driver availability.
