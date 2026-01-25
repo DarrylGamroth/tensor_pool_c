@@ -170,6 +170,8 @@ Callbacks MUST be invoked from the conductor thread (`do_work`).
       state; remove public Aeron members from `tp_client_t` where possible.
 - [ ] Implement an Aeron-style command queue (lock-free ring) for async add
       requests; `tp_client_do_work` drains the queue and executes commands.
+- [ ] Replace GCC `__atomic` usage with C11 atomics for portability in
+      `tp_seqlock`, driver client ID/correlation counters, and producer fences.
 - [ ] Add client-level handler registration for descriptor/progress/QoS/metadata/
       discovery and driver events.
 - [ ] Route existing per-producer/consumer callbacks through conductor or
