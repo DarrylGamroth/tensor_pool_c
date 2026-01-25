@@ -32,12 +32,12 @@ Related design docs:
 - [x] Update CMake targets to build client/driver libs cleanly.
 
 ## Phase 3: C Driver (Authoritative Control Plane)
-- [ ] Implement attach request handling and policy checks per driver spec.
-- [ ] Create SHM regions (header + pools) in canonical layout.
-- [ ] Publish ShmPoolAnnounce and manage epochs.
-- [ ] Track leases and keepalive expiry; revoke with correct reason codes.
-- [ ] Implement GC/retention for old epochs.
-- [ ] Provide `tp_driver` executable with config + logging.
+- [x] Implement attach request handling and policy checks per driver spec.
+- [x] Create SHM regions (header + pools) in canonical layout.
+- [x] Publish ShmPoolAnnounce and manage epochs.
+- [x] Track leases and keepalive expiry; revoke with correct reason codes.
+- [x] Implement GC/retention for old epochs.
+- [x] Provide `tp_driver` executable with config + logging.
 
 ## Phase 4: Discovery Service (Advisory)
 - [ ] Implement discovery registry and stream index.
@@ -66,7 +66,7 @@ Related design docs:
 - Phase 0: Completed
 - Phase 1: Completed
 - Phase 2: Completed
-- Phase 3: Not started
+- Phase 3: Completed
 - Phase 4: Not started
 - Phase 5: Not started
 - Phase 6: Not started
