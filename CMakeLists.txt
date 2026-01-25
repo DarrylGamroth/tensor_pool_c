@@ -4,6 +4,7 @@ project(tensor_pool_c LANGUAGES C)
 
 include(CheckIncludeFile)
 include(CheckSymbolExists)
+include(FetchContent)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -23,6 +24,8 @@ set(SBE_TOOL_VERSION "" CACHE STRING "SBE tool version to download (empty = late
 set(SBE_TOOL_CACHE_DIR "" CACHE PATH "Cache directory for downloaded sbe-all jars")
 set(SBE_TOOL_CLASSPATH "" CACHE STRING "Classpath for SBE tool invocation")
 set(SBE_JAVA_MAIN "" CACHE STRING "SBE tool main class (auto-detected if empty)")
+set(TP_TOML_SOURCE "https://github.com/cktan/tomlc17.git" CACHE STRING "TOML parser source repository")
+set(TP_TOML_TAG "main" CACHE STRING "TOML parser git tag/branch")
 
 set(AERON_TARGET "")
 set(AERON_VERSION_TXT "0.0.0")
@@ -43,6 +46,18 @@ add_definitions(-DAERON_VERSION_MAJOR=${AERON_VERSION_MAJOR})
 add_definitions(-DAERON_VERSION_MINOR=${AERON_VERSION_MINOR})
 add_definitions(-DAERON_VERSION_PATCH=${AERON_VERSION_PATCH})
 add_definitions(-DAERON_VERSION_GITSHA="unknown")
+
+FetchContent_Declare(
+    tomlc17
+    GIT_REPOSITORY ${TP_TOML_SOURCE}
+    GIT_TAG ${TP_TOML_TAG}
+)
+FetchContent_GetProperties(tomlc17)
+if (NOT tomlc17_POPULATED)
+    FetchContent_Populate(tomlc17)
+endif ()
+add_library(tomlc17 STATIC "${tomlc17_SOURCE_DIR}/src/tomlc17.c")
+target_include_directories(tomlc17 PUBLIC "${tomlc17_SOURCE_DIR}/src")
 
 if (TP_USE_SYSTEM_AERON)
     if (AERON_INCLUDE_DIR AND AERON_LIBRARY)
@@ -68,6 +83,7 @@ endif ()
 
 set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp.h
+    include/tensor_pool/tp_driver.h
     include/tensor_pool/common/tp_clock.h
     include/tensor_pool/common/tp_context.h
     include/tensor_pool/common/tp_error.h
@@ -84,6 +100,7 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/common/tp_types.h
     include/tensor_pool/common/tp_uri.h
     include/tensor_pool/common/tp_version.h
+    include/tensor_pool/driver/tp_driver.h
     include/tensor_pool/client/tp_aeron.h
     include/tensor_pool/client/tp_client.h
     include/tensor_pool/client/tp_client_conductor.h
@@ -131,6 +148,8 @@ set(TP_SOURCES
     src/client/tp_producer.c
     src/client/tp_progress_poller.c
     src/client/tp_qos.c
+    src/driver/tp_driver.c
+    src/driver/tp_driver_config.c
 )
 
 if (TP_ENABLE_SBE_CODEGEN)
@@ -266,6 +285,7 @@ target_include_directories(tensor_pool
 )
 
 target_link_libraries(tensor_pool PUBLIC ${AERON_TARGET})
+target_link_libraries(tensor_pool PUBLIC tomlc17)
 
 if (TP_ENABLE_COVERAGE)
     if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -310,7 +330,8 @@ add_executable(tensor_pool_tests
     tests/test_tp_producer_claim.c
     tests/test_tp_log.c
     tests/test_tp_shm_security.c
-    tests/test_tp_consumer_apply.c)
+    tests/test_tp_consumer_apply.c
+    tests/test_tp_driver_config.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
 target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/common")
 target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
@@ -391,6 +412,10 @@ target_include_directories(tp_example_bgapi PRIVATE "${TP_INTERNAL_INCLUDE_DIR}"
 
 add_executable(tp_shm_create tools/tp_shm_create.c)
 target_link_libraries(tp_shm_create PRIVATE tensor_pool)
+
+add_executable(tp_driver tools/tp_driver.c)
+target_link_libraries(tp_driver PRIVATE tensor_pool)
+target_include_directories(tp_driver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 if (TP_ENABLE_FUZZ)
     if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang")

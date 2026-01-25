@@ -24,5 +24,6 @@
 #include "tensor_pool/common/tp_types.h"
 #include "tensor_pool/common/tp_uri.h"
 #include "tensor_pool/common/tp_version.h"
+#include "tensor_pool/driver/tp_driver.h"
 
 #endif
