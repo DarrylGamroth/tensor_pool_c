@@ -62,7 +62,7 @@ Related design docs:
 - [ ] Keep `docs/IMPLEMENTATION_GUIDE.md` checklist in sync.
 
 ## Progress
-- Phase 0: Not started
+- Phase 0: Completed
 - Phase 1: Not started
 - Phase 2: Not started
 - Phase 3: Not started
