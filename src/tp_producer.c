@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
@@ -1485,7 +1486,7 @@ int tp_producer_publish_frame(
             payload_len);
     }
 
-    __atomic_thread_fence(__ATOMIC_RELEASE);
+    atomic_thread_fence(memory_order_release);
     tp_atomic_store_u64((uint64_t *)slot, committed);
 
     {

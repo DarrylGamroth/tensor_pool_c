@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 #include <errno.h>
+#include <stdatomic.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
@@ -98,29 +99,28 @@ static uint64_t tp_driver_seed_u64(void)
     return seed;
 }
 
-static uint64_t tp_driver_correlation_counter = 0;
-static uint32_t tp_driver_client_id_counter = 0;
+static atomic_uint_fast64_t tp_driver_correlation_counter = 0;
+static atomic_uint_fast32_t tp_driver_client_id_counter = 0;
 
 int64_t tp_driver_next_correlation_id(void)
 {
-    uint64_t current = __atomic_load_n(&tp_driver_correlation_counter, __ATOMIC_ACQUIRE);
+    uint64_t current = atomic_load_explicit(&tp_driver_correlation_counter, memory_order_acquire);
     if (current == 0)
     {
         uint64_t seed = tp_driver_seed_u64();
         uint64_t expected = 0;
-        (void)__atomic_compare_exchange_n(
+        (void)atomic_compare_exchange_weak_explicit(
             &tp_driver_correlation_counter,
             &expected,
             seed,
-            false,
-            __ATOMIC_RELEASE,
-            __ATOMIC_RELAXED);
+            memory_order_release,
+            memory_order_relaxed);
     }
 
-    current = __atomic_fetch_add(&tp_driver_correlation_counter, 1, __ATOMIC_RELAXED);
+    current = atomic_fetch_add_explicit(&tp_driver_correlation_counter, 1, memory_order_relaxed);
     if (current == 0)
     {
-        current = __atomic_fetch_add(&tp_driver_correlation_counter, 1, __ATOMIC_RELAXED);
+        current = atomic_fetch_add_explicit(&tp_driver_correlation_counter, 1, memory_order_relaxed);
     }
 
     return (int64_t)current;
@@ -128,7 +128,7 @@ int64_t tp_driver_next_correlation_id(void)
 
 uint32_t tp_driver_next_client_id(void)
 {
-    uint32_t current = __atomic_load_n(&tp_driver_client_id_counter, __ATOMIC_ACQUIRE);
+    uint32_t current = atomic_load_explicit(&tp_driver_client_id_counter, memory_order_acquire);
     if (current == 0)
     {
         uint64_t seed = tp_driver_seed_u64();
@@ -138,19 +138,18 @@ uint32_t tp_driver_next_client_id(void)
             seed32 = 1;
         }
         uint32_t expected = 0;
-        (void)__atomic_compare_exchange_n(
+        (void)atomic_compare_exchange_weak_explicit(
             &tp_driver_client_id_counter,
             &expected,
             seed32,
-            false,
-            __ATOMIC_RELEASE,
-            __ATOMIC_RELAXED);
+            memory_order_release,
+            memory_order_relaxed);
     }
 
-    current = __atomic_fetch_add(&tp_driver_client_id_counter, 1, __ATOMIC_RELAXED);
+    current = atomic_fetch_add_explicit(&tp_driver_client_id_counter, 1, memory_order_relaxed);
     if (current == 0)
     {
-        current = __atomic_fetch_add(&tp_driver_client_id_counter, 1, __ATOMIC_RELAXED);
+        current = atomic_fetch_add_explicit(&tp_driver_client_id_counter, 1, memory_order_relaxed);
     }
 
     return current;

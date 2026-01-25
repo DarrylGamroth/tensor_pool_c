@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 static inline uint64_t tp_seq_in_progress(uint64_t seq)
 {
@@ -26,12 +27,12 @@ static inline uint64_t tp_seq_value(uint64_t seq_commit)
 
 static inline uint64_t tp_atomic_load_u64(const uint64_t *value)
 {
-    return __atomic_load_n(value, __ATOMIC_ACQUIRE);
+    return atomic_load_explicit((_Atomic uint64_t *)value, memory_order_acquire);
 }
 
 static inline void tp_atomic_store_u64(uint64_t *value, uint64_t v)
 {
-    __atomic_store_n(value, v, __ATOMIC_RELEASE);
+    atomic_store_explicit((_Atomic uint64_t *)value, v, memory_order_release);
 }
 
 #endif
