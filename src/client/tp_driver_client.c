@@ -20,6 +20,8 @@
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_types.h"
 #include "tensor_pool/client/tp_client.h"
+#include "tensor_pool/client/tp_consumer.h"
+#include "tensor_pool/client/tp_producer.h"
 #include "tp_aeron_wrap.h"
 #include "tensor_pool/internal/tp_context.h"
 
@@ -1454,6 +1456,28 @@ int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_
     return 0;
 }
 
+int tp_driver_detach_active(tp_driver_client_t *client)
+{
+    if (NULL == client)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_detach_active: null client");
+        return -1;
+    }
+
+    if (client->active_lease_id == 0 || NULL == client->publication)
+    {
+        return 0;
+    }
+
+    return tp_driver_detach(
+        client,
+        tp_driver_next_correlation_id(),
+        client->active_lease_id,
+        client->active_stream_id,
+        client->client_id,
+        client->role);
+}
+
 void tp_driver_attach_info_close(tp_driver_attach_info_t *info)
 {
     if (NULL == info)
@@ -1468,6 +1492,92 @@ void tp_driver_attach_info_close(tp_driver_attach_info_t *info)
     }
 
     info->pool_count = 0;
+}
+
+int tp_driver_attach_producer_config(
+    const tp_driver_attach_info_t *info,
+    uint32_t producer_id,
+    tp_payload_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_producer_config_t *out_cfg,
+    size_t *out_pool_count)
+{
+    size_t i;
+
+    if (NULL == info || NULL == pools || NULL == out_cfg || NULL == out_pool_count)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_producer_config: invalid input");
+        return -1;
+    }
+
+    if (pool_capacity < info->pool_count)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_producer_config: pool capacity too small");
+        return -1;
+    }
+
+    for (i = 0; i < info->pool_count; i++)
+    {
+        pools[i].pool_id = info->pools[i].pool_id;
+        pools[i].nslots = info->pools[i].nslots;
+        pools[i].stride_bytes = info->pools[i].stride_bytes;
+        pools[i].uri = info->pools[i].region_uri;
+    }
+
+    memset(out_cfg, 0, sizeof(*out_cfg));
+    out_cfg->stream_id = info->stream_id;
+    out_cfg->producer_id = producer_id;
+    out_cfg->epoch = info->epoch;
+    out_cfg->layout_version = info->layout_version;
+    out_cfg->header_nslots = info->header_nslots;
+    out_cfg->header_uri = info->header_region_uri;
+    out_cfg->pools = pools;
+    out_cfg->pool_count = info->pool_count;
+    *out_pool_count = info->pool_count;
+
+    return 0;
+}
+
+int tp_driver_attach_consumer_config(
+    const tp_driver_attach_info_t *info,
+    tp_consumer_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_consumer_config_t *out_cfg,
+    size_t *out_pool_count)
+{
+    size_t i;
+
+    if (NULL == info || NULL == pools || NULL == out_cfg || NULL == out_pool_count)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_consumer_config: invalid input");
+        return -1;
+    }
+
+    if (pool_capacity < info->pool_count)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_consumer_config: pool capacity too small");
+        return -1;
+    }
+
+    for (i = 0; i < info->pool_count; i++)
+    {
+        pools[i].pool_id = info->pools[i].pool_id;
+        pools[i].nslots = info->pools[i].nslots;
+        pools[i].stride_bytes = info->pools[i].stride_bytes;
+        pools[i].uri = info->pools[i].region_uri;
+    }
+
+    memset(out_cfg, 0, sizeof(*out_cfg));
+    out_cfg->stream_id = info->stream_id;
+    out_cfg->epoch = info->epoch;
+    out_cfg->layout_version = info->layout_version;
+    out_cfg->header_nslots = info->header_nslots;
+    out_cfg->header_uri = info->header_region_uri;
+    out_cfg->pools = pools;
+    out_cfg->pool_count = info->pool_count;
+    *out_pool_count = info->pool_count;
+
+    return 0;
 }
 
 static void tp_driver_event_handler(

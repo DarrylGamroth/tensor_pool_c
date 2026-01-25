@@ -1318,7 +1318,7 @@ static int tp_consumer_attach_driver(tp_consumer_t *consumer)
     tp_driver_attach_info_t info;
     tp_consumer_config_t config;
     tp_consumer_pool_config_t *pool_cfg = NULL;
-    size_t i;
+    size_t pool_count = 0;
     int result = -1;
 
     if (NULL == consumer)
@@ -1365,22 +1365,15 @@ static int tp_consumer_attach_driver(tp_consumer_t *consumer)
         goto cleanup;
     }
 
-    for (i = 0; i < info.pool_count; i++)
+    if (tp_driver_attach_consumer_config(
+        &info,
+        pool_cfg,
+        info.pool_count,
+        &config,
+        &pool_count) < 0)
     {
-        pool_cfg[i].pool_id = info.pools[i].pool_id;
-        pool_cfg[i].nslots = info.pools[i].nslots;
-        pool_cfg[i].stride_bytes = info.pools[i].stride_bytes;
-        pool_cfg[i].uri = info.pools[i].region_uri;
+        goto cleanup;
     }
-
-    memset(&config, 0, sizeof(config));
-    config.stream_id = info.stream_id;
-    config.epoch = info.epoch;
-    config.layout_version = info.layout_version;
-    config.header_nslots = info.header_nslots;
-    config.header_uri = info.header_region_uri;
-    config.pools = pool_cfg;
-    config.pool_count = info.pool_count;
 
     result = tp_consumer_attach_config(consumer, &config);
 
@@ -1392,6 +1385,96 @@ cleanup:
         consumer->driver_attached = false;
     }
     return result;
+}
+
+int tp_consumer_attach_driver_async(tp_consumer_t *consumer, tp_async_attach_t **out)
+{
+    tp_driver_attach_request_t request;
+
+    if (NULL == consumer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach_driver_async: invalid input");
+        return -1;
+    }
+
+    if (!consumer->driver_initialized)
+    {
+        if (tp_driver_client_init(&consumer->driver, consumer->client) < 0)
+        {
+            return -1;
+        }
+        consumer->driver_initialized = true;
+    }
+
+    tp_consumer_fill_driver_request(consumer, &request);
+    return tp_driver_attach_async(consumer->driver, &request, out);
+}
+
+int tp_consumer_attach_driver_poll(tp_consumer_t *consumer, tp_async_attach_t *async)
+{
+    tp_driver_attach_info_t info;
+    tp_consumer_config_t config;
+    tp_consumer_pool_config_t *pool_cfg = NULL;
+    size_t pool_count = 0;
+    int poll_result;
+    int result = -1;
+
+    if (NULL == consumer || NULL == async)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_attach_driver_poll: invalid input");
+        return -1;
+    }
+
+    poll_result = tp_driver_attach_poll(async, &info);
+    if (poll_result <= 0)
+    {
+        return poll_result;
+    }
+
+    if (info.code != tensor_pool_responseCode_OK)
+    {
+        TP_SET_ERR(EINVAL, "tp_consumer_attach_driver_poll: driver attach failed (%d): %s", info.code, info.error_message);
+        tp_driver_attach_info_close(&info);
+        return -1;
+    }
+
+    if (consumer->driver_attached)
+    {
+        tp_driver_attach_info_close(&consumer->driver_attach);
+    }
+
+    consumer->driver_attach = info;
+    consumer->driver_attached = true;
+
+    pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
+    if (NULL == pool_cfg)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_consumer_attach_driver_poll: pool allocation failed");
+        goto cleanup;
+    }
+
+    if (tp_driver_attach_consumer_config(
+        &info,
+        pool_cfg,
+        info.pool_count,
+        &config,
+        &pool_count) < 0)
+    {
+        goto cleanup;
+    }
+
+    result = tp_consumer_attach_config(consumer, &config);
+
+cleanup:
+    free(pool_cfg);
+    if (result < 0)
+    {
+        tp_driver_attach_info_close(&consumer->driver_attach);
+        consumer->driver_attached = false;
+        return -1;
+    }
+
+    return 1;
 }
 
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config)

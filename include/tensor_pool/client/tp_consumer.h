@@ -103,6 +103,8 @@ void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descri
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
 int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_progress_t *progress);
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
+int tp_consumer_attach_driver_async(tp_consumer_t *consumer, tp_async_attach_t **out);
+int tp_consumer_attach_driver_poll(tp_consumer_t *consumer, tp_async_attach_t *async);
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_handler_t handler, void *clientd);

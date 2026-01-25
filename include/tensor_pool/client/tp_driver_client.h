@@ -104,6 +104,10 @@ typedef struct tp_driver_event_poller_stct
 tp_driver_event_poller_t;
 
 typedef struct tp_driver_client_stct tp_driver_client_t;
+typedef struct tp_producer_config_stct tp_producer_config_t;
+typedef struct tp_payload_pool_config_stct tp_payload_pool_config_t;
+typedef struct tp_consumer_config_stct tp_consumer_config_t;
+typedef struct tp_consumer_pool_config_stct tp_consumer_pool_config_t;
 
 typedef struct tp_async_attach_stct
 {
@@ -151,8 +155,22 @@ int tp_driver_attach(
 
 int tp_driver_keepalive(tp_driver_client_t *client, uint64_t timestamp_ns);
 int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_t lease_id, uint32_t stream_id, uint32_t client_id, uint8_t role);
+int tp_driver_detach_active(tp_driver_client_t *client);
 
 void tp_driver_attach_info_close(tp_driver_attach_info_t *info);
+int tp_driver_attach_producer_config(
+    const tp_driver_attach_info_t *info,
+    uint32_t producer_id,
+    tp_payload_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_producer_config_t *out_cfg,
+    size_t *out_pool_count);
+int tp_driver_attach_consumer_config(
+    const tp_driver_attach_info_t *info,
+    tp_consumer_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_consumer_config_t *out_cfg,
+    size_t *out_pool_count);
 int tp_driver_client_update_lease(
     tp_driver_client_t *client,
     const tp_driver_attach_info_t *attach_info,

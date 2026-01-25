@@ -137,6 +137,9 @@ int64_t tp_producer_queue_claim(tp_producer_t *producer, tp_buffer_claim_t *clai
 void tp_producer_set_trace_id_generator(tp_producer_t *producer, tp_trace_id_generator_t *generator);
 void tp_producer_set_tracelink_validator(tp_producer_t *producer, tp_tracelink_validate_t validator, void *clientd);
 int tp_producer_offer_progress(tp_producer_t *producer, const tp_frame_progress_t *progress);
+
+int tp_producer_attach_driver_async(tp_producer_t *producer, tp_async_attach_t **out);
+int tp_producer_attach_driver_poll(tp_producer_t *producer, tp_async_attach_t *async);
 int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce);
 int tp_producer_set_data_source_meta(tp_producer_t *producer, const tp_data_source_meta_t *meta);
 void tp_producer_clear_data_source_announce(tp_producer_t *producer);

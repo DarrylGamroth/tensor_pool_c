@@ -259,8 +259,8 @@ static void tp_producer_clear_shm_uris(tp_producer_t *producer)
 
 static int tp_producer_store_shm_uris(tp_producer_t *producer, const tp_producer_config_t *config)
 {
-    size_t i;
     int result = -1;
+    size_t i = 0;
 
     if (NULL == producer || NULL == config)
     {
@@ -1244,6 +1244,7 @@ static int tp_producer_attach_driver(tp_producer_t *producer)
     tp_driver_attach_info_t info;
     tp_producer_config_t config;
     tp_payload_pool_config_t *pool_cfg = NULL;
+    size_t pool_count = 0;
     size_t i;
     int result = -1;
 
@@ -1291,23 +1292,16 @@ static int tp_producer_attach_driver(tp_producer_t *producer)
         goto cleanup;
     }
 
-    for (i = 0; i < info.pool_count; i++)
+    if (tp_driver_attach_producer_config(
+        &info,
+        producer->context.producer_id,
+        pool_cfg,
+        info.pool_count,
+        &config,
+        &pool_count) < 0)
     {
-        pool_cfg[i].pool_id = info.pools[i].pool_id;
-        pool_cfg[i].nslots = info.pools[i].nslots;
-        pool_cfg[i].stride_bytes = info.pools[i].stride_bytes;
-        pool_cfg[i].uri = info.pools[i].region_uri;
+        goto cleanup;
     }
-
-    memset(&config, 0, sizeof(config));
-    config.stream_id = info.stream_id;
-    config.producer_id = producer->context.producer_id;
-    config.epoch = info.epoch;
-    config.layout_version = info.layout_version;
-    config.header_nslots = info.header_nslots;
-    config.header_uri = info.header_region_uri;
-    config.pools = pool_cfg;
-    config.pool_count = info.pool_count;
 
     result = tp_producer_attach_config(producer, &config);
 
@@ -1319,6 +1313,97 @@ cleanup:
         producer->driver_attached = false;
     }
     return result;
+}
+
+int tp_producer_attach_driver_async(tp_producer_t *producer, tp_async_attach_t **out)
+{
+    tp_driver_attach_request_t request;
+
+    if (NULL == producer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_driver_async: invalid input");
+        return -1;
+    }
+
+    if (!producer->driver_initialized)
+    {
+        if (tp_driver_client_init(&producer->driver, producer->client) < 0)
+        {
+            return -1;
+        }
+        producer->driver_initialized = true;
+    }
+
+    tp_producer_fill_driver_request(producer, &request);
+    return tp_driver_attach_async(producer->driver, &request, out);
+}
+
+int tp_producer_attach_driver_poll(tp_producer_t *producer, tp_async_attach_t *async)
+{
+    tp_driver_attach_info_t info;
+    tp_producer_config_t config;
+    tp_payload_pool_config_t *pool_cfg = NULL;
+    size_t pool_count = 0;
+    int poll_result;
+    int result = -1;
+
+    if (NULL == producer || NULL == async)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_attach_driver_poll: invalid input");
+        return -1;
+    }
+
+    poll_result = tp_driver_attach_poll(async, &info);
+    if (poll_result <= 0)
+    {
+        return poll_result;
+    }
+
+    if (info.code != tensor_pool_responseCode_OK)
+    {
+        TP_SET_ERR(EINVAL, "tp_producer_attach_driver_poll: driver attach failed (%d): %s", info.code, info.error_message);
+        tp_driver_attach_info_close(&info);
+        return -1;
+    }
+
+    if (producer->driver_attached)
+    {
+        tp_driver_attach_info_close(&producer->driver_attach);
+    }
+
+    producer->driver_attach = info;
+    producer->driver_attached = true;
+
+    pool_cfg = calloc(info.pool_count, sizeof(*pool_cfg));
+    if (NULL == pool_cfg)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_attach_driver_poll: pool allocation failed");
+        goto cleanup;
+    }
+
+    if (tp_driver_attach_producer_config(
+        &info,
+        producer->context.producer_id,
+        pool_cfg,
+        info.pool_count,
+        &config,
+        &pool_count) < 0)
+    {
+        goto cleanup;
+    }
+
+    result = tp_producer_attach_config(producer, &config);
+
+cleanup:
+    free(pool_cfg);
+    if (result < 0)
+    {
+        tp_driver_attach_info_close(&producer->driver_attach);
+        producer->driver_attached = false;
+        return -1;
+    }
+
+    return 1;
 }
 
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config)
