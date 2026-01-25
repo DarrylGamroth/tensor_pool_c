@@ -63,7 +63,7 @@ Columns:
 | W-15.12-1 | 15.12 | Consumer state machine/fallback | `src/client/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Fallback enter/exit and remap covered |
 | W-15.13-1 | 15.13 | Test and validation checklist coverage | `tests/test_tp_smoke.c`, `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c` | n/a | Compliant | Added fail-closed superblock tests, QoS drop counts, and epoch remap coverage. |
 | W-15.14-1 | 15.14 | Liveness: ShmPoolAnnounce freshness, pid/activity checks | `src/client/tp_consumer.c`, `src/common/tp_shm.c` | `tests/test_tp_pollers.c` | Compliant | Freshness/pid/activity validated |
-| W-15.15-1 | 15.15 | Supervisor/consumer coordination layer ≈ client conductor | n/a | n/a | Missing | Informative guidance; implement Aeron-style client conductor |
+| W-15.15-1 | 15.15 | Supervisor/consumer coordination layer ≈ client conductor | `src/client/tp_client_conductor.c` | `tests/test_tp_client_conductor.c` | Compliant | Conductor centralizes shared polling/dispatch |
 | W-15.16a-1 | 15.16a | File-backed SHM prefault/lock/fsync policy | n/a | n/a | N/A | Informative guidance |
 | W-15.17-1 | 15.17 | ControlResponse error codes | `src/client/tp_control.c`, `src/client/tp_control_adapter.c` | `tests/test_tp_control.c` | Compliant | |
 | W-15.18-1 | 15.18 | Normative algorithms (per role) | `src/client/tp_consumer.c`, `src/client/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_producer_claim.c` | Compliant | Commit protocol, header validation, and payload flush hook implemented |
@@ -77,19 +77,19 @@ Columns:
 
 | Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| D-2.1 | 2 | Single authoritative driver per stream | n/a | n/a | Missing | Driver responsibility not yet implemented |
+| D-2.1 | 2 | Single authoritative driver per stream | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces exclusive producer; no integration test yet |
 | D-2.2 | 2.2/2.3 | Clients MUST NOT create/truncate/unlink SHM files | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Client library never creates/truncates; driver owns SHM lifecycles |
 | D-3-1 | 3 | Clients treat driver URIs as authoritative | `src/client/tp_driver_client.c`, `src/client/tp_client.c`, `src/client/tp_consumer.c`, `src/client/tp_producer.c` | `tests/test_tp_smoke.c` | Compliant | Driver mode rejects manual config |
-| D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | Schema/block length gated |
+| D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/client/tp_driver_client.c`, `src/driver/tp_driver.c` | `tests/test_tp_driver_client.c` | Partial | Driver-side attach handling needs integration tests |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/client/tp_driver_client.c`, `src/common/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
-| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Missing | Driver enforcement not yet implemented |
+| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces semantics; no integration tests yet |
 | D-4.4-1 | 4.4 | Lease keepalive send/expiry handling | `src/client/tp_driver_client.c`, `src/client/tp_client.c` | `tests/test_tp_driver_client.c` | Compliant | `tp_client_do_work` schedules keepalives |
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.6-1 | 4.6 | Response code validation | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/client/tp_consumer.c`, `src/client/tp_producer.c`, `src/client/tp_driver_client.c` | `tests/test_tp_lease_revoked.c` | Compliant | Revoke clears mappings and schedules reattach |
-| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | n/a | n/a | Missing | Driver responsibility not yet implemented |
+| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces uniqueness; no integration tests yet |
 | D-4.9-1 | 4.9 | Detach request/response encode/decode | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-B.1-1 | Appendix B.1 | Correlation IDs unique/non-reused; seeded per process | `src/client/tp_driver_client.c`, `src/client/tp_producer.c`, `src/client/tp_consumer.c` | `tests/test_tp_driver_client.c` | Compliant | Generator seeds from urandom/time and increments |
 | D-B.1-2 | Appendix B.1 | Ignore duplicate ShmAttachResponse after OK | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client_live.c` | Compliant | Post-OK duplicates ignored |

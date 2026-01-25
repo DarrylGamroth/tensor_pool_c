@@ -5,6 +5,7 @@ Authoritative references:
 - `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`
 - `docs/SHM_Driver_Model_Spec_v1.0.md`
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
+- `docs/DRIVER_USAGE.md`
 
 This guide focuses on practical usage patterns and callback flow. The API uses TensorPool enums (`tp_mode_t`, `tp_progress_state_t`) so SBE symbols do not leak into application code.
 
@@ -187,6 +188,7 @@ if (tp_producer_reattach_due(&producer, (uint64_t)tp_clock_now_ns()))
 ```
 
 Notes:
+- See `docs/DRIVER_USAGE.md` for driver configuration and canonical SHM layout details.
 - `tp_frame_metadata_t.timestamp_ns` is capture time for `SlotHeader.timestamp_ns`. If it is `0` or `TP_NULL_U64`, the producer fills `SlotHeader.timestamp_ns` with `tp_clock_now_ns()`.
 - `FrameDescriptor.timestamp_ns` is null by default. Enable publish-time timestamps with `tp_producer_context_set_publish_descriptor_timestamp(&prod_ctx, true)` when needed.
 

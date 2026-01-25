@@ -13,6 +13,7 @@ Authoritative references:
 - `docs/STREAM_ID_CONVENTIONS.md`
 - `docs/AERON_LIKE_API_PROPOSAL.md`
 - `docs/CLIENT_CONDUCTOR_DESIGN.md`
+- `docs/DRIVER_USAGE.md`
 
 Target style references:
 - Aeron C client: `../aeron/aeron-client/src/main/c`
@@ -159,6 +160,13 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 - MISSING: Discovery provider/registry service.
   - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
+### Driver (Server-side)
+- DONE: Authoritative attach/keepalive/detach and policy checks.
+- DONE: SHM creation, epoch management, and ShmPoolAnnounce emission.
+- DONE: Lease revocation and GC/retention policy.
+- DONE: `tp_driver` executable with TOML config + logging.
+- PARTIAL: Node ID allocation (optional; driver does not auto-assign).
+
 ### Supervisor / Unified Management
 - MISSING: Supervisor/console policy layer (recommended by spec).
   - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
@@ -175,7 +183,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Tests / Compliance
 - DONE: Wire-spec unit tests and compliance mappings.
-- PARTIAL: Conductor-level integration tests (blocked on conductor implementation).
+- PARTIAL: Driver integration tests (lifecycle not yet covered end-to-end).
 
 ### Code Organization
 - DONE: Split implementation into `src/client`, `src/driver`, `src/common`.

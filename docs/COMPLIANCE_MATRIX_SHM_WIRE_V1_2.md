@@ -33,7 +33,7 @@ Legend:
 | 8.2 SlotHeader and TensorHeader | Compliant | Producer validates tensor headers before publish; consumer decodes and validates on read. |
 | 8.3 Commit Encoding via seq_commit | Compliant | Seqlock pattern with optional payload flush hook before commit. |
 | 9. Payload Pools | Compliant | Pool mapping enforced in attach config with stride validation (64-byte multiple) in `src/common/tp_shm.c`. |
-| 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented (driver emits in driver mode; producer emits in no-driver mode). |
+| 10. Aeron + SBE Messages | Compliant | Control/QoS/descriptor/progress/ShmPoolAnnounce implemented (driver emits in driver mode via `src/driver/tp_driver.c`; producer emits in no-driver mode). |
 | 10.1 Service Discovery and SHM Coordination | Compliant | ShmPoolAnnounce decode and consumer mapping implemented (`src/client/tp_consumer.c`). |
 | 10.1.1 ShmPoolAnnounce | Compliant | Decode/consume path and freshness checks in `src/client/tp_control_adapter.c` + `src/client/tp_consumer.c`; producer emits in no-driver mode via `src/client/tp_control.c` + `src/client/tp_producer.c`. |
 | 10.1.2 ConsumerHello | Compliant | Encode/decode implemented; both producer and consumer validate per-consumer channel/stream requests. |
@@ -78,14 +78,14 @@ Legend:
 | 15.12 Consumer State Machine | Compliant | Mapped/unmapped tracking with fallback entry/exit in `src/client/tp_consumer.c`. |
 | 15.13 Test and Validation Checklist | Compliant | Fail-closed superblock validation, QoS drop counts, and epoch remap coverage added in tests. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
-| 15.15 Aeron Terminology Mapping | Missing | Client conductor does not yet centralize control/QoS/metadata/descriptor polling or handler dispatch. |
+| 15.15 Aeron Terminology Mapping | Compliant | Client conductor centralizes shared polling/dispatch in `src/client/tp_client_conductor.c`. |
 | 15.16 Reuse Aeron Primitives | Compliant | Control/descriptor/QoS/metadata all use Aeron; no custom SHM counters added; optional bridge/supervisor remain external. |
 | 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/client/tp_control.c` and `src/client/tp_control_adapter.c`. |
 | 15.18 Normative Algorithms | Compliant | Producer commit protocol and consumer validation follow spec; payload flush hook covers non-coherent DMA. |
 | 15.20 Compatibility Matrix | N/A | Spec evolution guidance. |
 | 15.21 Protocol State Machines | Compliant | Mapping transitions and fallback recovery exercised in tests. |
-| 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout tool defaulted; noncanonical path creation gated; symlink-safe open/containment checks in `src/common/tp_shm.c`. |
+| 15.21a Filesystem Layout and Path Containment | Compliant | Canonical layout enforced in driver and tools; symlink-safe open/containment checks in `src/common/tp_shm.c`. |
 | 15.22 SHM Backend Validation | Compliant | URI scheme/hugepages enforcement and 64-byte stride alignment checks in `src/common/tp_shm.c`. |
 
 ## Section 16 (Normative)

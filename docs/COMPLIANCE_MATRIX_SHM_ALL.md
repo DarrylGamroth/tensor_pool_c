@@ -25,7 +25,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/client/tp_control.c` and `src/client/tp_control_adapter.c`. |
 | QoS messages | Compliant | Encode/decode and cadence in `src/client/tp_producer.c` and `src/client/tp_consumer.c`. |
-| Client conductor (Aeron-style) | Missing | Conductor does not yet centralize control/QoS/metadata/descriptor polling or handler dispatch. |
+| Client conductor (Aeron-style) | Compliant | Conductor centralizes shared pollers and dispatch in `src/client/tp_client_conductor.c`. |
 | Supervisor/unified management | Missing | Not implemented in this repo. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
 | SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/common/tp_shm.c`. |
@@ -35,15 +35,15 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| Driver lifecycle, ownership, epoch management | Missing | Driver responsibilities not yet implemented in this repo. |
+| Driver lifecycle, ownership, epoch management | Compliant | `tp_driver` manages epochs, SHM creation, and announce emission in `src/driver/tp_driver.c`. |
 | Attach request encode | Compliant | `tp_driver_send_attach` in `src/client/tp_driver_client.c`. |
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
-| Node ID negotiation | Compliant | `desiredNodeId` sent; `nodeId` accepted from driver; allocation remains driver-owned. |
+| Node ID negotiation | Partial | Driver enforces `desiredNodeId`; no auto-assignment when absent. |
 | Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
 | Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
 | Lease revoked / shutdown handling | Compliant | Decode validates enums; revoke clears mappings and schedules reattach. |
 | Schema version compatibility | Compliant | `schemaId`/`templateId`/`version`/`blockLength` gated in driver client decoders. |
-| Control-plane transport | Compliant | Driver control uses Aeron publication/subscription via client. |
+| Control-plane transport | Compliant | Driver control/announce use Aeron publications/subscriptions in `src/driver/tp_driver.c`. |
 
 ## SHM_Discovery_Service_Spec_v_1.0
 
@@ -63,7 +63,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | FrameDescriptor trace_id | Compliant | `trace_id` in `tp_frame_descriptor_t` and publish paths. |
 | TraceLinkSet encode/decode | Compliant | `src/common/tp_tracelink.c` enforces schema, uniqueness, non-zero parents. |
 | TraceLink propagation helpers | Compliant | `tp_tracelink_resolve_trace_id` enforces root/1→1/N→1 rules. |
-| Node ID allocation | External | Driver/discovery-owned; client uses `nodeId` when provided. |
+| Node ID allocation | Missing | Driver/discovery-owned; auto-assignment not yet implemented. |
 | Best-effort semantics | Compliant | TraceLink emission is non-blocking. |
 
 ## SHM_Join_Barrier_Spec_v1.0

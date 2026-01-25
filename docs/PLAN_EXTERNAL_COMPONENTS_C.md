@@ -11,35 +11,35 @@ Out of scope:
 - UDP bridge service (spec removed / external by policy).
 
 ## Phase 0: Requirements Baseline
-- [ ] Enumerate all **External** items in `docs/COMPLIANCE_MATRIX_SHM_ALL.md`.
-- [ ] Expand `docs/REQUIREMENTS_TEST_CHECKLIST.md` with MUST/SHOULD for driver, discovery,
+- [x] Enumerate all **External** items in `docs/COMPLIANCE_MATRIX_SHM_ALL.md`.
+- [x] Expand `docs/REQUIREMENTS_TEST_CHECKLIST.md` with MUST/SHOULD for driver, discovery,
       supervisor, and node-id allocation.
-- [ ] Add traceability rows for newly planned components in
+- [x] Add traceability rows for newly planned components in
       `docs/TRACEABILITY_MATRIX_SHM_ALL.md`.
 
 ## Phase 1: Client Conductor (Aeron-style)
-- [ ] Implement a single-writer conductor that owns client state.
-- [ ] Centralize control/QoS/metadata/descriptor subscriptions and publications.
-- [ ] Implement driver attach/keepalive/revoke state machine.
-- [ ] Apply epoch/remap logic and SHM mapping decisions.
-- [ ] Dispatch callbacks for FrameDescriptor, QoS, metadata, discovery updates.
-- [ ] Provide `tp_client_do_work()`/agent-loop integration for polling.
+- [x] Implement a single-writer conductor that owns client state.
+- [x] Centralize control/QoS/metadata/descriptor subscriptions and publications.
+- [x] Implement driver attach/keepalive/revoke state machine.
+- [x] Apply epoch/remap logic and SHM mapping decisions.
+- [x] Dispatch callbacks for FrameDescriptor, QoS, metadata, discovery updates.
+- [x] Provide `tp_client_do_work()`/agent-loop integration for polling.
 
 ## Phase 2: Common Infrastructure (Shared by Driver/Discovery/Supervisor)
-- [ ] Define config schema (TOML) for driver + discovery + supervisor.
-- [ ] Add shared logging/metrics infrastructure (Aeron-style levels).
-- [ ] Add Aeron context helpers (channel config, timeouts, idle strategies).
-- [ ] Add shared SHM helpers (canonical directory layout, file creation, mmap/hugepages).
+- [x] Define config schema (TOML) for driver + discovery + supervisor.
+- [x] Add shared logging/metrics infrastructure (Aeron-style levels).
+- [x] Add Aeron context helpers (channel config, timeouts, idle strategies).
+- [x] Add shared SHM helpers (canonical directory layout, file creation, mmap/hugepages).
 
 ## Phase 3: C TensorPool Driver (Authoritative Control Plane)
-- [ ] Implement attach request handling and policy checks per driver spec.
-- [ ] Allocate and publish epochs; create header/pool files in canonical layout.
-- [ ] Implement lease management, keepalive tracking, and revoke reasons.
-- [ ] Enforce publishMode, expectedLayoutVersion, hugepages requirements.
-- [ ] Implement GC/retention policy for epochs (keep N, prune old).
-- [ ] Provide driver control + announce publications (stream IDs per conventions).
+- [x] Implement attach request handling and policy checks per driver spec.
+- [x] Allocate and publish epochs; create header/pool files in canonical layout.
+- [x] Implement lease management, keepalive tracking, and revoke reasons.
+- [x] Enforce publishMode, expectedLayoutVersion, hugepages requirements.
+- [x] Implement GC/retention policy for epochs (keep N, prune old).
+- [x] Provide driver control + announce publications (stream IDs per conventions).
 - [ ] Implement node-id allocation (authoritative per spec).
-- [ ] Provide `tp_driver` executable with lifecycle control and logging.
+- [x] Provide `tp_driver` executable with lifecycle control and logging.
 
 ## Phase 4: Discovery Service / Registry (Advisory)
 - [ ] Implement discovery registry state model (streams, pools, QoS metadata).
@@ -65,10 +65,10 @@ Out of scope:
 - [ ] Document operational workflows in `docs/DEPLOYMENT_GUIDE.md`.
 
 ## Progress
-- Phase 0: Not started
-- Phase 1: Not started
-- Phase 2: Not started
-- Phase 3: Not started
+- Phase 0: Completed
+- Phase 1: Completed
+- Phase 2: Completed
+- Phase 3: In progress (node-id allocation missing)
 - Phase 4: Not started
 - Phase 5: Not started
 - Phase 6: Not started
