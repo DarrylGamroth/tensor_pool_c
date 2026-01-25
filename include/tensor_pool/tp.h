@@ -26,5 +26,6 @@
 #include "tensor_pool/common/tp_version.h"
 #include "tensor_pool/driver/tp_driver.h"
 #include "tensor_pool/discovery/tp_discovery_service.h"
+#include "tensor_pool/supervisor/tp_supervisor.h"
 
 #endif

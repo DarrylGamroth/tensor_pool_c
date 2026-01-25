@@ -103,6 +103,8 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/driver/tp_driver.h
     include/tensor_pool/discovery/tp_discovery_service.h
     include/tensor_pool/tp_discovery_service.h
+    include/tensor_pool/supervisor/tp_supervisor.h
+    include/tensor_pool/tp_supervisor.h
     include/tensor_pool/client/tp_aeron.h
     include/tensor_pool/client/tp_client.h
     include/tensor_pool/client/tp_client_conductor.h
@@ -154,6 +156,8 @@ set(TP_SOURCES
     src/driver/tp_driver_config.c
     src/discovery/tp_discovery_service.c
     src/discovery/tp_discovery_config.c
+    src/supervisor/tp_supervisor.c
+    src/supervisor/tp_supervisor_config.c
 )
 
 if (TP_ENABLE_SBE_CODEGEN)
@@ -336,7 +340,8 @@ add_executable(tensor_pool_tests
     tests/test_tp_shm_security.c
     tests/test_tp_consumer_apply.c
     tests/test_tp_driver_config.c
-    tests/test_tp_discovery_service.c)
+    tests/test_tp_discovery_service.c
+    tests/test_tp_supervisor.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
 target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/common")
 target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
@@ -429,6 +434,10 @@ target_include_directories(tp_discoveryd PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 add_executable(tp_discovery_query tools/tp_discovery_query.c)
 target_link_libraries(tp_discovery_query PRIVATE tensor_pool)
 target_include_directories(tp_discovery_query PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+
+add_executable(tp_supervisord tools/tp_supervisord.c)
+target_link_libraries(tp_supervisord PRIVATE tensor_pool)
+target_include_directories(tp_supervisord PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 if (TP_ENABLE_FUZZ)
     if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
