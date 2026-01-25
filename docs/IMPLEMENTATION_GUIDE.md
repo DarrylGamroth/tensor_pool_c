@@ -31,6 +31,8 @@ Target style references:
 - No Aeron types in public API; wrap with TensorPool handles/types.
 - Error semantics: return 0 on success, -1 on failure; `tp_err` set on error.
 - C11 atomics for portability (`stdatomic.h`).
+- Use Aeron-style agents for execution (agent runner or invoker). Avoid
+  pthread-specific helpers in TensorPool code.
 
 ## 3. Client Conductor (Required)
 The conductor is the single-writer owner of client state and shared Aeron
@@ -161,7 +163,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Supervisor
 - DONE: Supervisor service and policy handler embedded in `tp_driver` (`tp_supervisor`).
-  - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
+  - SHOULD be a standalone agent; MAY run embedded in the driver.
 
 ### Driver (Server-side)
 - DONE: Authoritative attach/keepalive/detach and policy checks.
@@ -172,7 +174,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Supervisor / Unified Management
 - MISSING: Supervisor/console policy layer (recommended by spec).
-  - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
+  - SHOULD be a standalone agent; MAY run embedded in the driver.
 
 ### TraceLink
 - DONE: Snowflake trace IDs and TraceLinkSet encode/decode.

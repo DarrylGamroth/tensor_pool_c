@@ -20,6 +20,7 @@ Authoritative references:
 ## Assumptions
 - Breaking API changes are acceptable during development.
 - Follow Aeron conductor/agent patterns wherever possible.
+- The conductor is an Aeron-style agent; avoid pthread-specific helpers.
 
 ## Non-Goals
 - Implementing the driver, discovery provider, or supervisor services.

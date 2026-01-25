@@ -53,14 +53,16 @@ Related design docs:
 - [x] Embed supervisor agent in `tp_driver`.
 
 ## Phase 6: Integration + Interop
-- [ ] Add integration tests for driver + discovery + client conductor.
-- [ ] Add interop tests against Julia driver/client for wire compatibility.
-- [ ] Add failure-mode tests (expired lease, remap, invalid layout).
+- [x] Add integration tests for driver + discovery + client conductor.
+- [ ] Add interop tests against Julia driver/client for wire compatibility. (Skipped per instruction.)
+- [x] Add failure-mode tests (expired lease, remap, invalid layout).
+- [x] Standardize all test drivers/tools on Aeron-style agent execution (no pthread-specific helpers).
 
 ## Phase 7: Documentation & Usage
-- [ ] Update `docs/C_CLIENT_API_USAGE.md` to use conductor-only APIs.
-- [ ] Add examples for driver/discovery/supervisor usage.
-- [ ] Keep `docs/IMPLEMENTATION_GUIDE.md` checklist in sync.
+- [x] Update `docs/C_CLIENT_API_USAGE.md` to use conductor-only APIs.
+- [x] Add examples for driver/discovery/supervisor usage.
+- [x] Keep `docs/IMPLEMENTATION_GUIDE.md` checklist in sync.
+- [x] Document agent/agent-invoker execution model for conductor and services.
 
 ## Progress
 - Phase 0: Completed
@@ -69,8 +71,8 @@ Related design docs:
 - Phase 3: Completed
 - Phase 4: Completed
 - Phase 5: Completed
-- Phase 6: Not started
-- Phase 7: Not started
+- Phase 6: Completed (Julia interop tests skipped per instruction)
+- Phase 7: Completed
 
 ## Checklist (Specs → Tests)
 - [ ] Add integration coverage for driver server-side requirements (D-2.1, D-4.3-1, D-4.8-1, D-4.2-4/TL-6.2-1).

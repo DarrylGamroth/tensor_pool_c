@@ -77,20 +77,20 @@ Columns:
 
 | Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| D-2.1 | 2 | Single authoritative driver per stream | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces exclusive producer; no integration test yet |
+| D-2.1 | 2 | Single authoritative driver per stream | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Exclusive producer lease enforced; second producer rejected |
 | D-2.2 | 2.2/2.3 | Clients MUST NOT create/truncate/unlink SHM files | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Client library never creates/truncates; driver owns SHM lifecycles |
 | D-3-1 | 3 | Clients treat driver URIs as authoritative | `src/client/tp_driver_client.c`, `src/client/tp_client.c`, `src/client/tp_consumer.c`, `src/client/tp_producer.c` | `tests/test_tp_smoke.c` | Compliant | Driver mode rejects manual config |
-| D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/client/tp_driver_client.c`, `src/driver/tp_driver.c` | `tests/test_tp_driver_client.c` | Partial | Driver-side attach handling needs integration tests |
+| D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/client/tp_driver_client.c`, `src/driver/tp_driver.c` | `tests/test_tp_driver_client.c`, `tests/test_tp_driver_integration.c` | Compliant | Driver-side attach handling exercised end-to-end |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/client/tp_driver_client.c`, `src/common/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
-| D-4.2-4 | 4.2 | Driver assigns `nodeId` when absent, stable per lease | `src/driver/tp_driver.c` | n/a | Partial | No reuse cooldown; no integration test yet |
-| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces semantics; no integration tests yet |
+| D-4.2-4 | 4.2 | Driver assigns `nodeId` when absent, stable per lease | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Node ID assigned on attach when not provided |
+| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Partial | Layout version mismatch covered; publishMode/hugepages still need integration coverage |
 | D-4.4-1 | 4.4 | Lease keepalive send/expiry handling | `src/client/tp_driver_client.c`, `src/client/tp_client.c` | `tests/test_tp_driver_client.c` | Compliant | `tp_client_do_work` schedules keepalives |
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.6-1 | 4.6 | Response code validation | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/client/tp_consumer.c`, `src/client/tp_producer.c`, `src/client/tp_driver_client.c` | `tests/test_tp_lease_revoked.c` | Compliant | Revoke clears mappings and schedules reattach |
-| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | `src/driver/tp_driver.c` | n/a | Partial | Driver enforces uniqueness; no integration tests yet |
+| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | `src/driver/tp_driver.c` | `tests/test_tp_driver_integration.c` | Compliant | Duplicate producer attach rejected |
 | D-4.9-1 | 4.9 | Detach request/response encode/decode | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-B.1-1 | Appendix B.1 | Correlation IDs unique/non-reused; seeded per process | `src/client/tp_driver_client.c`, `src/client/tp_producer.c`, `src/client/tp_consumer.c` | `tests/test_tp_driver_client.c` | Compliant | Generator seeds from urandom/time and increments |
 | D-B.1-2 | Appendix B.1 | Ignore duplicate ShmAttachResponse after OK | `src/client/tp_driver_client.c` | `tests/test_tp_driver_client_live.c` | Compliant | Post-OK duplicates ignored |
