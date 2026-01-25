@@ -299,9 +299,9 @@ install(TARGETS tensor_pool
     RUNTIME DESTINATION bin)
 
 foreach (header IN LISTS TP_PUBLIC_HEADERS)
-    get_filename_component(header_dir "${header}" DIRECTORY)
+    get_filename_component(header_dir "${CMAKE_CURRENT_LIST_DIR}/${header}" DIRECTORY)
     file(RELATIVE_PATH header_rel_dir "${CMAKE_CURRENT_LIST_DIR}/include" "${header_dir}")
-    install(FILES "${header}" DESTINATION "include/${header_rel_dir}")
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/${header}" DESTINATION "include/${header_rel_dir}")
 endforeach ()
 
 if (TP_ENABLE_COVERAGE)

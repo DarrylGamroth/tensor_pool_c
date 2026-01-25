@@ -30,14 +30,14 @@ clear lifecycle semantics and consistent naming.
 - Aeron alignment: opaque handles + context/agent lifecycle mirror Aeron C client patterns.
 
 ## Phase 1: API Surface Redesign
-- [ ] Replace "helper" names with public API names:
+- [x] Replace "helper" names with public API names:
   - `tp_driver_attach_info_to_producer_config` → `tp_driver_attach_producer_config`.
   - `tp_driver_attach_info_to_consumer_config` → `tp_driver_attach_consumer_config`.
   - `tp_driver_detach_if_active` → `tp_driver_detach_active`.
-- [ ] Add explicit async + poll variants for driver attach:
+- [x] Add explicit async + poll variants for driver attach:
   - `tp_producer_attach_driver_async`, `tp_producer_attach_driver_poll`.
   - `tp_consumer_attach_driver_async`, `tp_consumer_attach_driver_poll`.
-- [ ] Keep blocking `tp_producer_attach_driver` and `tp_consumer_attach_driver` as optional wrappers.
+- [x] Keep blocking `tp_producer_attach_driver` and `tp_consumer_attach_driver` as optional wrappers.
 - [x] Make internal structs opaque (Aeron model):
   - `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t` become opaque handles.
   - `tp_client_conductor_t`, `tp_aeron_client_t`, `tp_consumer_manager_t`,
@@ -126,7 +126,7 @@ clear lifecycle semantics and consistent naming.
 - [x] Update fuzz targets to use internal headers for opaque handle structs.
 - [x] Add unit coverage for new accessor APIs.
 - [x] Run coverage + fuzzing for the new API work and record results.
-- [ ] Add async + poll attach APIs for producer/consumer and align naming.
+- [x] Add async + poll attach APIs for producer/consumer and align naming.
 - [ ] Decide and implement `tp_context_t` opaque lifecycle and context getters.
 - [ ] Standardize poll return semantics (`0/1/-1`) across all pollers/helpers.
 - [ ] Add registration-id accessors for all async operations.
@@ -138,5 +138,5 @@ clear lifecycle semantics and consistent naming.
 - [ ] Remove/rename old APIs (breaking changes) and add migration guide.
 
 ## Latest Runs
-- Coverage (build-coverage): lines 58.5%, functions 81.0%, branches 47.4% (gcovr warned on negative hits).
+- Coverage (build-coverage): lines 59.5%, functions 80.6%, branches 48.2% (gcovr warned on negative hits).
 - Fuzz smoke: `tools/run_fuzz_smoke.sh` completed.
