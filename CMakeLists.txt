@@ -378,6 +378,8 @@ if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
             --exclude ".*tools/.*"
             --exclude ".*fuzz/.*"
             --gcov-ignore-errors=no_working_dir_found
+            --gcov-ignore-errors=source_not_found
+            --gcov-ignore-errors=output_error
             --print-summary
             --xml-pretty -o coverage.xml
             --html-details -o coverage.html)
