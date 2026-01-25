@@ -324,6 +324,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_producer_errors.c
     tests/test_tp_driver_client.c
     tests/test_tp_driver_client_live.c
+    tests/test_tp_driver_integration.c
     tests/test_tp_discovery_client.c
     tests/test_tp_discovery_client_live.c
     tests/test_tp_merge_map.c
