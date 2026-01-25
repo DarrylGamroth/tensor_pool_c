@@ -50,7 +50,7 @@ Call `tp_client_do_work(&client)` in your poll loop to drive keepalives, conduct
 
 TensorPool mirrors Aeron’s agent pattern. Choose one of two modes:
 
-- Agent runner (dedicated agent loop): run `tp_client_do_work` in your own agent loop.
+- Agent runner (dedicated agent loop): run `tp_client_do_work` in your own agent loop, or use `tp_client_conductor_agent_*` for an Aeron-style agent runner.
 - Agent invoker (single-threaded): set `tp_client_context_set_use_agent_invoker(&ctx, true)` and call `tp_client_do_work` frequently to drive the Aeron conductor in your loop.
 
 Example (agent invoker + shared pollers):

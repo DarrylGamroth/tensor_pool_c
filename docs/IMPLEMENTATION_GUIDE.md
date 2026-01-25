@@ -31,8 +31,9 @@ Target style references:
 - No Aeron types in public API; wrap with TensorPool handles/types.
 - Error semantics: return 0 on success, -1 on failure; `tp_err` set on error.
 - C11 atomics for portability (`stdatomic.h`).
-- Use Aeron-style agents for execution (agent runner or invoker). Avoid
-  pthread-specific helpers in TensorPool code.
+- Use Aeron-style agents for execution (agent runner or invoker). Prefer
+  `tp_agent_runner` (wrapper over Aeron agent runner) over pthread usage
+  in TensorPool code.
 
 ## 3. Client Conductor (Required)
 The conductor is the single-writer owner of client state and shared Aeron
@@ -159,7 +160,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Discovery
 - DONE: DiscoveryRequest encode + response decode + poller API.
-- DONE: Discovery provider/registry service (`tp_discoveryd`, `tp_discovery_service`).
+- DONE: Discovery provider/registry service (`tp_discoveryd`, `tp_discovery_service`) with agent runner loop.
 
 ### Supervisor
 - DONE: Supervisor service and policy handler embedded in `tp_driver` (`tp_supervisor`).
@@ -169,7 +170,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 - DONE: Authoritative attach/keepalive/detach and policy checks.
 - DONE: SHM creation, epoch management, and ShmPoolAnnounce emission.
 - DONE: Lease revocation and GC/retention policy.
-- DONE: `tp_driver` executable with TOML config + logging.
+- DONE: `tp_driver` executable with TOML config + logging (agent runner loop).
 - DONE: Node ID allocation with reuse cooldown per TraceLink guidance.
 
 ### Supervisor / Unified Management
@@ -188,6 +189,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Tests / Compliance
 - DONE: Wire-spec unit tests and compliance mappings.
+- DONE: Agent runner smoke tests.
 - PARTIAL: Driver integration tests (lifecycle not yet covered end-to-end).
 
 ### Code Organization

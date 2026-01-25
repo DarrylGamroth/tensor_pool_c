@@ -44,6 +44,7 @@ Authoritative references:
   them in `do_work` (Aeron-style command queue).
 - Optional agent-invoker mode: `tp_client_do_work` drives Aeron and conductor
   together for single-threaded applications.
+- For dedicated loops, use the Aeron-style agent runner (`tp_client_conductor_agent_*`).
 - No blocking inside `do_work`; it returns work count as in Aeron.
 
 ## Command Queue (Aeron-style)

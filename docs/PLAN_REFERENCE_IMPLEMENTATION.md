@@ -79,3 +79,5 @@ Related design docs:
 - [x] Add integration coverage for D-4.3-1 publishMode/hugepages semantics.
 - [x] Add node ID reuse cooldown policy (TraceLink §6.2) with tests.
 - [x] Expand config-matrix integration tests beyond external driver availability.
+- [x] Standardize tools on Aeron-style agent runner loops (`tp_agent_runner`).
+- [x] Add agent runner smoke coverage (`tests/test_tp_agent.c`).
