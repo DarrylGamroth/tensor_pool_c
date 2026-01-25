@@ -49,7 +49,7 @@ Columns:
 | W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/tp_progress_poller.c` | `tests/test_tp_pollers.c`, `tests/test_tp_progress_poller_extra.c` | Compliant | Tracker sized to header ring when consumer is set |
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/tp_control.c`, `src/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/tp_qos.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
-| W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | External | External supervisor not implemented |
+| W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | Missing | Supervisor not implemented |
 | W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/tp_consumer_registry.c`, `src/tp_consumer.c` | `tests/test_tp_consumer_registry.c`, `tests/test_tp_pollers.c` | Compliant | Fallback entered on invalid announce or mapping failure when configured. |
 | W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/tp_shm.c`, `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_consumer_apply.c` | Compliant | Layout version gated at attach and superblock validation matches announce |
 | W-15.2-1 | 15.2 | Epoch lifecycle: drop on mismatch, remap on announce | `src/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |
@@ -77,19 +77,19 @@ Columns:
 
 | Req ID | Spec Section | Requirement | Implementation | Tests | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| D-2.1 | 2 | Single authoritative driver per stream | n/a | n/a | External | Driver responsibility |
+| D-2.1 | 2 | Single authoritative driver per stream | n/a | n/a | Missing | Driver responsibility not yet implemented |
 | D-2.2 | 2.2/2.3 | Clients MUST NOT create/truncate/unlink SHM files | `docs/C_CLIENT_API_USAGE.md` | n/a | Compliant | Client library never creates/truncates; driver owns SHM lifecycles |
 | D-3-1 | 3 | Clients treat driver URIs as authoritative | `src/tp_driver_client.c`, `src/tp_client.c`, `src/tp_consumer.c`, `src/tp_producer.c` | `tests/test_tp_smoke.c` | Compliant | Driver mode rejects manual config |
 | D-4.2-1 | 4.2 | Attach request/response encode/decode, required fields validated | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | Schema/block length gated |
 | D-4.2-2 | 4.2 | `correlationId` echoed; URIs non-empty; `headerSlotBytes=256`; pool_nslots match | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.2-3 | 4.2 | Node ID assignment and validation | `src/tp_driver_client.c`, `src/tp_trace.c` | `tests/test_tp_driver_client.c` | Compliant | Client honors non-null nodeId |
-| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | External | Driver enforcement external |
+| D-4.3-1 | 4.3 | Attach request semantics (expectedLayoutVersion, publishMode, hugepages) | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Missing | Driver enforcement not yet implemented |
 | D-4.4-1 | 4.4 | Lease keepalive send/expiry handling | `src/tp_driver_client.c`, `src/tp_client.c` | `tests/test_tp_driver_client.c` | Compliant | `tp_client_do_work` schedules keepalives |
 | D-4.4a-1 | 4.4a | Schema version compatibility gating | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.5-1 | 4.5 | Control-plane transport over Aeron | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.6-1 | 4.6 | Response code validation | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-4.7-1 | 4.7/4.9 | Lease lifecycle, revoke handling | `src/tp_consumer.c`, `src/tp_producer.c`, `src/tp_driver_client.c` | `tests/test_tp_lease_revoked.c` | Compliant | Revoke clears mappings and schedules reattach |
-| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | n/a | n/a | External | Driver responsibility |
+| D-4.8-1 | 4.8 | Lease identity and client identity uniqueness | n/a | n/a | Missing | Driver responsibility not yet implemented |
 | D-4.9-1 | 4.9 | Detach request/response encode/decode | `src/tp_driver_client.c` | `tests/test_tp_driver_client.c` | Compliant | |
 | D-B.1-1 | Appendix B.1 | Correlation IDs unique/non-reused; seeded per process | `src/tp_driver_client.c`, `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_driver_client.c` | Compliant | Generator seeds from urandom/time and increments |
 | D-B.1-2 | Appendix B.1 | Ignore duplicate ShmAttachResponse after OK | `src/tp_driver_client.c` | `tests/test_tp_driver_client_live.c` | Compliant | Post-OK duplicates ignored |
@@ -104,9 +104,9 @@ Columns:
 | DS-4.2-1 | 4.2 | Gate decode by `schemaId`/`templateId` on shared streams | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-4.3-1 | 4.3 | Request must include response channel and non-zero stream ID | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-5.0-1 | 5.0 | Optional fields use nullValue or zero-length strings | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | Optional dataSourceId nullValue handled |
-| DS-5.1-1 | 5.1 | Filter AND semantics, tag matching rules | n/a | n/a | External | Provider responsibility |
+| DS-5.1-1 | 5.1 | Filter AND semantics, tag matching rules | n/a | n/a | Missing | Provider responsibility not yet implemented |
 | DS-5.2-1 | 5.2 | Response validation: headerSlotBytes/maxDims, pool_nslots match, authority fields non-empty | `src/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
-| DS-6-1 | 6 | Registry expiry/indexing/conflict resolution | n/a | n/a | External | Provider responsibility |
+| DS-6-1 | 6 | Registry expiry/indexing/conflict resolution | n/a | n/a | Missing | Provider responsibility not yet implemented |
 
 ## SHM_TraceLink_Spec_v1.0
 
@@ -114,7 +114,7 @@ Columns:
 | --- | --- | --- | --- | --- | --- | --- |
 | TL-5-1 | 5 | TraceLink is best-effort and non-blocking | `src/tp_tracelink.c`, `src/tp_producer.c` | `tests/test_tp_tracelink.c` | Compliant | No flow-control coupling |
 | TL-6.1-1 | 6.1 | 64-bit Snowflake-style trace IDs | `src/tp_trace.c` | `tests/test_tp_tracelink.c` | Compliant | Agrona-style generator |
-| TL-6.2-1 | 6.2 | Node ID unique per deployment | n/a | n/a | External | Driver/discovery responsibility |
+| TL-6.2-1 | 6.2 | Node ID unique per deployment | n/a | n/a | Missing | Driver/discovery responsibility not yet implemented |
 | TL-6.3-1 | 6.3 | Propagation rules for root/derived frames | `src/tp_producer.c`, `src/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | Helper enforces root/1→1/N→1 rules and flags when to emit TraceLinkSet. |
 | TL-8.1-1 | 8.1 | FrameDescriptor `trace_id` field (null sentinel 0) | `src/tp_producer.c`, `src/tp_consumer.c` | `tests/test_tp_tracelink.c` | Compliant | |
 | TL-9-1 | 9 | TraceLinkSet encode/decode, parent uniqueness, schema gating | `src/tp_tracelink.c` | `tests/test_tp_tracelink.c` | Compliant | |

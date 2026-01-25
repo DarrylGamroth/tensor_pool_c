@@ -48,7 +48,7 @@ Legend:
 | 10.4 QoS and Health | Compliant | QoS publish/poll implemented with cadence via `announce_period_ns`, watermark uses nullValue when absent. |
 | 10.4.1 QosConsumer | Compliant | Encode/decode plus cadence in consumer poll loop. |
 | 10.4.2 QosProducer | Compliant | Encode/decode plus cadence implemented; `watermark` uses nullValue when absent. |
-| 10.5 Supervisor / Unified Management | External | Supervisor role is out of scope for this repo. |
+| 10.5 Supervisor / Unified Management | Missing | Supervisor role not yet implemented. |
 | 11. Consumer Modes | Compliant | Rate-limited mode honored for per-consumer descriptors; shared stream fallback allowed when declined. |
 
 ## Sections 12–14 (Informative)
