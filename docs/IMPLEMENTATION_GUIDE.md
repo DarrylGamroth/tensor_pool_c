@@ -112,3 +112,53 @@ It SHOULD be integrated into control-plane polling for updates.
 - A running Aeron Media Driver is expected at `/dev/shm/aeron-dgamroth`.
 - Stream IDs MUST follow `docs/STREAM_ID_CONVENTIONS.md`.
 - Logging should be configurable; stderr default is acceptable for tools.
+
+## 15. Implementation Checklist (Status)
+Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
+
+### Client Conductor (Aeron-style)
+- MISSING: Single-writer conductor owns control/QoS/metadata/descriptor streams.
+- MISSING: MPSC command queue for async add operations.
+- MISSING: Client-level handler registration and dispatch from `tp_client_do_work`.
+- MISSING: Remove public Aeron types from user-facing headers.
+
+### Driver Model (Client-side)
+- DONE: Attach/keepalive/detach encode/decode and lease handling.
+- DONE: Client ID auto-assign when 0 provided; retry on collision.
+- DONE: Schema/version/block-length gating for driver messages.
+
+### SHM Layout / Mapping
+- DONE: Superblock validation, canonical layout enforcement, path containment checks.
+- DONE: Header ring layout, seqlock commit protocol, payload pool mapping rules.
+- DONE: TensorHeader validation and stride rules (64-byte aligned).
+
+### Producer
+- DONE: Offer/try_claim/commit/queue_claim APIs and DMA flush hook.
+- DONE: FrameDescriptor/FrameProgress encode; QoS + metadata cadence.
+- DONE: TraceLink helpers with non-blocking emission.
+
+### Consumer
+- DONE: Descriptor/progress polling with committed seqlock validation.
+- DONE: Per-consumer stream support and fallback behavior.
+- DONE: Drop accounting and QoS emission.
+
+### Discovery
+- DONE: DiscoveryRequest encode + response decode + poller API.
+- MISSING: Discovery provider/registry service.
+
+### Supervisor / Unified Management
+- MISSING: Supervisor/console policy layer (recommended by spec).
+
+### TraceLink
+- DONE: Snowflake trace IDs and TraceLinkSet encode/decode.
+- MISSING: Node ID allocation (driver/discovery owned).
+
+### JoinBarrier
+- DONE: MergeMap decode + join barrier modes (sequence/timestamp/latest).
+
+### Build / Codegen
+- DONE: CMake build and SBE codegen via Maven toolchain.
+
+### Tests / Compliance
+- DONE: Wire-spec unit tests and compliance mappings.
+- PARTIAL: Conductor-level integration tests (blocked on conductor implementation).
