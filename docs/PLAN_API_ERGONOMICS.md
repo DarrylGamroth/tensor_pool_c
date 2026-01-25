@@ -27,6 +27,10 @@ clear lifecycle semantics and consistent naming.
   - `require_*` for validation requirements, `use_*` for runtime toggles.
   - `*_offer`, `*_try_claim`, `*_commit`, `*_poll` aligned with Aeron.
 - Align error messages and return codes with Aeron conventions.
+- Add consistent lifecycle APIs (`*_close`) and ownership rules for all public objects.
+- Add `*_constants` accessors (publication/subscription) to expose channel/stream metadata
+  without leaking Aeron types.
+- Expose idle strategy configuration for `tp_agent_runner` (sleep/yield/busy).
 
 ## Phase 3: Migration & Examples
 - Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
