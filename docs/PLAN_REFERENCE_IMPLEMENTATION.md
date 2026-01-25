@@ -14,15 +14,15 @@ Related design docs:
 - `docs/IMPLEMENTATION_GUIDE.md`
 
 ## Phase 0: Baseline Tracking
-- [ ] Ensure compliance and traceability matrices reflect missing items.
-- [ ] Confirm requirements-to-tests checklist coverage for new work.
-- [ ] Mark conductor/driver/discovery/supervisor as MISSING where applicable.
+- [x] Ensure compliance and traceability matrices reflect missing items.
+- [x] Confirm requirements-to-tests checklist coverage for new work.
+- [x] Mark conductor/driver/discovery/supervisor as MISSING where applicable.
 
 ## Phase 1: Client Conductor (Aeron-style)
-- [ ] Implement MPSC command queue (C11 atomics) for async add operations.
+- [x] Implement MPSC command queue (C11 atomics) for async add operations.
 - [ ] Move control/QoS/metadata/descriptor subscriptions into conductor-owned state.
 - [ ] Add client-level handler registration and dispatch in `tp_client_do_work`.
-- [ ] Remove public Aeron types from user-facing headers (opaque handles).
+- [x] Remove public Aeron types from user-facing headers (opaque handles).
 - [ ] Route per-producer/consumer polling through conductor (or deprecate).
 - [ ] Add unit tests for conductor lifecycle and handler dispatch.
 
@@ -64,7 +64,7 @@ Related design docs:
 
 ## Progress
 - Phase 0: Completed
-- Phase 1: Not started
+- Phase 1: In progress (MPSC queue + opaque handles done; conductor-owned subscriptions pending)
 - Phase 2: Not started
 - Phase 3: Not started
 - Phase 4: Not started
