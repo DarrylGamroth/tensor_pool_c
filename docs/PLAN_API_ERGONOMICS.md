@@ -37,8 +37,8 @@ clear lifecycle semantics and consistent naming.
 - Add tests for new async + poll functions (success, timeout, error paths).
 - Add tests for blocking convenience wrappers.
 
-## Phase 5: Deprecation Strategy
-- Mark old names as deprecated for one release cycle (if needed).
+## Phase 5: Breaking Changes
+- No backwards compatibility: remove or rename old APIs directly.
 - Provide a migration guide with old→new mapping.
 
 ## Open Questions
