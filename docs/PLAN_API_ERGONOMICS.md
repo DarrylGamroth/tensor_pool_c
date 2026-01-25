@@ -35,6 +35,9 @@ clear lifecycle semantics and consistent naming.
 - Add `*_constants` accessors (publication/subscription) to expose channel/stream metadata
   without leaking Aeron types.
 - Expose idle strategy configuration for `tp_agent_runner` (sleep/yield/busy).
+- Add `*_get_registration_id` accessors for async operations (Aeron-style).
+- Standardize poll return semantics to `0/1/-1` across all pollers and async helpers.
+- Add minimal client defaults API to avoid repeated channel setup (Aeron sample-style).
 
 ## Public vs Private Inventory (Aeron-style)
 
