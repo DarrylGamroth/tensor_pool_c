@@ -1,7 +1,7 @@
 # Supervisor Usage
 
-This document describes the standalone supervisor (`tp_supervisord`) that handles
-`ConsumerHello` and emits `ConsumerConfig` per the wire spec.
+This document describes the supervisor logic that is embedded in `tp_driver`.
+It handles `ConsumerHello` and emits `ConsumerConfig` per the wire spec.
 
 Authoritative references:
 - `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`
@@ -9,23 +9,12 @@ Authoritative references:
 
 ## Running the Supervisor
 
-```
-./build/tp_supervisord -c config/supervisor_example.toml
-```
-
-Optional logging:
-```
-TP_LOG_LEVEL=4 ./build/tp_supervisord -c config/supervisor_example.toml
-```
-
-Optional stats logging (milliseconds):
-```
-TP_SUPERVISOR_STATS_MS=2000 ./build/tp_supervisord -c config/supervisor_example.toml
-```
+The supervisor runs inside `tp_driver` when `[supervisor]` is present in the driver
+config. See the example in `config/driver_integration_example.toml`.
 
 ## Config
 
-See `config/supervisor_example.toml`. Key fields:
+See the `[supervisor]` section in your driver config. Key fields:
 
 ### [supervisor]
 - `control_channel` / `control_stream_id`: control-plane stream to receive `ConsumerHello` and send `ConsumerConfig`.

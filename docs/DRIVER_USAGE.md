@@ -8,6 +8,7 @@ The authoritative behavior is defined by:
 
 ## Overview
 - The driver is the authoritative control plane for SHM lifecycle, epochs, and `ShmPoolAnnounce`.
+- The supervisor policy engine is embedded in `tp_driver` and enabled via `[supervisor]` config.
 - Clients MUST attach via the driver when using the driver model.
 - Producers and consumers MUST NOT create, truncate, or unlink SHM files directly in driver mode.
 
@@ -65,6 +66,20 @@ Key sections:
 ### [streams.<name>]
 - `stream_id`: static stream ID.
 - `profile`: profile name.
+
+### [supervisor]
+- `control_channel` / `control_stream_id`: control-plane stream to receive `ConsumerHello` and send `ConsumerConfig`.
+- `announce_channel` / `announce_stream_id`: `ShmPoolAnnounce` subscription (defaults to `[driver]` values).
+- `metadata_channel` / `metadata_stream_id`: `DataSourceAnnounce`/`DataSourceMeta` subscription (defaults to `[driver]` values).
+- `qos_channel` / `qos_stream_id`: `QosConsumer`/`QosProducer` subscription (defaults to `[driver]` values).
+- `consumer_capacity`: registry capacity for tracking consumers.
+- `consumer_stale_ms`: stale timeout for consumer registry sweeps.
+- `per_consumer_enabled`: enable per-consumer stream assignment.
+- `per_consumer_descriptor_channel` / `per_consumer_descriptor_base` / `per_consumer_descriptor_range`: assignment policy.
+- `per_consumer_control_channel` / `per_consumer_control_base` / `per_consumer_control_range`: assignment policy.
+- `force_no_shm`: force `ConsumerConfig.use_shm=0`.
+- `force_mode`: override consumer mode (0 = no override).
+- `payload_fallback_uri`: optional fallback URI for non-SHM consumers.
 
 ## Canonical SHM Layout
 

@@ -40,3 +40,25 @@ payload_pools = [
 [streams.cam1]
 stream_id = 10000
 profile = "camera"
+
+[supervisor]
+control_channel = "aeron:ipc?term-length=4m"
+control_stream_id = 1000
+announce_channel = "aeron:ipc?term-length=4m"
+announce_stream_id = 1001
+metadata_channel = "aeron:ipc?term-length=4m"
+metadata_stream_id = 1300
+qos_channel = "aeron:ipc?term-length=4m"
+qos_stream_id = 1200
+consumer_capacity = 256
+consumer_stale_ms = 5000
+per_consumer_enabled = true
+per_consumer_descriptor_channel = "aeron:ipc?term-length=4m"
+per_consumer_descriptor_base = 31000
+per_consumer_descriptor_range = 1000
+per_consumer_control_channel = "aeron:ipc?term-length=4m"
+per_consumer_control_base = 32000
+per_consumer_control_range = 1000
+force_no_shm = false
+force_mode = 0
+payload_fallback_uri = ""

@@ -14,7 +14,7 @@ Legend:
 - **Compliant**: Implemented per spec.
 - **Partial**: Core behavior implemented; gaps remain.
 - **Missing**: Not implemented.
-- **External**: Out of scope for this repo (driver/supervisor/bridge).
+- **External**: Out of scope for this repo (e.g., UDP bridge).
 - **N/A**: Informative-only.
 
 Columns:

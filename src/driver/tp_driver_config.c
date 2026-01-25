@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,6 +98,34 @@ static int tp_driver_copy_uint32(uint32_t *out, toml_datum_t value, const char *
     return 0;
 }
 
+static int tp_driver_copy_int32(int32_t *out, toml_datum_t value, const char *name, bool required)
+{
+    if (value.type == TOML_UNKNOWN)
+    {
+        if (required)
+        {
+            TP_SET_ERR(EINVAL, "tp_driver_config_load: missing %s", name);
+            return -1;
+        }
+        return 0;
+    }
+
+    if (value.type != TOML_INT64)
+    {
+        TP_SET_ERR(EINVAL, "tp_driver_config_load: %s must be an integer", name);
+        return -1;
+    }
+
+    if (value.u.int64 < INT32_MIN || value.u.int64 > INT32_MAX)
+    {
+        TP_SET_ERR(EINVAL, "tp_driver_config_load: %s out of range", name);
+        return -1;
+    }
+
+    *out = (int32_t)value.u.int64;
+    return 0;
+}
+
 static int tp_driver_copy_uint64(uint64_t *out, toml_datum_t value, const char *name, bool required)
 {
     if (value.type == TOML_UNKNOWN)
@@ -122,6 +151,207 @@ static int tp_driver_copy_uint64(uint64_t *out, toml_datum_t value, const char *
     }
 
     *out = (uint64_t)value.u.int64;
+    return 0;
+}
+
+static void tp_driver_clear_allowed_paths(tp_context_t *context)
+{
+    if (NULL == context)
+    {
+        return;
+    }
+    context->allowed_paths.paths = NULL;
+    context->allowed_paths.length = 0;
+    context->allowed_paths.canonical_paths = NULL;
+    context->allowed_paths.canonical_length = 0;
+    context->allowed_paths.enforce_permissions = 0;
+}
+
+static int tp_driver_load_supervisor(tp_driver_config_t *config, toml_datum_t supervisor)
+{
+    if (NULL == config)
+    {
+        return -1;
+    }
+
+    config->supervisor_enabled = false;
+
+    if (supervisor.type == TOML_UNKNOWN)
+    {
+        return 0;
+    }
+
+    if (supervisor.type != TOML_TABLE)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_config_load: [supervisor] must be a table");
+        return -1;
+    }
+
+    config->supervisor_enabled = true;
+    if (tp_supervisor_config_init(&config->supervisor_config) < 0)
+    {
+        return -1;
+    }
+
+    config->supervisor_config.base = config->base;
+    tp_driver_clear_allowed_paths(&config->supervisor_config.base);
+
+    if (tp_driver_copy_string(
+            config->supervisor_config.control_channel,
+            sizeof(config->supervisor_config.control_channel),
+            toml_get(supervisor, "control_channel"),
+            "supervisor.control_channel",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.announce_channel,
+            sizeof(config->supervisor_config.announce_channel),
+            toml_get(supervisor, "announce_channel"),
+            "supervisor.announce_channel",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.metadata_channel,
+            sizeof(config->supervisor_config.metadata_channel),
+            toml_get(supervisor, "metadata_channel"),
+            "supervisor.metadata_channel",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.qos_channel,
+            sizeof(config->supervisor_config.qos_channel),
+            toml_get(supervisor, "qos_channel"),
+            "supervisor.qos_channel",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.control_stream_id,
+            toml_get(supervisor, "control_stream_id"),
+            "supervisor.control_stream_id",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.announce_stream_id,
+            toml_get(supervisor, "announce_stream_id"),
+            "supervisor.announce_stream_id",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.metadata_stream_id,
+            toml_get(supervisor, "metadata_stream_id"),
+            "supervisor.metadata_stream_id",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.qos_stream_id,
+            toml_get(supervisor, "qos_stream_id"),
+            "supervisor.qos_stream_id",
+            false) < 0 ||
+        tp_driver_copy_uint32(
+            &config->supervisor_config.consumer_capacity,
+            toml_get(supervisor, "consumer_capacity"),
+            "supervisor.consumer_capacity",
+            false) < 0 ||
+        tp_driver_copy_uint32(
+            &config->supervisor_config.consumer_stale_ms,
+            toml_get(supervisor, "consumer_stale_ms"),
+            "supervisor.consumer_stale_ms",
+            false) < 0 ||
+        tp_driver_copy_bool(
+            &config->supervisor_config.per_consumer_enabled,
+            toml_get(supervisor, "per_consumer_enabled"),
+            "supervisor.per_consumer_enabled",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.per_consumer_descriptor_channel,
+            sizeof(config->supervisor_config.per_consumer_descriptor_channel),
+            toml_get(supervisor, "per_consumer_descriptor_channel"),
+            "supervisor.per_consumer_descriptor_channel",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.per_consumer_control_channel,
+            sizeof(config->supervisor_config.per_consumer_control_channel),
+            toml_get(supervisor, "per_consumer_control_channel"),
+            "supervisor.per_consumer_control_channel",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.per_consumer_descriptor_base,
+            toml_get(supervisor, "per_consumer_descriptor_base"),
+            "supervisor.per_consumer_descriptor_base",
+            false) < 0 ||
+        tp_driver_copy_int32(
+            &config->supervisor_config.per_consumer_control_base,
+            toml_get(supervisor, "per_consumer_control_base"),
+            "supervisor.per_consumer_control_base",
+            false) < 0 ||
+        tp_driver_copy_uint32(
+            &config->supervisor_config.per_consumer_descriptor_range,
+            toml_get(supervisor, "per_consumer_descriptor_range"),
+            "supervisor.per_consumer_descriptor_range",
+            false) < 0 ||
+        tp_driver_copy_uint32(
+            &config->supervisor_config.per_consumer_control_range,
+            toml_get(supervisor, "per_consumer_control_range"),
+            "supervisor.per_consumer_control_range",
+            false) < 0 ||
+        tp_driver_copy_bool(
+            &config->supervisor_config.force_no_shm,
+            toml_get(supervisor, "force_no_shm"),
+            "supervisor.force_no_shm",
+            false) < 0 ||
+        tp_driver_copy_uint32(
+            (uint32_t *)&config->supervisor_config.force_mode,
+            toml_get(supervisor, "force_mode"),
+            "supervisor.force_mode",
+            false) < 0 ||
+        tp_driver_copy_string(
+            config->supervisor_config.payload_fallback_uri,
+            sizeof(config->supervisor_config.payload_fallback_uri),
+            toml_get(supervisor, "payload_fallback_uri"),
+            "supervisor.payload_fallback_uri",
+            false) < 0)
+    {
+        return -1;
+    }
+
+    if (config->supervisor_config.control_channel[0] == '\0')
+    {
+        strncpy(config->supervisor_config.control_channel, config->base.control_channel,
+            sizeof(config->supervisor_config.control_channel) - 1);
+        config->supervisor_config.control_stream_id = config->base.control_stream_id;
+    }
+    if (config->supervisor_config.announce_channel[0] == '\0')
+    {
+        strncpy(config->supervisor_config.announce_channel, config->base.announce_channel,
+            sizeof(config->supervisor_config.announce_channel) - 1);
+        config->supervisor_config.announce_stream_id = config->base.announce_stream_id;
+    }
+    if (config->supervisor_config.metadata_channel[0] == '\0')
+    {
+        strncpy(config->supervisor_config.metadata_channel, config->base.metadata_channel,
+            sizeof(config->supervisor_config.metadata_channel) - 1);
+        config->supervisor_config.metadata_stream_id = config->base.metadata_stream_id;
+    }
+    if (config->supervisor_config.qos_channel[0] == '\0')
+    {
+        strncpy(config->supervisor_config.qos_channel, config->base.qos_channel,
+            sizeof(config->supervisor_config.qos_channel) - 1);
+        config->supervisor_config.qos_stream_id = config->base.qos_stream_id;
+    }
+
+    if (config->supervisor_config.per_consumer_descriptor_base != 0 &&
+        config->supervisor_config.per_consumer_descriptor_range == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_config_load: per_consumer_descriptor_range required");
+        return -1;
+    }
+    if (config->supervisor_config.per_consumer_control_base != 0 &&
+        config->supervisor_config.per_consumer_control_range == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_config_load: per_consumer_control_range required");
+        return -1;
+    }
+    if (config->supervisor_config.force_mode != 0 &&
+        config->supervisor_config.force_mode != TP_MODE_STREAM &&
+        config->supervisor_config.force_mode != TP_MODE_RATE_LIMITED)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_config_load: supervisor.force_mode invalid");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -686,6 +916,7 @@ void tp_driver_config_close(tp_driver_config_t *config)
     config->control_stream_id_ranges.ranges = NULL;
     config->control_stream_id_ranges.count = 0;
 
+    tp_supervisor_config_close(&config->supervisor_config);
     tp_context_clear_allowed_paths(&config->base);
 }
 
@@ -697,6 +928,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
     toml_datum_t policies;
     toml_datum_t profiles;
     toml_datum_t streams;
+    toml_datum_t supervisor;
     uint32_t announce_period_ms = 0;
     bool allow_dynamic_streams = false;
 
@@ -724,6 +956,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
     policies = toml_get(parsed.toptab, "policies");
     profiles = toml_get(parsed.toptab, "profiles");
     streams = toml_get(parsed.toptab, "streams");
+    supervisor = toml_get(parsed.toptab, "supervisor");
 
     if (driver.type != TOML_TABLE)
     {
@@ -970,6 +1203,12 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
     }
 
     if (tp_driver_load_streams(config, streams) < 0)
+    {
+        toml_free(parsed);
+        return -1;
+    }
+
+    if (tp_driver_load_supervisor(config, supervisor) < 0)
     {
         toml_free(parsed);
         return -1;

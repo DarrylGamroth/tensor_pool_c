@@ -160,7 +160,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 - DONE: Discovery provider/registry service (`tp_discoveryd`, `tp_discovery_service`).
 
 ### Supervisor
-- DONE: Supervisor service and policy handler (`tp_supervisord`, `tp_supervisor`).
+- DONE: Supervisor service and policy handler embedded in `tp_driver` (`tp_supervisor`).
   - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
 ### Driver (Server-side)

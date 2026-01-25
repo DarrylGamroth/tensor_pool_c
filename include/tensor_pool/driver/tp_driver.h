@@ -9,6 +9,7 @@
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
 #include "tensor_pool/tp_log.h"
+#include "tensor_pool/tp_supervisor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +83,8 @@ typedef struct tp_driver_config_stct
     size_t profile_count;
     tp_driver_stream_def_t *streams;
     size_t stream_count;
+    bool supervisor_enabled;
+    tp_supervisor_config_t supervisor_config;
 }
 tp_driver_config_t;
 
@@ -100,6 +103,8 @@ typedef struct tp_driver_stct
     size_t lease_capacity;
     uint64_t lease_counter;
     uint64_t next_announce_ns;
+    bool supervisor_enabled;
+    tp_supervisor_t supervisor;
 }
 tp_driver_t;
 

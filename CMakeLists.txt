@@ -435,10 +435,6 @@ add_executable(tp_discovery_query tools/tp_discovery_query.c)
 target_link_libraries(tp_discovery_query PRIVATE tensor_pool)
 target_include_directories(tp_discovery_query PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
-add_executable(tp_supervisord tools/tp_supervisord.c)
-target_link_libraries(tp_supervisord PRIVATE tensor_pool)
-target_include_directories(tp_supervisord PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
-
 if (TP_ENABLE_FUZZ)
     if (NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
         message(FATAL_ERROR "TP_ENABLE_FUZZ requires clang with libFuzzer; configure with CC=clang")

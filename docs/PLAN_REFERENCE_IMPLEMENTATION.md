@@ -50,7 +50,7 @@ Related design docs:
 - [x] Implement supervisor/console agent.
 - [x] Subscribe to announce/QoS/metadata/health streams.
 - [x] Emit ConsumerConfig for per-consumer streams and rate limits.
-- [x] Provide `tp_supervisord` executable; allow optional embedded mode.
+- [x] Embed supervisor agent in `tp_driver`.
 
 ## Phase 6: Integration + Interop
 - [ ] Add integration tests for driver + discovery + client conductor.

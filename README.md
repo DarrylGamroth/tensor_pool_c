@@ -88,4 +88,4 @@ tools/run_fuzz_smoke.sh
 - `docs/C_CLIENT_API_USAGE.md`
 - `docs/DRIVER_USAGE.md`
 - `docs/DISCOVERY_USAGE.md`
-- `docs/SUPERVISOR_USAGE.md`
+- `docs/SUPERVISOR_USAGE.md` (embedded in `tp_driver`)

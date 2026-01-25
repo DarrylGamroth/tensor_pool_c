@@ -1974,6 +1974,19 @@ int tp_driver_init(tp_driver_t *driver, tp_driver_config_t *config)
         }
     }
 
+    if (driver->config.supervisor_enabled)
+    {
+        if (tp_supervisor_init(&driver->supervisor, &driver->config.supervisor_config) < 0)
+        {
+            free(driver->streams);
+            driver->streams = NULL;
+            driver->stream_count = 0;
+            tp_driver_config_close(&driver->config);
+            return -1;
+        }
+        driver->supervisor_enabled = true;
+    }
+
     return 0;
 }
 
@@ -2024,6 +2037,14 @@ int tp_driver_start(tp_driver_t *driver)
             tp_driver_gc_stream(driver, &tp_driver_streams(driver)[i]);
         }
     }
+
+    if (driver->supervisor_enabled)
+    {
+        if (tp_supervisor_start(&driver->supervisor) < 0)
+        {
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -2047,6 +2068,16 @@ int tp_driver_do_work(tp_driver_t *driver)
             aeron_fragment_assembler_handler,
             tp_fragment_assembler_handle(driver->control_assembler),
             10);
+    }
+
+    if (driver->supervisor_enabled)
+    {
+        int work = tp_supervisor_do_work(&driver->supervisor);
+        if (work < 0)
+        {
+            return -1;
+        }
+        fragments += work;
     }
 
     tp_driver_handle_expired_leases(driver);
@@ -2083,6 +2114,12 @@ int tp_driver_close(tp_driver_t *driver)
     tp_publication_close(&driver->control_publication);
     tp_publication_close(&driver->announce_publication);
     tp_aeron_client_close(&driver->aeron);
+
+    if (driver->supervisor_enabled)
+    {
+        tp_supervisor_close(&driver->supervisor);
+        driver->supervisor_enabled = false;
+    }
 
     free(driver->streams);
     driver->streams = NULL;

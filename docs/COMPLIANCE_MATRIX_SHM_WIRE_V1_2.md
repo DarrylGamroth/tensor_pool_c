@@ -7,7 +7,7 @@ Legend:
 - **Partial**: Some requirements implemented; gaps remain.
 - **Missing**: Not implemented.
 - **N/A**: Informative or out of scope.
-- **External**: Implemented by an external driver/supervisor not present in this repo.
+- **External**: Implemented outside this repo (e.g., UDP bridge).
 
 ## Sections 1–5 (Informative)
 
