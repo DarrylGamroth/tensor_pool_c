@@ -154,6 +154,28 @@ static int tp_driver_copy_uint64(uint64_t *out, toml_datum_t value, const char *
     return 0;
 }
 
+static int tp_driver_copy_bool(bool *out, toml_datum_t value, const char *name, bool required)
+{
+    if (value.type == TOML_UNKNOWN)
+    {
+        if (required)
+        {
+            TP_SET_ERR(EINVAL, "tp_driver_config_load: missing %s", name);
+            return -1;
+        }
+        return 0;
+    }
+
+    if (value.type != TOML_BOOLEAN)
+    {
+        TP_SET_ERR(EINVAL, "tp_driver_config_load: %s must be a boolean", name);
+        return -1;
+    }
+
+    *out = value.u.boolean;
+    return 0;
+}
+
 static void tp_driver_clear_allowed_paths(tp_context_t *context)
 {
     if (NULL == context)
@@ -352,28 +374,6 @@ static int tp_driver_load_supervisor(tp_driver_config_t *config, toml_datum_t su
         return -1;
     }
 
-    return 0;
-}
-
-static int tp_driver_copy_bool(bool *out, toml_datum_t value, const char *name, bool required)
-{
-    if (value.type == TOML_UNKNOWN)
-    {
-        if (required)
-        {
-            TP_SET_ERR(EINVAL, "tp_driver_config_load: missing %s", name);
-            return -1;
-        }
-        return 0;
-    }
-
-    if (value.type != TOML_BOOLEAN)
-    {
-        TP_SET_ERR(EINVAL, "tp_driver_config_load: %s must be a boolean", name);
-        return -1;
-    }
-
-    *out = value.u.boolean;
     return 0;
 }
 
