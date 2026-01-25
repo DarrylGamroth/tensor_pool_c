@@ -101,19 +101,28 @@ It SHOULD be integrated into control-plane polling for updates.
 - Generate SBE code from `./schemas` using `sbe-tool` (Maven artifacts).
 - Do not check in generated code; generate during build.
 
-## 13. Testing and Compliance
+## 13. Code Organization
+The codebase SHOULD be organized by role:
+- `src/client/`: client API, conductor, producer/consumer, discovery client.
+- `src/driver/`: driver lifecycle, attach/lease/epoch management, SHM creation/GC.
+- `src/common/`: shared utilities (logging, SHM helpers, SBE glue, atomics).
+
+Public headers SHOULD follow the same split under `include/tensor_pool/` as the
+code is moved.
+
+## 14. Testing and Compliance
 - Every MUST/SHOULD requirement MUST map to a test or explicit verification.
 - Maintain `docs/TRACEABILITY_MATRIX_SHM_ALL.md` and
   `docs/REQUIREMENTS_TEST_CHECKLIST.md`.
 - Add config-matrix integration tests for driver-mode permutations.
 - Add fuzzing for control-plane decoders (libFuzzer) where applicable.
 
-## 14. Operational Defaults
+## 15. Operational Defaults
 - A running Aeron Media Driver is expected at `/dev/shm/aeron-dgamroth`.
 - Stream IDs MUST follow `docs/STREAM_ID_CONVENTIONS.md`.
 - Logging should be configurable; stderr default is acceptable for tools.
 
-## 15. Implementation Checklist (Status)
+## 16. Implementation Checklist (Status)
 Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Client Conductor (Aeron-style)
@@ -162,3 +171,6 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 ### Tests / Compliance
 - DONE: Wire-spec unit tests and compliance mappings.
 - PARTIAL: Conductor-level integration tests (blocked on conductor implementation).
+
+### Code Organization
+- MISSING: Split implementation into `src/client`, `src/driver`, `src/common`.
