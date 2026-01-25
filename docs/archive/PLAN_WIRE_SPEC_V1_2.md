@@ -37,7 +37,7 @@ Authoritative reference: `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`.
 - [x] 6) Tests + Examples
   - `tests/test_tp_pollers.c`, `tests/test_tp_rollover.c`:
     - Updated to new descriptor/progress schema.
-  - `tools/tp_example_*`:
+  - `examples/tp_example_*`:
     - Updated `tp_consumer_read_frame` usage.
 - [x] 7) Validation
   - Existing slot header length enforcement remains unchanged (v1.2 compatible).
