@@ -6,7 +6,7 @@ review, while the existing low-level functions remain internal.
 
 Goals:
 - Reduce boilerplate in examples and applications.
-- Align with Aeron sample patterns (simple init + poll loop).
+- Align with Aeron async + poll patterns and sample utilities.
 - Keep strict spec behavior unchanged; helpers are thin wrappers.
 
 ## 1. Driver Attach → Config Helpers
@@ -46,9 +46,62 @@ Behavior:
 - If `client->active_lease_id != 0` and `client->publication != NULL`, sends detach.
 - Otherwise returns 0.
 
-## 2. Driver Attach Convenience
+## 2. Driver Attach Convenience (Aeron-style async + poll)
 
-### 2.1 Producer Attach Helper
+### 2.1 Producer Attach (Async Start)
+```c
+int tp_producer_attach_driver_async(
+    tp_producer_t *producer,
+    tp_driver_client_t *driver,
+    const tp_driver_attach_request_t *request,
+    tp_payload_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_driver_attach_info_t *attach_info,
+    tp_async_attach_t **out_async);
+```
+Behavior:
+- Starts `tp_driver_attach_async` and stores the async handle.
+- Caller polls with `tp_producer_attach_driver_poll`.
+
+### 2.2 Producer Attach (Poll)
+```c
+int tp_producer_attach_driver_poll(
+    tp_producer_t *producer,
+    tp_async_attach_t *async,
+    tp_payload_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_driver_attach_info_t *attach_info);
+```
+Behavior:
+- Returns `0` if not complete, `1` on success, `-1` on error (Aeron-style).
+- On success, validates response code and populates `producer` via
+  `tp_driver_attach_info_to_producer_config`, then calls `tp_producer_attach`.
+
+### 2.3 Consumer Attach (Async Start)
+```c
+int tp_consumer_attach_driver_async(
+    tp_consumer_t *consumer,
+    tp_driver_client_t *driver,
+    const tp_driver_attach_request_t *request,
+    tp_consumer_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_driver_attach_info_t *attach_info,
+    tp_async_attach_t **out_async);
+```
+Behavior mirrors producer helper.
+
+### 2.4 Consumer Attach (Poll)
+```c
+int tp_consumer_attach_driver_poll(
+    tp_consumer_t *consumer,
+    tp_async_attach_t *async,
+    tp_consumer_pool_config_t *pools,
+    size_t pool_capacity,
+    tp_driver_attach_info_t *attach_info);
+```
+Behavior mirrors producer poll helper.
+
+### 2.5 Blocking Convenience (Optional)
 ```c
 int tp_producer_attach_driver(
     tp_producer_t *producer,
@@ -58,15 +111,7 @@ int tp_producer_attach_driver(
     size_t pool_capacity,
     tp_driver_attach_info_t *attach_info,
     int64_t timeout_ns);
-```
-Behavior:
-- Calls `tp_driver_attach`.
-- Validates response code.
-- Populates `producer` via `tp_driver_attach_info_to_producer_config`.
-- Calls `tp_producer_attach`.
 
-### 2.2 Consumer Attach Helper
-```c
 int tp_consumer_attach_driver(
     tp_consumer_t *consumer,
     tp_driver_client_t *driver,
@@ -76,9 +121,11 @@ int tp_consumer_attach_driver(
     tp_driver_attach_info_t *attach_info,
     int64_t timeout_ns);
 ```
-Behavior mirrors producer helper.
+Behavior:
+- Convenience wrapper around async + poll with timeout.
+- Returns `0` on success, `-1` on error.
 
-## 3. Example/Utility Helpers (Optional Promotion)
+## 3. Example/Utility Helpers (Aeron sample-style)
 
 ### 3.1 Client Context Defaults
 ```c
@@ -98,6 +145,7 @@ int tp_subscription_wait_connected(tp_client_t *client, tp_subscription_t *sub, 
 ```
 Behavior:
 - Polls `tp_client_do_work` until connected or timeout.
+- For poll-style helpers, return `0` (not complete), `1` (complete), `-1` (error).
 
 ## 4. API Placement
 
@@ -110,4 +158,5 @@ Existing low-level APIs remain available internally under `src/...`.
 ## 5. Migration Notes
 
 - Examples should be updated to use helpers to reduce boilerplate.
-- Error handling remains `0` on success, `-1` on failure with `tp_err` set.
+- Poll-style helpers follow Aeron return semantics: `0` (not complete), `1` (complete), `-1` (error).
+- Blocking convenience helpers return `0` on success, `-1` on error with `tp_err` set.
