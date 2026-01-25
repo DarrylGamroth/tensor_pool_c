@@ -2,12 +2,13 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_clock.h"
-#include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_shm.h"
 #include "tp_aeron_wrap.h"
 
@@ -85,7 +86,7 @@ static void tp_test_write_superblock(
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }
 
-static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, const char *aeron_dir)
+static int tp_test_start_client(tp_client_t **client, tp_client_context_t *ctx, const char *aeron_dir)
 {
     const char *allowed_paths[] = { "/tmp" };
 
@@ -110,16 +111,16 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
         return -1;
     }
 
-    if (tp_client_start(client) < 0)
+    if (tp_client_start(*client) < 0)
     {
-        tp_client_close(client);
+        tp_client_close(*client);
         return -1;
     }
 
     return 0;
 }
 
-static int tp_test_start_client_any(tp_client_t *client, tp_client_context_t *ctx)
+static int tp_test_start_client_any(tp_client_t **client, tp_client_context_t *ctx)
 {
     char default_dir[AERON_MAX_PATH];
     const char *env_dir = getenv("AERON_DIR");
@@ -204,9 +205,10 @@ static int tp_test_offer(tp_client_t *client, tp_publication_t *pub, const uint8
 void tp_test_consumer_lease_revoked(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
+    tp_driver_client_t driver;
     tp_publication_t *control_pub = NULL;
     tp_consumer_config_t config;
     tp_consumer_pool_config_t pool_cfg;
@@ -220,10 +222,12 @@ void tp_test_consumer_lease_revoked(void)
     char header_uri[256];
     char pool_uri[256];
     int result = -1;
+    int reattach_due = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
+    memset(&driver, 0, sizeof(driver));
 
     if (tp_test_start_client_any(&client, &ctx) < 0)
     {
@@ -238,12 +242,12 @@ void tp_test_consumer_lease_revoked(void)
     consumer_ctx.consumer_id = 42;
     consumer_ctx.use_driver = false;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
@@ -282,14 +286,15 @@ void tp_test_consumer_lease_revoked(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         goto cleanup;
     }
 
-    consumer.context.use_driver = true;
-    consumer.driver_attached = true;
-    consumer.driver.active_lease_id = 55;
+    consumer->context.use_driver = true;
+    consumer->driver_attached = true;
+    consumer->driver = &driver;
+    consumer->driver->active_lease_id = 55;
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -310,12 +315,12 @@ void tp_test_consumer_lease_revoked(void)
     tensor_pool_shmLeaseRevoked_set_timestampNs(&revoked, (uint64_t)tp_clock_now_ns());
     tensor_pool_shmLeaseRevoked_set_leaseId(&revoked, 55);
     tensor_pool_shmLeaseRevoked_set_streamId(&revoked, 76001);
-    tensor_pool_shmLeaseRevoked_set_clientId(&revoked, consumer.context.consumer_id);
+    tensor_pool_shmLeaseRevoked_set_clientId(&revoked, consumer->context.consumer_id);
     tensor_pool_shmLeaseRevoked_set_role(&revoked, tensor_pool_role_CONSUMER);
     tensor_pool_shmLeaseRevoked_set_reason(&revoked, tensor_pool_leaseRevokeReason_REVOKED);
     tensor_pool_shmLeaseRevoked_put_errorMessage(&revoked, "test", 4);
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmLeaseRevoked_sbe_position(&revoked)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmLeaseRevoked_sbe_position(&revoked)) < 0)
     {
         goto cleanup;
     }
@@ -323,9 +328,9 @@ void tp_test_consumer_lease_revoked(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (!consumer.shm_mapped && consumer.reattach_requested)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (!consumer->shm_mapped && consumer->reattach_requested)
         {
             result = 0;
             break;
@@ -338,15 +343,16 @@ void tp_test_consumer_lease_revoked(void)
 
 cleanup:
     tp_publication_close(&control_pub);
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        reattach_due = tp_consumer_reattach_due(consumer, consumer->next_attach_ns);
+        tp_consumer_close(consumer);
     }
     {
-        const char *aeron_dir = tp_context_get_aeron_dir(client.context.base);
+        const char *aeron_dir = tp_context_get_aeron_dir(client->context.base);
         if (NULL != aeron_dir && aeron_dir[0] != '\0')
         {
-            tp_client_close(&client);
+            tp_client_close(client);
         }
     }
     if (header_fd >= 0)
@@ -361,15 +367,16 @@ cleanup:
     }
 
     assert(result == 0);
-    assert(tp_consumer_reattach_due(&consumer, consumer.next_attach_ns) == 1);
+    assert(reattach_due == 1);
 }
 
 void tp_test_producer_lease_revoked(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
+    tp_driver_client_t driver;
     tp_publication_t *control_pub = NULL;
     tp_producer_config_t config;
     tp_payload_pool_config_t pool_cfg;
@@ -383,10 +390,12 @@ void tp_test_producer_lease_revoked(void)
     char header_uri[256];
     char pool_uri[256];
     int result = -1;
+    int reattach_due = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
+    memset(&driver, 0, sizeof(driver));
 
     if (tp_test_start_client_any(&client, &ctx) < 0)
     {
@@ -401,12 +410,12 @@ void tp_test_producer_lease_revoked(void)
     producer_ctx.producer_id = 24;
     producer_ctx.use_driver = false;
 
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
@@ -446,14 +455,15 @@ void tp_test_producer_lease_revoked(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_producer_attach(&producer, &config) < 0)
+    if (tp_producer_attach(producer, &config) < 0)
     {
         goto cleanup;
     }
 
-    producer.context.use_driver = true;
-    producer.driver_attached = true;
-    producer.driver.active_lease_id = 77;
+    producer->context.use_driver = true;
+    producer->driver_attached = true;
+    producer->driver = &driver;
+    producer->driver->active_lease_id = 77;
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -474,12 +484,12 @@ void tp_test_producer_lease_revoked(void)
     tensor_pool_shmLeaseRevoked_set_timestampNs(&revoked, (uint64_t)tp_clock_now_ns());
     tensor_pool_shmLeaseRevoked_set_leaseId(&revoked, 77);
     tensor_pool_shmLeaseRevoked_set_streamId(&revoked, 76002);
-    tensor_pool_shmLeaseRevoked_set_clientId(&revoked, producer.context.producer_id);
+    tensor_pool_shmLeaseRevoked_set_clientId(&revoked, producer->context.producer_id);
     tensor_pool_shmLeaseRevoked_set_role(&revoked, tensor_pool_role_PRODUCER);
     tensor_pool_shmLeaseRevoked_set_reason(&revoked, tensor_pool_leaseRevokeReason_REVOKED);
     tensor_pool_shmLeaseRevoked_put_errorMessage(&revoked, "test", 4);
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmLeaseRevoked_sbe_position(&revoked)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmLeaseRevoked_sbe_position(&revoked)) < 0)
     {
         goto cleanup;
     }
@@ -487,9 +497,9 @@ void tp_test_producer_lease_revoked(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_producer_poll_control(&producer, 10);
-        tp_client_do_work(&client);
-        if (producer.pool_count == 0 && producer.reattach_requested)
+         tp_producer_poll_control(producer, 10);
+        tp_client_do_work(client);
+        if (producer->pool_count == 0 && producer->reattach_requested)
         {
             result = 0;
             break;
@@ -502,15 +512,16 @@ void tp_test_producer_lease_revoked(void)
 
 cleanup:
     tp_publication_close(&control_pub);
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        reattach_due = tp_producer_reattach_due(producer, producer->next_attach_ns);
+        tp_producer_close(producer);
     }
     {
-        const char *aeron_dir = tp_context_get_aeron_dir(client.context.base);
+        const char *aeron_dir = tp_context_get_aeron_dir(client->context.base);
         if (NULL != aeron_dir && aeron_dir[0] != '\0')
         {
-            tp_client_close(&client);
+            tp_client_close(client);
         }
     }
     if (header_fd >= 0)
@@ -525,5 +536,5 @@ cleanup:
     }
 
     assert(result == 0);
-    assert(tp_producer_reattach_due(&producer, producer.next_attach_ns) == 1);
+    assert(reattach_due == 1);
 }

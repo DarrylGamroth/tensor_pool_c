@@ -2,9 +2,9 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/tp_clock.h"
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 #include "tensor_pool/internal/tp_consumer_manager.h"
 #include "tensor_pool/internal/tp_control_poller.h"
 #include "tensor_pool/tp_seqlock.h"
@@ -12,7 +12,7 @@
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/internal/tp_metadata_poller.h"
 #include "tensor_pool/internal/tp_progress_poller.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/internal/tp_qos.h"
 #include "tensor_pool/tp_slot.h"
 
@@ -130,7 +130,7 @@ static int tp_test_driver_active(const char *aeron_dir)
 }
 
 static int tp_test_start_client(
-    tp_client_t *client,
+    tp_client_t **client,
     tp_client_context_t *ctx,
     const char *aeron_dir,
     uint64_t announce_period_ns)
@@ -167,9 +167,9 @@ static int tp_test_start_client(
         return -1;
     }
 
-    if (tp_client_start(client) < 0)
+    if (tp_client_start(*client) < 0)
     {
-        tp_client_close(client);
+        tp_client_close(*client);
         return -1;
     }
 
@@ -177,7 +177,7 @@ static int tp_test_start_client(
 }
 
 static int tp_test_start_client_any(
-    tp_client_t *client,
+    tp_client_t **client,
     tp_client_context_t *ctx,
     uint64_t announce_period_ns)
 {
@@ -601,11 +601,11 @@ static void tp_on_descriptor_fragment(void *clientd, const uint8_t *buffer, size
 void tp_test_cadence(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_qos_poller_t qos_poller;
     tp_qos_handlers_t qos_handlers;
     tp_metadata_poller_t meta_poller;
@@ -626,9 +626,9 @@ void tp_test_cadence(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    producer = NULL;
+    consumer = NULL;
     memset(&state, 0, sizeof(state));
 
     if (tp_test_start_client_any(&client, &ctx, 5 * 1000 * 1000ULL) < 0)
@@ -643,7 +643,7 @@ void tp_test_cadence(void)
     producer_ctx.stream_id = 50001;
     producer_ctx.producer_id = 7;
 
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -655,14 +655,14 @@ void tp_test_cadence(void)
     consumer_ctx.stream_id = 50001;
     consumer_ctx.consumer_id = 9;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, producer.qos_publication) < 0 ||
-        tp_test_wait_for_publication(&client, producer.metadata_publication) < 0 ||
-        tp_test_wait_for_publication(&client, consumer.qos_publication) < 0)
+    if (tp_test_wait_for_publication(client, producer->qos_publication) < 0 ||
+        tp_test_wait_for_publication(client, producer->metadata_publication) < 0 ||
+        tp_test_wait_for_publication(client, consumer->qos_publication) < 0)
     {
         goto cleanup;
     }
@@ -674,7 +674,7 @@ void tp_test_cadence(void)
     memset(&qos_handlers, 0, sizeof(qos_handlers));
     qos_handlers.on_qos_event = tp_on_cadence_qos;
     qos_handlers.clientd = &state;
-    if (tp_qos_poller_init(&qos_poller, &client, &qos_handlers) < 0)
+    if (tp_qos_poller_init(&qos_poller, client, &qos_handlers) < 0)
     {
         goto cleanup;
     }
@@ -683,7 +683,7 @@ void tp_test_cadence(void)
     meta_handlers.on_data_source_announce = tp_on_cadence_announce;
     meta_handlers.on_data_source_meta_begin = tp_on_cadence_meta_begin;
     meta_handlers.clientd = &state;
-    if (tp_metadata_poller_init(&meta_poller, &client, &meta_handlers) < 0)
+    if (tp_metadata_poller_init(&meta_poller, client, &meta_handlers) < 0)
     {
         goto cleanup;
     }
@@ -695,7 +695,7 @@ void tp_test_cadence(void)
     announce.meta_version = 1;
     announce.name = "cadence";
     announce.summary = "cadence";
-    if (tp_producer_set_data_source_announce(&producer, &announce) < 0)
+    if (tp_producer_set_data_source_announce(producer, &announce) < 0)
     {
         goto cleanup;
     }
@@ -709,7 +709,7 @@ void tp_test_cadence(void)
     meta.timestamp_ns = tp_clock_now_ns();
     meta.attributes = &attr;
     meta.attribute_count = 1;
-    if (tp_producer_set_data_source_meta(&producer, &meta) < 0)
+    if (tp_producer_set_data_source_meta(producer, &meta) < 0)
     {
         goto cleanup;
     }
@@ -717,30 +717,30 @@ void tp_test_cadence(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_producer_poll_control(&producer, 10);
-        tp_consumer_poll_control(&consumer, 10);
+         tp_producer_poll_control(producer, 10);
+         tp_consumer_poll_control(consumer, 10);
         tp_qos_poll(&qos_poller, 10);
         tp_metadata_poll(&meta_poller, 10);
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
 
-        if (producer.last_qos_ns != 0 && producer.last_qos_ns != last_producer_qos_ns)
+        if (producer->last_qos_ns != 0 && producer->last_qos_ns != last_producer_qos_ns)
         {
-            last_producer_qos_ns = producer.last_qos_ns;
+            last_producer_qos_ns = producer->last_qos_ns;
             producer_qos_updates++;
         }
-        if (consumer.last_qos_ns != 0 && consumer.last_qos_ns != last_consumer_qos_ns)
+        if (consumer->last_qos_ns != 0 && consumer->last_qos_ns != last_consumer_qos_ns)
         {
-            last_consumer_qos_ns = consumer.last_qos_ns;
+            last_consumer_qos_ns = consumer->last_qos_ns;
             consumer_qos_updates++;
         }
-        if (producer.last_announce_ns != 0 && producer.last_announce_ns != last_announce_ns)
+        if (producer->last_announce_ns != 0 && producer->last_announce_ns != last_announce_ns)
         {
-            last_announce_ns = producer.last_announce_ns;
+            last_announce_ns = producer->last_announce_ns;
             announce_updates++;
         }
-        if (producer.last_meta_ns != 0 && producer.last_meta_ns != last_meta_ns)
+        if (producer->last_meta_ns != 0 && producer->last_meta_ns != last_meta_ns)
         {
-            last_meta_ns = producer.last_meta_ns;
+            last_meta_ns = producer->last_meta_ns;
             meta_updates++;
         }
 
@@ -764,19 +764,19 @@ void tp_test_cadence(void)
     }
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
     tp_fragment_assembler_close(&qos_poller.assembler);
     tp_fragment_assembler_close(&meta_poller.assembler);
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
 
     assert(result == 0);
@@ -785,9 +785,9 @@ cleanup:
 void tp_test_shm_announce_freshness(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *control_pub = NULL;
     uint8_t buffer[512];
     struct tensor_pool_messageHeader header;
@@ -803,8 +803,8 @@ void tp_test_shm_announce_freshness(void)
     uint64_t freshness_ns;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -818,12 +818,12 @@ void tp_test_shm_announce_freshness(void)
     consumer_ctx.stream_id = 60001;
     consumer_ctx.consumer_id = 3;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
@@ -852,7 +852,7 @@ void tp_test_shm_announce_freshness(void)
     {
         goto cleanup;
     }
-    freshness_ns = tp_context_get_announce_period_ns(client.context.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    freshness_ns = tp_context_get_announce_period_ns(ctx.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -896,7 +896,7 @@ void tp_test_shm_announce_freshness(void)
     tensor_pool_shmPoolAnnounce_payloadPools_put_regionUri(&pools, pool_uri, strlen(pool_uri));
     tensor_pool_shmPoolAnnounce_put_headerRegionUri(&announce, header_uri, strlen(header_uri));
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -905,14 +905,14 @@ void tp_test_shm_announce_freshness(void)
         int i;
         for (i = 0; i < 50; i++)
         {
-            tp_consumer_poll_control(&consumer, 10);
-            tp_client_do_work(&client);
+             tp_consumer_poll_control(consumer, 10);
+            tp_client_do_work(client);
             {
                 struct timespec ts = { 0, 1000000 };
                 nanosleep(&ts, NULL);
             }
         }
-        assert(!consumer.shm_mapped);
+        assert(!consumer->shm_mapped);
     }
 
     now_ns = (uint64_t)tp_clock_now_realtime_ns();
@@ -921,7 +921,7 @@ void tp_test_shm_announce_freshness(void)
         goto cleanup;
     }
     tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns + 1000000ULL);
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -930,9 +930,9 @@ void tp_test_shm_announce_freshness(void)
         int64_t map_deadline = tp_clock_now_ns() + 200 * 1000 * 1000LL;
         while (tp_clock_now_ns() < map_deadline)
         {
-            tp_consumer_poll_control(&consumer, 10);
-            tp_client_do_work(&client);
-            if (consumer.shm_mapped)
+             tp_consumer_poll_control(consumer, 10);
+            tp_client_do_work(client);
+            if (consumer->shm_mapped)
             {
                 result = 0;
                 break;
@@ -949,13 +949,13 @@ cleanup:
     {
         tp_publication_close(&control_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -974,9 +974,9 @@ cleanup:
 void tp_test_rate_limit(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_consumer_hello_view_t hello;
     tp_consumer_manager_t *manager;
     tp_consumer_entry_t *entry = NULL;
@@ -997,17 +997,17 @@ void tp_test_rate_limit(void)
     int fragments = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
         return;
     }
 
-    tp_context_set_descriptor_channel(client.context.base, "", -1);
+    tp_context_set_descriptor_channel(ctx.base, "", -1);
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 2100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 2100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -1038,7 +1038,7 @@ void tp_test_rate_limit(void)
     producer_ctx.stream_id = 70001;
     producer_ctx.producer_id = 5;
 
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -1059,16 +1059,16 @@ void tp_test_rate_limit(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_producer_attach(&producer, &config) < 0)
+    if (tp_producer_attach(producer, &config) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_producer_enable_consumer_manager(&producer, 4) < 0)
+    if (tp_producer_enable_consumer_manager(producer, 4) < 0)
     {
         goto cleanup;
     }
-    manager = producer.consumer_manager;
+    manager = producer->consumer_manager;
 
     memset(&hello, 0, sizeof(hello));
     hello.stream_id = 70001;
@@ -1099,7 +1099,7 @@ void tp_test_rate_limit(void)
         {
             break;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
         {
             struct timespec ts = { 0, 1000000 };
             nanosleep(&ts, NULL);
@@ -1131,11 +1131,11 @@ void tp_test_rate_limit(void)
     meta.timestamp_ns = 1;
     meta.meta_version = 1;
 
-    if (tp_test_offer_frame(&producer, &frame, &meta) < 0)
+    if (tp_test_offer_frame(producer, &frame, &meta) < 0)
     {
         goto cleanup;
     }
-    if (tp_test_offer_frame(&producer, &frame, &meta) < 0)
+    if (tp_test_offer_frame(producer, &frame, &meta) < 0)
     {
         goto cleanup;
     }
@@ -1148,7 +1148,7 @@ void tp_test_rate_limit(void)
         {
             break;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
         {
             struct timespec ts = { 0, 1000000 };
             nanosleep(&ts, NULL);
@@ -1166,7 +1166,7 @@ void tp_test_rate_limit(void)
         while (tp_clock_now_ns() < deadline)
         {
             aeron_subscription_poll(tp_subscription_handle(descriptor_sub), tp_on_descriptor_fragment, &fragments, 10);
-            tp_client_do_work(&client);
+            tp_client_do_work(client);
             {
                 struct timespec ts = { 0, 1000000 };
                 nanosleep(&ts, NULL);
@@ -1184,13 +1184,13 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1209,9 +1209,9 @@ cleanup:
 void tp_test_qos_liveness(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_consumer_hello_view_t hello;
     tp_consumer_manager_t *manager;
     tp_consumer_entry_t *entry = NULL;
@@ -1234,8 +1234,8 @@ void tp_test_qos_liveness(void)
     uint64_t stale_ns = 5ULL * 1000 * 1000 * 1000ULL;
     uint64_t old_ns;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -1268,7 +1268,7 @@ void tp_test_qos_liveness(void)
     producer_ctx.stream_id = 72001;
     producer_ctx.producer_id = 6;
 
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -1289,16 +1289,16 @@ void tp_test_qos_liveness(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_producer_attach(&producer, &config) < 0)
+    if (tp_producer_attach(producer, &config) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_producer_enable_consumer_manager(&producer, 4) < 0)
+    if (tp_producer_enable_consumer_manager(producer, 4) < 0)
     {
         goto cleanup;
     }
-    manager = producer.consumer_manager;
+    manager = producer->consumer_manager;
 
     memset(&hello, 0, sizeof(hello));
     hello.stream_id = 72001;
@@ -1319,12 +1319,12 @@ void tp_test_qos_liveness(void)
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1200, &qos_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1200, &qos_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, qos_pub) < 0)
+    if (tp_test_wait_for_publication(client, qos_pub) < 0)
     {
         goto cleanup;
     }
@@ -1349,7 +1349,7 @@ void tp_test_qos_liveness(void)
     tensor_pool_qosConsumer_set_dropsLate(&qos, 0);
     tensor_pool_qosConsumer_set_mode(&qos, tensor_pool_mode_STREAM);
 
-    if (tp_test_offer(&client, qos_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, qos_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
@@ -1357,7 +1357,7 @@ void tp_test_qos_liveness(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        if (tp_producer_poll_control(&producer, 10) < 0)
+        if (tp_producer_poll_control(producer, 10) < 0)
         {
             goto cleanup;
         }
@@ -1380,13 +1380,13 @@ cleanup:
     {
         tp_publication_close(&qos_pub);
     }
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1405,9 +1405,9 @@ cleanup:
 void tp_test_qos_drop_counts(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *descriptor_pub = NULL;
     int header_fd = -1;
     int pool_fd = -1;
@@ -1428,8 +1428,8 @@ void tp_test_qos_drop_counts(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -1443,17 +1443,17 @@ void tp_test_qos_drop_counts(void)
     consumer_ctx.stream_id = 82001;
     consumer_ctx.consumer_id = 9;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1100, &descriptor_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1100, &descriptor_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, descriptor_pub) < 0)
+    if (tp_test_wait_for_publication(client, descriptor_pub) < 0)
     {
         goto cleanup;
     }
@@ -1492,7 +1492,7 @@ void tp_test_qos_drop_counts(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         goto cleanup;
     }
@@ -1516,13 +1516,13 @@ void tp_test_qos_drop_counts(void)
     tensor_pool_frameDescriptor_set_traceId(&descriptor, 0);
 
     tensor_pool_frameDescriptor_set_seq(&descriptor, 1);
-    if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, descriptor_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
 
     tensor_pool_frameDescriptor_set_seq(&descriptor, 3);
-    if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, descriptor_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
@@ -1530,9 +1530,9 @@ void tp_test_qos_drop_counts(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_descriptors(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.last_seq_seen >= 3)
+         tp_consumer_poll_descriptors(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->last_seq_seen >= 3)
         {
             break;
         }
@@ -1542,7 +1542,7 @@ void tp_test_qos_drop_counts(void)
         }
     }
 
-    if (tp_consumer_get_drop_counts(&consumer, &drops_gap, &drops_late, NULL) < 0)
+    if (tp_consumer_get_drop_counts(consumer, &drops_gap, &drops_late, NULL) < 0)
     {
         goto cleanup;
     }
@@ -1552,9 +1552,9 @@ void tp_test_qos_drop_counts(void)
         goto cleanup;
     }
 
-    (void)tp_consumer_read_frame(&consumer, 1, &view);
+    (void) tp_consumer_read_frame(consumer, 1, &view);
 
-    if (tp_consumer_get_drop_counts(&consumer, &drops_gap, &drops_late, NULL) < 0)
+    if (tp_consumer_get_drop_counts(consumer, &drops_gap, &drops_late, NULL) < 0)
     {
         goto cleanup;
     }
@@ -1571,13 +1571,13 @@ cleanup:
     {
         tp_publication_close(&descriptor_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1596,9 +1596,9 @@ cleanup:
 void tp_test_epoch_regression(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *descriptor_pub = NULL;
     int header_fd = -1;
     int pool_fd = -1;
@@ -1614,8 +1614,8 @@ void tp_test_epoch_regression(void)
     int step = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -1629,17 +1629,17 @@ void tp_test_epoch_regression(void)
     consumer_ctx.stream_id = 73001;
     consumer_ctx.consumer_id = 4;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1100, &descriptor_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1100, &descriptor_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, descriptor_pub) < 0)
+    if (tp_test_wait_for_publication(client, descriptor_pub) < 0)
     {
         goto cleanup;
     }
@@ -1678,14 +1678,14 @@ void tp_test_epoch_regression(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         step = 1;
         goto cleanup;
     }
 
-    assert(consumer.shm_mapped);
-    assert(consumer.mapped_epoch == 2);
+    assert(consumer->shm_mapped);
+    assert(consumer->mapped_epoch == 2);
 
     {
         struct tensor_pool_frameDescriptor descriptor;
@@ -1711,7 +1711,7 @@ void tp_test_epoch_regression(void)
         tensor_pool_frameDescriptor_set_metaVersion(&descriptor, 1);
         tensor_pool_frameDescriptor_set_traceId(&descriptor, 0);
 
-        if (tp_test_offer(&client, descriptor_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer(client, descriptor_pub, buffer, header_len + body_len) < 0)
         {
             step = 2;
             goto cleanup;
@@ -1721,9 +1721,9 @@ void tp_test_epoch_regression(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_descriptors(&consumer, 10);
-        tp_client_do_work(&client);
-        if (!consumer.shm_mapped)
+         tp_consumer_poll_descriptors(consumer, 10);
+        tp_client_do_work(client);
+        if (!consumer->shm_mapped)
         {
             result = 0;
             break;
@@ -1741,21 +1741,21 @@ cleanup:
             stderr,
             "tp_test_epoch_regression failed at step %d shm=%d mapped_epoch=%llu: %s\n",
             step,
-            consumer.shm_mapped ? 1 : 0,
-            (unsigned long long)consumer.mapped_epoch,
+            consumer->shm_mapped ? 1 : 0,
+            (unsigned long long)consumer->mapped_epoch,
             tp_errmsg());
     }
     if (descriptor_pub)
     {
         tp_publication_close(&descriptor_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1774,9 +1774,9 @@ cleanup:
 void tp_test_epoch_remap(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *control_pub = NULL;
     int header_fd = -1;
     int pool_fd = -1;
@@ -1793,8 +1793,8 @@ void tp_test_epoch_remap(void)
     int step = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -1808,17 +1808,17 @@ void tp_test_epoch_remap(void)
     consumer_ctx.stream_id = 83001;
     consumer_ctx.consumer_id = 10;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, control_pub) < 0)
+    if (tp_test_wait_for_publication(client, control_pub) < 0)
     {
         goto cleanup;
     }
@@ -1886,7 +1886,7 @@ void tp_test_epoch_remap(void)
     tensor_pool_shmPoolAnnounce_payloadPools_put_regionUri(&pools, pool_uri, strlen(pool_uri));
     tensor_pool_shmPoolAnnounce_put_headerRegionUri(&announce, header_uri, strlen(header_uri));
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -1895,9 +1895,9 @@ void tp_test_epoch_remap(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.shm_mapped && consumer.mapped_epoch == 1)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->shm_mapped && consumer->mapped_epoch == 1)
         {
             break;
         }
@@ -1907,7 +1907,7 @@ void tp_test_epoch_remap(void)
         }
     }
 
-    if (!consumer.shm_mapped || consumer.mapped_epoch != 1)
+    if (!consumer->shm_mapped || consumer->mapped_epoch != 1)
     {
         goto cleanup;
     }
@@ -1924,7 +1924,7 @@ void tp_test_epoch_remap(void)
 
     tensor_pool_shmPoolAnnounce_set_epoch(&announce, 2);
     tensor_pool_shmPoolAnnounce_set_announceTimestampNs(&announce, now_ns);
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -1933,9 +1933,9 @@ void tp_test_epoch_remap(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.shm_mapped && consumer.mapped_epoch == 2)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->shm_mapped && consumer->mapped_epoch == 2)
         {
             result = 0;
             break;
@@ -1953,21 +1953,21 @@ cleanup:
             stderr,
             "tp_test_epoch_remap failed at step %d shm=%d mapped_epoch=%llu: %s\n",
             step,
-            consumer.shm_mapped ? 1 : 0,
-            (unsigned long long)consumer.mapped_epoch,
+            consumer->shm_mapped ? 1 : 0,
+            (unsigned long long)consumer->mapped_epoch,
             tp_errmsg());
     }
     if (control_pub)
     {
         tp_publication_close(&control_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1986,7 +1986,7 @@ cleanup:
 void tp_test_meta_blob_ordering(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_metadata_poller_t poller;
     tp_metadata_handlers_t handlers;
     tp_blob_state_t state;
@@ -2003,7 +2003,7 @@ void tp_test_meta_blob_ordering(void)
     int64_t deadline;
     size_t header_len = tensor_pool_messageHeader_encoded_length();
 
-    memset(&client, 0, sizeof(client));
+    client = NULL;
     memset(&poller, 0, sizeof(poller));
     memset(&state, 0, sizeof(state));
 
@@ -2012,12 +2012,12 @@ void tp_test_meta_blob_ordering(void)
         return;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1300, &meta_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1300, &meta_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, meta_pub) < 0)
+    if (tp_test_wait_for_publication(client, meta_pub) < 0)
     {
         goto cleanup;
     }
@@ -2027,7 +2027,7 @@ void tp_test_meta_blob_ordering(void)
     handlers.on_meta_blob_complete = tp_on_blob_complete;
     handlers.clientd = &state;
 
-    if (tp_metadata_poller_init(&poller, &client, &handlers) < 0)
+    if (tp_metadata_poller_init(&poller, client, &handlers) < 0)
     {
         goto cleanup;
     }
@@ -2050,7 +2050,7 @@ void tp_test_meta_blob_ordering(void)
     tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 8);
     tensor_pool_metaBlobAnnounce_set_checksum(&announce, 0);
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -2069,7 +2069,7 @@ void tp_test_meta_blob_ordering(void)
         goto cleanup;
     }
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
     {
         goto cleanup;
     }
@@ -2083,7 +2083,7 @@ void tp_test_meta_blob_ordering(void)
         goto cleanup;
     }
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
     {
         goto cleanup;
     }
@@ -2098,7 +2098,7 @@ void tp_test_meta_blob_ordering(void)
     tensor_pool_metaBlobComplete_set_metaVersion(&complete, 1);
     tensor_pool_metaBlobComplete_set_checksum(&complete, 0);
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobComplete_sbe_position(&complete)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobComplete_sbe_position(&complete)) < 0)
     {
         goto cleanup;
     }
@@ -2107,7 +2107,7 @@ void tp_test_meta_blob_ordering(void)
     while (tp_clock_now_ns() < deadline)
     {
         tp_metadata_poll(&poller, 10);
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
         if (state.chunk_count >= 1)
         {
             break;
@@ -2135,7 +2135,7 @@ void tp_test_meta_blob_ordering(void)
     tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 4);
     tensor_pool_metaBlobAnnounce_set_checksum(&announce, 0);
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -2154,7 +2154,7 @@ void tp_test_meta_blob_ordering(void)
         goto cleanup;
     }
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk)) < 0)
     {
         goto cleanup;
     }
@@ -2169,7 +2169,7 @@ void tp_test_meta_blob_ordering(void)
     tensor_pool_metaBlobComplete_set_metaVersion(&complete, 2);
     tensor_pool_metaBlobComplete_set_checksum(&complete, 0);
 
-    if (tp_test_offer(&client, meta_pub, buffer, (size_t)tensor_pool_metaBlobComplete_sbe_position(&complete)) < 0)
+    if (tp_test_offer(client, meta_pub, buffer, (size_t)tensor_pool_metaBlobComplete_sbe_position(&complete)) < 0)
     {
         goto cleanup;
     }
@@ -2178,7 +2178,7 @@ void tp_test_meta_blob_ordering(void)
     while (tp_clock_now_ns() < deadline)
     {
         tp_metadata_poll(&poller, 10);
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
         if (state.complete_count >= 1)
         {
             result = 0;
@@ -2196,9 +2196,9 @@ cleanup:
     {
         tp_publication_close(&meta_pub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
 
     assert(result == 0);
@@ -2207,9 +2207,9 @@ cleanup:
 void tp_test_activity_liveness(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     int header_fd = -1;
     int pool_fd = -1;
     char header_path[] = "/tmp/tp_activity_headerXXXXXX";
@@ -2223,8 +2223,8 @@ void tp_test_activity_liveness(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -2238,7 +2238,7 @@ void tp_test_activity_liveness(void)
     consumer_ctx.stream_id = 74001;
     consumer_ctx.consumer_id = 5;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -2281,19 +2281,19 @@ void tp_test_activity_liveness(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         goto cleanup;
     }
 
-    tp_consumer_poll_control(&consumer, 1);
-    if (!consumer.shm_mapped)
+     tp_consumer_poll_control(consumer, 1);
+    if (!consumer->shm_mapped)
     {
         goto cleanup;
     }
 
-    stale_ns = tp_context_get_announce_period_ns(client.context.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
-    consumer.attach_time_ns = now_ns - stale_ns - 1;
+    stale_ns = tp_context_get_announce_period_ns(ctx.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    consumer->attach_time_ns = now_ns - stale_ns - 1;
     if (now_ns > stale_ns * 2)
     {
         tp_test_update_activity_timestamp(header_fd, now_ns - stale_ns * 2);
@@ -2306,9 +2306,9 @@ void tp_test_activity_liveness(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (!consumer.shm_mapped)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (!consumer->shm_mapped)
         {
             result = 0;
             break;
@@ -2320,13 +2320,13 @@ void tp_test_activity_liveness(void)
     }
 
 cleanup:
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -2345,9 +2345,9 @@ cleanup:
 void tp_test_pid_liveness(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     int header_fd = -1;
     int pool_fd = -1;
     char header_path[] = "/tmp/tp_pid_headerXXXXXX";
@@ -2360,8 +2360,8 @@ void tp_test_pid_liveness(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -2375,7 +2375,7 @@ void tp_test_pid_liveness(void)
     consumer_ctx.stream_id = 74002;
     consumer_ctx.consumer_id = 7;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -2418,13 +2418,13 @@ void tp_test_pid_liveness(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         goto cleanup;
     }
 
-    tp_consumer_poll_control(&consumer, 1);
-    if (!consumer.shm_mapped)
+     tp_consumer_poll_control(consumer, 1);
+    if (!consumer->shm_mapped)
     {
         goto cleanup;
     }
@@ -2434,9 +2434,9 @@ void tp_test_pid_liveness(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (!consumer.shm_mapped)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (!consumer->shm_mapped)
         {
             result = 0;
             break;
@@ -2448,13 +2448,13 @@ void tp_test_pid_liveness(void)
     }
 
 cleanup:
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -2473,9 +2473,9 @@ cleanup:
 void tp_test_consumer_fallback_state(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *control_pub = NULL;
     uint8_t buffer[256];
     struct tensor_pool_messageHeader header;
@@ -2484,8 +2484,8 @@ void tp_test_consumer_fallback_state(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -2499,17 +2499,17 @@ void tp_test_consumer_fallback_state(void)
     consumer_ctx.stream_id = 75001;
     consumer_ctx.consumer_id = 6;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, control_pub) < 0)
+    if (tp_test_wait_for_publication(client, control_pub) < 0)
     {
         goto cleanup;
     }
@@ -2536,7 +2536,7 @@ void tp_test_consumer_fallback_state(void)
     tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "", 0);
     tensor_pool_consumerConfig_put_controlChannel(&cfg, "", 0);
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
     {
         goto cleanup;
     }
@@ -2544,11 +2544,11 @@ void tp_test_consumer_fallback_state(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.state == TP_CONSUMER_STATE_FALLBACK)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->state == TP_CONSUMER_STATE_FALLBACK)
         {
-            if (strcmp(tp_consumer_payload_fallback_uri(&consumer), fallback_uri) == 0)
+            if (strcmp(tp_consumer_payload_fallback_uri(consumer), fallback_uri) == 0)
             {
                 result = 0;
             }
@@ -2565,13 +2565,13 @@ cleanup:
     {
         tp_publication_close(&control_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
 
     assert(result == 0);
@@ -2580,9 +2580,9 @@ cleanup:
 void tp_test_consumer_fallback_recover(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *control_pub = NULL;
     uint8_t buffer[512];
     struct tensor_pool_messageHeader header;
@@ -2600,8 +2600,8 @@ void tp_test_consumer_fallback_recover(void)
     int result = -1;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -2615,17 +2615,17 @@ void tp_test_consumer_fallback_recover(void)
     consumer_ctx.stream_id = 75002;
     consumer_ctx.consumer_id = 7;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, control_pub) < 0)
+    if (tp_test_wait_for_publication(client, control_pub) < 0)
     {
         goto cleanup;
     }
@@ -2671,7 +2671,7 @@ void tp_test_consumer_fallback_recover(void)
     tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "", 0);
     tensor_pool_consumerConfig_put_controlChannel(&cfg, "", 0);
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
     {
         goto cleanup;
     }
@@ -2679,9 +2679,9 @@ void tp_test_consumer_fallback_recover(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.state == TP_CONSUMER_STATE_FALLBACK)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->state == TP_CONSUMER_STATE_FALLBACK)
         {
             break;
         }
@@ -2691,7 +2691,7 @@ void tp_test_consumer_fallback_recover(void)
         }
     }
 
-    if (consumer.state != TP_CONSUMER_STATE_FALLBACK)
+    if (consumer->state != TP_CONSUMER_STATE_FALLBACK)
     {
         goto cleanup;
     }
@@ -2712,7 +2712,7 @@ void tp_test_consumer_fallback_recover(void)
     tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "", 0);
     tensor_pool_consumerConfig_put_controlChannel(&cfg, "", 0);
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
     {
         goto cleanup;
     }
@@ -2720,9 +2720,9 @@ void tp_test_consumer_fallback_recover(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.state == TP_CONSUMER_STATE_UNMAPPED && !consumer.shm_mapped)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->state == TP_CONSUMER_STATE_UNMAPPED && !consumer->shm_mapped)
         {
             break;
         }
@@ -2732,7 +2732,7 @@ void tp_test_consumer_fallback_recover(void)
         }
     }
 
-    if (consumer.state != TP_CONSUMER_STATE_UNMAPPED)
+    if (consumer->state != TP_CONSUMER_STATE_UNMAPPED)
     {
         goto cleanup;
     }
@@ -2778,7 +2778,7 @@ void tp_test_consumer_fallback_recover(void)
     tensor_pool_shmPoolAnnounce_payloadPools_put_regionUri(&pools, pool_uri, strlen(pool_uri));
     tensor_pool_shmPoolAnnounce_put_headerRegionUri(&announce, header_uri, strlen(header_uri));
 
-    if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
+    if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_shmPoolAnnounce_sbe_position(&announce)) < 0)
     {
         goto cleanup;
     }
@@ -2786,9 +2786,9 @@ void tp_test_consumer_fallback_recover(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        tp_client_do_work(&client);
-        if (consumer.state == TP_CONSUMER_STATE_MAPPED && consumer.shm_mapped)
+         tp_consumer_poll_control(consumer, 10);
+        tp_client_do_work(client);
+        if (consumer->state == TP_CONSUMER_STATE_MAPPED && consumer->shm_mapped)
         {
             result = 0;
             break;
@@ -2804,13 +2804,13 @@ cleanup:
     {
         tp_publication_close(&control_pub);
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -2829,9 +2829,9 @@ cleanup:
 void tp_test_progress_per_consumer_control(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_consumer_config_t consumer_config;
     tp_consumer_pool_config_t pool_cfg;
     tp_publication_t *control_pub = NULL;
@@ -2855,8 +2855,8 @@ void tp_test_progress_per_consumer_control(void)
     uint32_t header_index = 0;
     int64_t deadline;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -2891,7 +2891,7 @@ void tp_test_progress_per_consumer_control(void)
     consumer_ctx.consumer_id = 77;
     consumer_ctx.use_driver = false;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -2912,7 +2912,7 @@ void tp_test_progress_per_consumer_control(void)
     consumer_config.pools = &pool_cfg;
     consumer_config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &consumer_config) < 0)
+    if (tp_consumer_attach(consumer, &consumer_config) < 0)
     {
         goto cleanup;
     }
@@ -2967,13 +2967,13 @@ void tp_test_progress_per_consumer_control(void)
     }
     step = 5;
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
     step = 6;
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1003, &progress_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1003, &progress_pub) < 0)
     {
         goto cleanup;
     }
@@ -3002,7 +3002,7 @@ void tp_test_progress_per_consumer_control(void)
         tensor_pool_consumerConfig_put_descriptorChannel(&cfg, "", 0);
         tensor_pool_consumerConfig_put_controlChannel(&cfg, "aeron:ipc", 9);
 
-        if (tp_test_offer(&client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
+        if (tp_test_offer(client, control_pub, buffer, (size_t)tensor_pool_consumerConfig_sbe_position(&cfg)) < 0)
         {
             goto cleanup;
         }
@@ -3012,26 +3012,26 @@ void tp_test_progress_per_consumer_control(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        tp_consumer_poll_control(&consumer, 10);
-        if (consumer.control_subscription)
+         tp_consumer_poll_control(consumer, 10);
+        if (consumer->control_subscription)
         {
-            if (aeron_subscription_is_connected(tp_subscription_handle(consumer.control_subscription)) &&
+            if (aeron_subscription_is_connected(tp_subscription_handle(consumer->control_subscription)) &&
                 aeron_publication_is_connected(tp_publication_handle(progress_pub)))
             {
                 break;
             }
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
-    if (NULL == consumer.control_subscription ||
-        !aeron_subscription_is_connected(tp_subscription_handle(consumer.control_subscription)) ||
+    if (NULL == consumer->control_subscription ||
+        !aeron_subscription_is_connected(tp_subscription_handle(consumer->control_subscription)) ||
         !aeron_publication_is_connected(tp_publication_handle(progress_pub)))
     {
         goto cleanup;
     }
     step = 9;
 
-    if (tp_consumer_set_progress_handler(&consumer, tp_on_progress_capture, &progress_count) < 0)
+    if (tp_consumer_set_progress_handler(consumer, tp_on_progress_capture, &progress_count) < 0)
     {
         goto cleanup;
     }
@@ -3040,12 +3040,12 @@ void tp_test_progress_per_consumer_control(void)
     {
         tp_frame_progress_t progress_view;
         memset(&progress_view, 0, sizeof(progress_view));
-        progress_view.stream_id = consumer.stream_id;
-        progress_view.epoch = consumer.epoch;
+        progress_view.stream_id = consumer->stream_id;
+        progress_view.epoch = consumer->epoch;
         progress_view.seq = seq;
         progress_view.payload_bytes_filled = 32;
         progress_view.state = TP_PROGRESS_COMPLETE;
-        if (tp_consumer_validate_progress(&consumer, &progress_view) != 0)
+        if (tp_consumer_validate_progress(consumer, &progress_view) != 0)
         {
             goto cleanup;
         }
@@ -3071,7 +3071,7 @@ void tp_test_progress_per_consumer_control(void)
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 32);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_COMPLETE);
 
-        if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+        if (tp_test_offer(client, progress_pub, buffer, header_len + body_len) < 0)
         {
             goto cleanup;
         }
@@ -3081,7 +3081,7 @@ void tp_test_progress_per_consumer_control(void)
     deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
     while (tp_clock_now_ns() < deadline)
     {
-        if (tp_consumer_poll_progress(&consumer, 10) < 0)
+        if (tp_consumer_poll_progress(consumer, 10) < 0)
         {
             goto cleanup;
         }
@@ -3089,7 +3089,7 @@ void tp_test_progress_per_consumer_control(void)
         {
             break;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
 
     if (progress_count == 0)
@@ -3105,13 +3105,13 @@ cleanup:
     {
         fprintf(stderr, "tp_test_progress_per_consumer_control failed at step %d: %s\n", step, tp_errmsg());
     }
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -3130,9 +3130,9 @@ cleanup:
 void tp_test_progress_layout_validation(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_consumer_config_t config;
     tp_consumer_pool_config_t pool_cfg;
     tp_frame_progress_t progress;
@@ -3151,8 +3151,8 @@ void tp_test_progress_layout_validation(void)
     uint32_t header_index = 0;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&consumer, 0, sizeof(consumer));
+    client = NULL;
+    consumer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx, 0) < 0)
     {
@@ -3185,7 +3185,7 @@ void tp_test_progress_layout_validation(void)
     consumer_ctx.stream_id = 80001;
     consumer_ctx.consumer_id = 2;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -3205,7 +3205,7 @@ void tp_test_progress_layout_validation(void)
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &config) < 0)
+    if (tp_consumer_attach(consumer, &config) < 0)
     {
         goto cleanup;
     }
@@ -3261,26 +3261,26 @@ void tp_test_progress_layout_validation(void)
     }
 
     memset(&progress, 0, sizeof(progress));
-    progress.stream_id = consumer.stream_id;
-    progress.epoch = consumer.epoch;
+    progress.stream_id = consumer->stream_id;
+    progress.epoch = consumer->epoch;
     progress.seq = seq;
     progress.payload_bytes_filled = 32;
     progress.state = TP_PROGRESS_STARTED;
-    assert(tp_consumer_validate_progress(&consumer, &progress) != 0);
+    assert(tp_consumer_validate_progress(consumer, &progress) != 0);
 
     progress.payload_bytes_filled = 8;
-    assert(tp_consumer_validate_progress(&consumer, &progress) == 0);
+    assert(tp_consumer_validate_progress(consumer, &progress) == 0);
 
     result = 0;
 
 cleanup:
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -3299,7 +3299,7 @@ cleanup:
 void tp_test_progress_regression_rejected(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_publication_t *progress_pub = NULL;
     tp_subscription_t *progress_sub = NULL;
     tp_progress_poller_t progress_poller;
@@ -3313,7 +3313,7 @@ void tp_test_progress_regression_rejected(void)
     int result = -1;
     int skip = 0;
 
-    memset(&client, 0, sizeof(client));
+    client = NULL;
     memset(&progress_poller, 0, sizeof(progress_poller));
     memset(&progress_handlers, 0, sizeof(progress_handlers));
 
@@ -3322,18 +3322,18 @@ void tp_test_progress_regression_rejected(void)
         return;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1003, &progress_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1003, &progress_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1003, &progress_sub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, progress_pub) < 0 ||
-        tp_test_wait_for_subscription(&client, progress_sub) < 0)
+    if (tp_test_wait_for_publication(client, progress_pub) < 0 ||
+        tp_test_wait_for_subscription(client, progress_sub) < 0)
     {
         skip = 1;
         goto cleanup;
@@ -3359,13 +3359,13 @@ void tp_test_progress_regression_rejected(void)
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 32);
     tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
 
-    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, progress_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
 
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 16);
-    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, progress_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
@@ -3375,7 +3375,7 @@ void tp_test_progress_regression_rejected(void)
         while (tp_clock_now_ns() < deadline && progress_count < 1)
         {
             tp_progress_poll(&progress_poller, 10);
-            tp_client_do_work(&client);
+            tp_client_do_work(client);
         }
     }
 
@@ -3387,7 +3387,7 @@ void tp_test_progress_regression_rejected(void)
     tp_progress_poller_set_max_payload_bytes(&progress_poller, 8);
     tensor_pool_frameProgress_set_seq(&progress, 8);
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 16);
-    if (tp_test_offer(&client, progress_pub, buffer, header_len + body_len) < 0)
+    if (tp_test_offer(client, progress_pub, buffer, header_len + body_len) < 0)
     {
         goto cleanup;
     }
@@ -3397,7 +3397,7 @@ void tp_test_progress_regression_rejected(void)
         while (tp_clock_now_ns() < deadline)
         {
             tp_progress_poll(&progress_poller, 10);
-            tp_client_do_work(&client);
+            tp_client_do_work(client);
         }
     }
 
@@ -3418,9 +3418,9 @@ cleanup:
     {
         tp_subscription_close(&progress_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (skip)
     {
@@ -3432,9 +3432,9 @@ cleanup:
 void tp_test_pollers(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_publication_t *control_pub = NULL;
     tp_publication_t *qos_pub = NULL;
     tp_publication_t *meta_pub = NULL;
@@ -3456,7 +3456,7 @@ void tp_test_pollers(void)
     int64_t deadline;
 
     memset(&state, 0, sizeof(state));
-    memset(&consumer, 0, sizeof(consumer));
+    consumer = NULL;
     memset(&control_handlers, 0, sizeof(control_handlers));
     memset(&qos_handlers, 0, sizeof(qos_handlers));
     memset(&meta_handlers, 0, sizeof(meta_handlers));
@@ -3467,45 +3467,45 @@ void tp_test_pollers(void)
         return;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1200, &qos_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1200, &qos_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1300, &meta_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1300, &meta_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1003, &progress_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1003, &progress_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1100, &descriptor_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1100, &descriptor_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1003, &progress_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1003, &progress_sub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, control_pub) < 0 ||
-        tp_test_wait_for_publication(&client, qos_pub) < 0 ||
-        tp_test_wait_for_publication(&client, meta_pub) < 0 ||
-        tp_test_wait_for_publication(&client, progress_pub) < 0 ||
-        tp_test_wait_for_publication(&client, descriptor_pub) < 0 ||
-        tp_test_wait_for_subscription(&client, tp_client_control_subscription(&client)) < 0 ||
-        tp_test_wait_for_subscription(&client, tp_client_qos_subscription(&client)) < 0 ||
-        tp_test_wait_for_subscription(&client, tp_client_metadata_subscription(&client)) < 0 ||
-        tp_test_wait_for_subscription(&client, progress_sub) < 0)
+    if (tp_test_wait_for_publication(client, control_pub) < 0 ||
+        tp_test_wait_for_publication(client, qos_pub) < 0 ||
+        tp_test_wait_for_publication(client, meta_pub) < 0 ||
+        tp_test_wait_for_publication(client, progress_pub) < 0 ||
+        tp_test_wait_for_publication(client, descriptor_pub) < 0 ||
+        tp_test_wait_for_subscription(client, tp_client_control_subscription(client)) < 0 ||
+        tp_test_wait_for_subscription(client, tp_client_qos_subscription(client)) < 0 ||
+        tp_test_wait_for_subscription(client, tp_client_metadata_subscription(client)) < 0 ||
+        tp_test_wait_for_subscription(client, progress_sub) < 0)
     {
         skip = 1;
         goto cleanup;
@@ -3513,14 +3513,14 @@ void tp_test_pollers(void)
 
     control_handlers.on_consumer_hello = tp_on_consumer_hello;
     control_handlers.clientd = &state;
-    if (tp_control_poller_init(&control_poller, &client, &control_handlers) < 0)
+    if (tp_control_poller_init(&control_poller, client, &control_handlers) < 0)
     {
         goto cleanup;
     }
 
     qos_handlers.on_qos_event = tp_on_qos_event;
     qos_handlers.clientd = &state;
-    if (tp_qos_poller_init(&qos_poller, &client, &qos_handlers) < 0)
+    if (tp_qos_poller_init(&qos_poller, client, &qos_handlers) < 0)
     {
         goto cleanup;
     }
@@ -3531,7 +3531,7 @@ void tp_test_pollers(void)
     meta_handlers.on_meta_blob_chunk = tp_on_meta_blob_chunk;
     meta_handlers.on_meta_blob_complete = tp_on_meta_blob_complete;
     meta_handlers.clientd = &state;
-    if (tp_metadata_poller_init(&meta_poller, &client, &meta_handlers) < 0)
+    if (tp_metadata_poller_init(&meta_poller, client, &meta_handlers) < 0)
     {
         goto cleanup;
     }
@@ -3571,8 +3571,7 @@ void tp_test_pollers(void)
         tensor_pool_consumerHello_put_descriptorChannel(&hello, "", 0);
         tensor_pool_consumerHello_put_controlChannel(&hello, "", 0);
 
-        if (tp_test_offer_or_skip(
-            &client,
+        if (tp_test_offer_or_skip(client,
             control_pub,
             buffer,
             (size_t)tensor_pool_consumerHello_sbe_position(&hello),
@@ -3603,7 +3602,7 @@ void tp_test_pollers(void)
         tensor_pool_qosConsumer_set_dropsLate(&qos, 0);
         tensor_pool_qosConsumer_set_mode(&qos, tensor_pool_mode_STREAM);
 
-        if (tp_test_offer_or_skip(&client, qos_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, qos_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3629,8 +3628,7 @@ void tp_test_pollers(void)
         tensor_pool_dataSourceAnnounce_put_name(&announce, "name", 4);
         tensor_pool_dataSourceAnnounce_put_summary(&announce, "summary", 7);
 
-        if (tp_test_offer_or_skip(
-            &client,
+        if (tp_test_offer_or_skip(client,
             meta_pub,
             buffer,
             (size_t)tensor_pool_dataSourceAnnounce_sbe_position(&announce),
@@ -3670,8 +3668,7 @@ void tp_test_pollers(void)
         tensor_pool_dataSourceMeta_attributes_put_format(&attrs, "s", 1);
         tensor_pool_dataSourceMeta_attributes_put_value(&attrs, "v", 1);
 
-        if (tp_test_offer_or_skip(
-            &client,
+        if (tp_test_offer_or_skip(client,
             meta_pub,
             buffer,
             (size_t)tensor_pool_dataSourceMeta_sbe_position(&meta),
@@ -3700,7 +3697,7 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobAnnounce_set_totalLen(&announce, 3);
         tensor_pool_metaBlobAnnounce_set_checksum(&announce, 123);
 
-        if (tp_test_offer_or_skip(&client, meta_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, meta_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3725,8 +3722,7 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobChunk_set_chunkOffset(&chunk, 0);
         tensor_pool_metaBlobChunk_put_bytes(&chunk, bytes, sizeof(bytes) - 1);
 
-        if (tp_test_offer_or_skip(
-            &client,
+        if (tp_test_offer_or_skip(client,
             meta_pub,
             buffer,
             (size_t)tensor_pool_metaBlobChunk_sbe_position(&chunk),
@@ -3753,7 +3749,7 @@ void tp_test_pollers(void)
         tensor_pool_metaBlobComplete_set_metaVersion(&complete, 1);
         tensor_pool_metaBlobComplete_set_checksum(&complete, 123);
 
-        if (tp_test_offer_or_skip(&client, meta_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, meta_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3778,14 +3774,14 @@ void tp_test_pollers(void)
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 128);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_STARTED);
 
-        if (tp_test_offer_or_skip(&client, progress_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, progress_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
 
         tensor_pool_frameProgress_set_payloadBytesFilled(&progress, 64);
         tensor_pool_frameProgress_set_state(&progress, tensor_pool_frameProgressState_PROGRESS);
-        if (tp_test_offer_or_skip(&client, progress_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, progress_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3796,16 +3792,16 @@ void tp_test_pollers(void)
         goto cleanup;
     }
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
 
-    consumer.state = TP_CONSUMER_STATE_MAPPED;
-    consumer.shm_mapped = true;
-    consumer.mapped_epoch = 1;
+    consumer->state = TP_CONSUMER_STATE_MAPPED;
+    consumer->shm_mapped = true;
+    consumer->mapped_epoch = 1;
 
-    tp_consumer_set_descriptor_handler(&consumer, tp_on_descriptor, &state);
+     tp_consumer_set_descriptor_handler(consumer, tp_on_descriptor, &state);
 
     {
         struct tensor_pool_messageHeader header;
@@ -3827,7 +3823,7 @@ void tp_test_pollers(void)
         tensor_pool_frameDescriptor_set_metaVersion(&descriptor, 1);
         tensor_pool_frameDescriptor_set_traceId(&descriptor, 9);
 
-        if (tp_test_offer_or_skip(&client, descriptor_pub, buffer, header_len + body_len, &skip) < 0)
+        if (tp_test_offer_or_skip(client, descriptor_pub, buffer, header_len + body_len, &skip) < 0)
         {
             goto cleanup;
         }
@@ -3840,8 +3836,8 @@ void tp_test_pollers(void)
         tp_qos_poll(&qos_poller, 10);
         tp_metadata_poll(&meta_poller, 10);
         tp_progress_poll(&progress_poller, 10);
-        tp_consumer_poll_descriptors(&consumer, 10);
-        tp_client_do_work(&client);
+         tp_consumer_poll_descriptors(consumer, 10);
+        tp_client_do_work(client);
 
         if (state.saw_hello && state.saw_qos && state.saw_announce && state.saw_meta &&
             state.saw_meta_blob_announce && state.saw_meta_blob_chunk && state.saw_meta_blob_complete &&
@@ -3858,9 +3854,9 @@ void tp_test_pollers(void)
     }
 
 cleanup:
-    if (consumer.client)
+    if (consumer->client)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
     tp_fragment_assembler_close(&control_poller.assembler);
     tp_fragment_assembler_close(&qos_poller.assembler);
@@ -3890,7 +3886,7 @@ cleanup:
     {
         tp_subscription_close(&progress_sub);
     }
-    tp_client_close(&client);
+    tp_client_close(client);
 
     if (skip)
     {

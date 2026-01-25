@@ -1,3 +1,4 @@
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_qos.h"
 
 #include "wire/tensor_pool/messageHeader.h"

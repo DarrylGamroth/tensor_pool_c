@@ -159,11 +159,11 @@ static void tp_on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 void tp_test_rollover(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_consumer_context_t consumer_ctx;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_producer_config_t producer_cfg;
     tp_consumer_config_t consumer_cfg;
     tp_payload_pool_config_t pool_cfg;
@@ -193,8 +193,6 @@ void tp_test_rollover(void)
     const uint32_t layout_version = 1;
     size_t i;
 
-    memset(&producer, 0, sizeof(producer));
-    memset(&consumer, 0, sizeof(consumer));
     memset(&state, 0, sizeof(state));
 
     default_dir[0] = '\0';
@@ -246,7 +244,7 @@ void tp_test_rollover(void)
         tp_client_context_set_aeron_dir(&ctx, aeron_dir);
         tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
         tp_context_set_allowed_paths(ctx.base, allowed_paths, 1);
-        if (tp_client_init(&client, &ctx) == 0 && tp_client_start(&client) == 0)
+        if (tp_client_init(&client, &ctx) == 0 && tp_client_start(client) == 0)
         {
             started = 1;
         }
@@ -264,7 +262,7 @@ void tp_test_rollover(void)
     producer_ctx.stream_id = stream_id;
     producer_ctx.producer_id = 1;
 
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -285,7 +283,7 @@ void tp_test_rollover(void)
     producer_cfg.pools = &pool_cfg;
     producer_cfg.pool_count = 1;
 
-    if (tp_producer_attach(&producer, &producer_cfg) < 0)
+    if (tp_producer_attach(producer, &producer_cfg) < 0)
     {
         goto cleanup;
     }
@@ -297,7 +295,7 @@ void tp_test_rollover(void)
     consumer_ctx.stream_id = stream_id;
     consumer_ctx.consumer_id = 2;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_ctx) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_ctx) < 0)
     {
         goto cleanup;
     }
@@ -317,17 +315,17 @@ void tp_test_rollover(void)
     consumer_cfg.pools = &consumer_pool_cfg;
     consumer_cfg.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &consumer_cfg) < 0)
+    if (tp_consumer_attach(consumer, &consumer_cfg) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_publication(client, tp_producer_descriptor_publication(producer)) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_subscription(&client, consumer.descriptor_subscription) < 0)
+    if (tp_test_wait_for_subscription(client, tp_consumer_descriptor_subscription(consumer)) < 0)
     {
         goto cleanup;
     }
@@ -352,12 +350,12 @@ void tp_test_rollover(void)
     meta.timestamp_ns = 0;
     meta.meta_version = 0;
 
-    state.consumer = &consumer;
-    tp_consumer_set_descriptor_handler(&consumer, tp_on_descriptor, &state);
+    state.consumer = consumer;
+    tp_consumer_set_descriptor_handler(consumer, tp_on_descriptor, &state);
 
     for (i = 0; i < frame_count; i++)
     {
-        if (tp_producer_offer_frame(&producer, &frame, &meta) < 0)
+        if (tp_producer_offer_frame(producer, &frame, &meta) < 0)
         {
             goto cleanup;
         }
@@ -367,7 +365,7 @@ void tp_test_rollover(void)
         int64_t deadline = tp_clock_now_ns() + 5 * 1000 * 1000 * 1000LL;
         while (state.received < (int)frame_count && tp_clock_now_ns() < deadline)
         {
-            tp_consumer_poll_descriptors(&consumer, 10);
+            tp_consumer_poll_descriptors(consumer, 10);
         }
     }
 
@@ -379,20 +377,17 @@ void tp_test_rollover(void)
     result = 0;
 
 cleanup:
-    if (consumer.client)
+    if (consumer)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
-    if (producer.client)
+    if (producer)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
+    if (client)
     {
-        const char *aeron_dir = tp_context_get_aeron_dir(client.context.base);
-        if (NULL != aeron_dir && aeron_dir[0] != '\0')
-        {
-            tp_client_close(&client);
-        }
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {

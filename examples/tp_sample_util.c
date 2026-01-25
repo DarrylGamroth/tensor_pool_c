@@ -1,3 +1,7 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "tp_sample_util.h"
 
 #include <inttypes.h>
@@ -10,7 +14,7 @@ int tp_example_init_client_context(
     const char *aeron_dir,
     const char *channel,
     int32_t announce_stream_id,
-    const char *const *allowed_paths,
+    const char **allowed_paths,
     size_t allowed_path_count)
 {
     if (NULL == ctx || NULL == aeron_dir || NULL == channel)
@@ -41,7 +45,7 @@ int tp_example_init_client_context_nodriver(
     tp_client_context_t *ctx,
     const char *aeron_dir,
     const char *channel,
-    const char *const *allowed_paths,
+    const char **allowed_paths,
     size_t allowed_path_count)
 {
     if (NULL == ctx || NULL == aeron_dir || NULL == channel)

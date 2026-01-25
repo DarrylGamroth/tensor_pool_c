@@ -256,8 +256,8 @@ static size_t tp_test_encode_detach_response(uint8_t *buffer, size_t length, int
 void tp_test_driver_client_attach_detach_live(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_driver_detach_info_t detach_info;
@@ -276,8 +276,8 @@ void tp_test_driver_client_attach_detach_live(void)
     }
 
     memset(&ctx, 0, sizeof(ctx));
-    memset(&client, 0, sizeof(client));
-    memset(&driver, 0, sizeof(driver));
+    client = NULL;
+    driver = NULL;
     memset(&request, 0, sizeof(request));
     memset(&info, 0, sizeof(info));
     memset(&detach_info, 0, sizeof(detach_info));
@@ -296,37 +296,37 @@ void tp_test_driver_client_attach_detach_live(void)
     tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
 
     step = 2;
-    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
     step = 3;
-    if (tp_driver_client_init(&driver, &client) < 0)
+    if (tp_driver_client_init(&driver, client) < 0)
     {
         goto cleanup;
     }
 
     step = 4;
-    if (tp_test_wait_for_publication(&client, driver.publication) < 0)
+    if (tp_test_wait_for_publication(client, tp_driver_client_publication(driver)) < 0)
     {
         goto cleanup;
     }
 
     step = 5;
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &response_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &response_pub) < 0)
     {
         goto cleanup;
     }
 
     step = 6;
-    if (tp_test_wait_for_publication(&client, response_pub) < 0)
+    if (tp_test_wait_for_publication(client, response_pub) < 0)
     {
         goto cleanup;
     }
 
     step = 7;
-    if (tp_test_wait_for_subscription(&client, tp_client_control_subscription(&client)) < 0)
+    if (tp_test_wait_for_subscription(client, tp_client_control_subscription(client)) < 0)
     {
         goto cleanup;
     }
@@ -341,7 +341,7 @@ void tp_test_driver_client_attach_detach_live(void)
     request.desired_node_id = TP_NULL_U32;
 
     step = 8;
-    if (tp_driver_attach_async(&driver, &request, &attach_async) < 0)
+    if (tp_driver_attach_async(driver, &request, &attach_async) < 0)
     {
         goto cleanup;
     }
@@ -367,7 +367,7 @@ void tp_test_driver_client_attach_detach_live(void)
             initial_correlation,
             tensor_pool_responseCode_REJECTED,
             "client_id already attached");
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -387,7 +387,7 @@ void tp_test_driver_client_attach_detach_live(void)
                 saw_retry = 1;
                 break;
             }
-            tp_client_do_work(&client);
+            tp_client_do_work(client);
         }
 
         if (!saw_retry)
@@ -404,7 +404,7 @@ void tp_test_driver_client_attach_detach_live(void)
             attach_async->request.correlation_id,
             tensor_pool_responseCode_OK,
             NULL);
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -423,7 +423,7 @@ void tp_test_driver_client_attach_detach_live(void)
         {
             break;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
 
     if (info.code != tensor_pool_responseCode_OK)
@@ -432,10 +432,10 @@ void tp_test_driver_client_attach_detach_live(void)
     }
 
     step = 13;
-    if (driver.active_lease_id != info.lease_id ||
-        driver.active_stream_id != request.stream_id ||
-        driver.client_id != attach_async->request.client_id ||
-        driver.role != request.role)
+    if (tp_driver_client_active_lease_id(driver) != info.lease_id ||
+        tp_driver_client_active_stream_id(driver) != request.stream_id ||
+        tp_driver_client_id(driver) != attach_async->request.client_id ||
+        tp_driver_client_role(driver) != request.role)
     {
         goto cleanup;
     }
@@ -448,7 +448,7 @@ void tp_test_driver_client_attach_detach_live(void)
             attach_async->request.correlation_id,
             tensor_pool_responseCode_REJECTED,
             "client_id already attached");
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -464,7 +464,7 @@ void tp_test_driver_client_attach_detach_live(void)
         goto cleanup;
     }
 
-    if (tp_driver_detach_async(&driver, &detach_async) < 0)
+    if (tp_driver_detach_async(driver, &detach_async) < 0)
     {
         goto cleanup;
     }
@@ -478,7 +478,7 @@ void tp_test_driver_client_attach_detach_live(void)
     step = 17;
     {
         size_t len = tp_test_encode_detach_response(buffer, sizeof(buffer), detach_async->response.correlation_id);
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -497,7 +497,7 @@ void tp_test_driver_client_attach_detach_live(void)
         {
             break;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
 
     if (detach_info.code != tensor_pool_responseCode_OK)
@@ -524,7 +524,7 @@ cleanup:
     {
         tp_publication_close(&response_pub);
     }
-    tp_driver_client_close(&driver);
-    tp_client_close(&client);
+    tp_driver_client_close(driver);
+    tp_client_close(client);
     assert(result == 0);
 }

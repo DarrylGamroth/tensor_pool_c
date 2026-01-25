@@ -110,6 +110,7 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/client/tp_client.h
     include/tensor_pool/client/tp_consumer.h
     include/tensor_pool/client/tp_control.h
+    include/tensor_pool/client/tp_control_view.h
     include/tensor_pool/client/tp_discovery_client.h
     include/tensor_pool/client/tp_driver_client.h
     include/tensor_pool/client/tp_producer.h
@@ -293,6 +294,8 @@ target_link_libraries(tensor_pool PUBLIC tomlc17)
 
 if (TP_ENABLE_COVERAGE)
     if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-O0 -g --coverage)
+        add_link_options(--coverage)
         target_compile_options(tensor_pool PRIVATE -O0 -g --coverage)
         target_link_options(tensor_pool PRIVATE --coverage)
     else ()
@@ -315,6 +318,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_tensor_extra.c
     tests/test_tp_aeron.c
     tests/test_tp_agent.c
+    tests/test_tp_accessors.c
     tests/test_tp_client_errors.c
     tests/test_tp_client_context.c
     tests/test_tp_consumer_errors.c
@@ -370,6 +374,7 @@ if (TP_ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
             --gcov-ignore-errors=no_working_dir_found
             --gcov-ignore-errors=source_not_found
             --gcov-ignore-errors=output_error
+            --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
             --print-summary
             --xml-pretty -o coverage.xml
             --html-details -o coverage.html)
@@ -422,7 +427,7 @@ target_include_directories(tp_control_listen PRIVATE "${TP_INTERNAL_INCLUDE_DIR}
 target_include_directories(tp_descriptor_listen PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 add_executable(tp_example_bgapi examples/tp_example_bgapi.c)
-target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
+target_link_libraries(tp_example_bgapi PRIVATE tensor_pool tp_example_util)
 target_include_directories(tp_example_bgapi PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 add_executable(tp_shm_create tools/tp_shm_create.c)

@@ -103,9 +103,9 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_consumer_context_t consumer_context;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t pool_cfg;
     tp_consumer_sample_state_t state;
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
     consumer_context.stream_id = stream_id;
     consumer_context.consumer_id = client_id;
 
-    if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_context) < 0)
     {
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -250,31 +250,34 @@ int main(int argc, char **argv)
     consumer_cfg.pools = &pool_cfg;
     consumer_cfg.pool_count = 1;
 
-    if (tp_consumer_attach(&consumer, &consumer_cfg) < 0)
+    if (tp_consumer_attach(consumer, &consumer_cfg) < 0)
     {
         fprintf(stderr, "Consumer attach failed: %s\n", tp_errmsg());
         goto cleanup;
     }
 
-    if (tp_example_wait_for_subscription(&client, consumer.descriptor_subscription, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_example_wait_for_subscription(
+            client,
+            tp_consumer_descriptor_subscription(consumer),
+            2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Descriptor subscription not connected\n");
         goto cleanup;
     }
 
-    state.consumer = &consumer;
+    state.consumer = consumer;
     state.received = 0;
     state.limit = max_frames;
     state.errors = 0;
 
-    tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
+    tp_consumer_set_descriptor_handler(consumer, on_descriptor, &state);
 
     {
         int64_t deadline = tp_clock_now_ns() + 5 * 1000 * 1000 * 1000LL;
         while (state.received < state.limit && tp_clock_now_ns() < deadline)
         {
-            tp_consumer_poll_control(&consumer, 10);
-            tp_consumer_poll_descriptors(&consumer, 10);
+            tp_consumer_poll_control(consumer, 10);
+            tp_consumer_poll_descriptors(consumer, 10);
         }
         if (state.received == 0)
         {
@@ -292,11 +295,11 @@ int main(int argc, char **argv)
 cleanup:
     if (consumer_inited)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
     if (client_inited)
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     return result;
 }

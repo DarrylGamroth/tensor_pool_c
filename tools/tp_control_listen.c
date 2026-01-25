@@ -863,7 +863,7 @@ int main(int argc, char **argv)
     int32_t qos_stream_id = 1200;
     tp_listen_state_t state;
     tp_client_context_t context;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_subscription_t *control_subscription = NULL;
     tp_subscription_t *metadata_subscription = NULL;
     tp_subscription_t *qos_subscription = NULL;
@@ -968,27 +968,27 @@ int main(int argc, char **argv)
     tp_client_context_set_metadata_channel(&context, metadata_channel, metadata_stream_id);
     tp_client_context_set_qos_channel(&context, qos_channel, qos_stream_id);
 
-    if (tp_client_init(&client, &context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Aeron init failed: %s\n", tp_errmsg());
         return 1;
     }
 
-    control_subscription = tp_client_control_subscription(&client);
-    metadata_subscription = tp_client_metadata_subscription(&client);
-    qos_subscription = tp_client_qos_subscription(&client);
+    control_subscription = tp_client_control_subscription(client);
+    metadata_subscription = tp_client_metadata_subscription(client);
+    qos_subscription = tp_client_qos_subscription(client);
 
     if (NULL == control_subscription || NULL == metadata_subscription || NULL == qos_subscription)
     {
         fprintf(stderr, "Subscription setup failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
     if (tp_fragment_assembler_create(&control_assembler, tp_on_control_fragment, &state) < 0)
     {
         fprintf(stderr, "Fragment assembler failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -996,7 +996,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Metadata assembler failed: %s\n", tp_errmsg());
         tp_fragment_assembler_close(&control_assembler);
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -1005,7 +1005,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "QoS assembler failed: %s\n", tp_errmsg());
         tp_fragment_assembler_close(&metadata_assembler);
         tp_fragment_assembler_close(&control_assembler);
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -1069,7 +1069,7 @@ int main(int argc, char **argv)
     {
         fclose(state.raw_out);
     }
-    tp_client_close(&client);
+    tp_client_close(client);
 
     return 0;
 }

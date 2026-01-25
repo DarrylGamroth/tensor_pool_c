@@ -1,3 +1,4 @@
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_control_poller.h"
 #include "tensor_pool/tp_join_barrier.h"
 #include "tensor_pool/tp_merge_map.h"

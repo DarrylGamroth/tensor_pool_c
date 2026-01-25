@@ -3,7 +3,6 @@
 #endif
 
 #include "tensor_pool/tp.h"
-#include "tensor_pool/internal/tp_consumer_manager.h"
 #include "tp_sample_util.h"
 
 #include <getopt.h>
@@ -115,62 +114,42 @@ static void tp_example_fill_interop_pattern(uint8_t *payload, size_t len, uint64
     }
 }
 
-static void wait_for_descriptor_connection(tp_producer_t *producer)
+static void wait_for_descriptor_connection(tp_client_t *client, tp_producer_t *producer)
 {
     const char *env = getenv("TP_EXAMPLE_WAIT_CONNECTED_MS");
     uint64_t wait_ms = 2000;
     struct timespec ts = { 0, 10 * 1000 * 1000 };
     uint64_t deadline;
     const int poll_limit = 10;
+    tp_publication_t *publication = NULL;
 
     if (env && env[0] != '\0')
     {
         wait_ms = (uint64_t)strtoull(env, NULL, 10);
     }
 
-    if (wait_ms == 0 || NULL == producer || NULL == producer->descriptor_publication)
+    publication = tp_producer_descriptor_publication(producer);
+    if (wait_ms == 0 || NULL == producer || NULL == publication)
     {
         return;
     }
 
-    tp_example_log_publication_status("Descriptor", producer->descriptor_publication);
+    tp_example_log_publication_status("Descriptor", publication);
     deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
     while ((uint64_t)tp_clock_now_ns() < deadline)
     {
-        if (tp_publication_is_connected(producer->descriptor_publication))
+        if (tp_publication_is_connected(publication))
         {
             fprintf(stderr, "Descriptor publication connected\n");
             return;
         }
         tp_producer_poll_control(producer, poll_limit);
-        tp_client_do_work(producer->client);
+        tp_client_do_work(client);
         nanosleep(&ts, NULL);
     }
 
-    log_publication_status("Descriptor", producer->descriptor_publication);
+    tp_example_log_publication_status("Descriptor", publication);
     fprintf(stderr, "Descriptor publication not connected after %" PRIu64 " ms\n", wait_ms);
-}
-
-static int tp_producer_has_consumers(const tp_producer_t *producer)
-{
-    const tp_consumer_registry_t *registry;
-    size_t i;
-
-    if (NULL == producer || NULL == producer->consumer_manager)
-    {
-        return 0;
-    }
-
-    registry = &producer->consumer_manager->registry;
-    for (i = 0; i < registry->capacity; i++)
-    {
-        if (registry->entries[i].in_use)
-        {
-            return 1;
-        }
-    }
-
-    return 0;
 }
 
 static void wait_for_consumer(tp_producer_t *producer)
@@ -190,20 +169,23 @@ static void wait_for_consumer(tp_producer_t *producer)
         return;
     }
 
-    if (!producer->consumer_manager)
+    if (tp_producer_enable_consumer_manager(producer, 16) < 0)
     {
-        if (tp_producer_enable_consumer_manager(producer, 16) < 0)
-        {
-            fprintf(stderr, "Consumer manager enable failed: %s\n", tp_errmsg());
-            return;
-        }
+        fprintf(stderr, "Consumer manager enable failed: %s\n", tp_errmsg());
+        return;
     }
 
     deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
     while ((uint64_t)tp_clock_now_ns() < deadline)
     {
         tp_producer_poll_control(producer, 10);
-        if (tp_producer_has_consumers(producer))
+        bool has_consumers = false;
+        if (tp_producer_has_consumers(producer, &has_consumers) < 0)
+        {
+            fprintf(stderr, "Consumer check failed: %s\n", tp_errmsg());
+            return;
+        }
+        if (has_consumers)
         {
             fprintf(stderr, "Consumer detected, publishing frames\n");
             return;
@@ -217,12 +199,12 @@ static void wait_for_consumer(tp_producer_t *producer)
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
-    tp_client_t client;
-    tp_driver_client_t driver;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_payload_pool_config_t *pool_cfg = NULL;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
     tp_frame_t frame;
@@ -374,14 +356,14 @@ int main(int argc, char **argv)
         tp_client_context_set_keepalive_interval_ns(&client_context, keepalive_ns);
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;
     }
     client_inited = true;
 
-    if (tp_driver_client_init(&driver, &client) < 0)
+    if (tp_driver_client_init(&driver, client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -405,7 +387,7 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(&driver, &request, &info, attach_timeout_ns) < 0)
+    if (tp_driver_attach(driver, &request, &info, attach_timeout_ns) < 0)
     {
         fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -417,7 +399,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
         goto cleanup;
     }
-    resolved_client_id = driver.client_id;
+    resolved_client_id = tp_driver_client_id(driver);
     if (resolved_client_id == 0)
     {
         resolved_client_id = request.client_id;
@@ -463,7 +445,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (tp_producer_init(&producer, &client, &producer_context) < 0)
+    if (tp_producer_init(&producer, client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -474,7 +456,7 @@ int main(int argc, char **argv)
         const char *env = getenv("TP_EXAMPLE_ENABLE_CONSUMER_MANAGER");
         if (env && env[0] != '\0')
         {
-            if (tp_producer_enable_consumer_manager(&producer, 16) < 0)
+            if (tp_producer_enable_consumer_manager(producer, 16) < 0)
             {
                 fprintf(stderr, "Consumer manager enable failed: %s\n", tp_errmsg());
                 goto cleanup;
@@ -484,14 +466,14 @@ int main(int argc, char **argv)
 
     if (verbose)
     {
-        tp_example_log_publication_status("Descriptor", producer.descriptor_publication);
-        tp_example_log_publication_status("Control", producer.control_publication);
-        tp_example_log_publication_status("QoS", producer.qos_publication);
-        tp_example_log_publication_status("Metadata", producer.metadata_publication);
+        tp_example_log_publication_status("Descriptor", tp_producer_descriptor_publication(producer));
+        tp_example_log_publication_status("Control", tp_producer_control_publication(producer));
+        tp_example_log_publication_status("QoS", tp_producer_qos_publication(producer));
+        tp_example_log_publication_status("Metadata", tp_producer_metadata_publication(producer));
     }
 
-    wait_for_consumer(&producer);
-    wait_for_descriptor_connection(&producer);
+    wait_for_consumer(producer);
+    wait_for_descriptor_connection(client, producer);
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer_cfg.stream_id = info.stream_id;
@@ -503,7 +485,7 @@ int main(int argc, char **argv)
     producer_cfg.pools = pool_cfg;
     producer_cfg.pool_count = info.pool_count;
 
-    if (tp_producer_attach(&producer, &producer_cfg) < 0)
+    if (tp_producer_attach(producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -552,7 +534,7 @@ int main(int argc, char **argv)
         for (published = 0; published < frame_count; published++)
         {
             tp_frame_progress_t progress;
-            uint64_t seq = producer.next_seq;
+            uint64_t seq = (uint64_t)published;
             const int poll_limit = 10;
 
             if (pattern == TP_EXAMPLE_PATTERN_SEQ)
@@ -564,7 +546,7 @@ int main(int argc, char **argv)
                 tp_example_fill_interop_pattern(payload_bytes, payload_len, seq);
             }
 
-            int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
+            int64_t position = tp_producer_offer_frame(producer, &frame, &meta);
             if (position < 0)
             {
                 fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
@@ -574,43 +556,45 @@ int main(int argc, char **argv)
             if (publish_progress)
             {
                 progress.seq = (uint64_t)position;
-                progress.stream_id = producer.stream_id;
-                progress.epoch = producer.epoch;
+                progress.stream_id = info.stream_id;
+                progress.epoch = info.epoch;
                 progress.payload_bytes_filled = (uint64_t)frame.payload_len;
                 progress.state = TP_PROGRESS_COMPLETE;
-                if (tp_producer_offer_progress(&producer, &progress) < 0)
+                if (tp_producer_offer_progress(producer, &progress) < 0)
                 {
                     fprintf(stderr, "Progress publish failed: %s\n", tp_errmsg());
                     goto cleanup;
                 }
             }
-            tp_producer_poll_control(&producer, poll_limit);
-            tp_client_do_work(&client);
+            tp_producer_poll_control(producer, poll_limit);
+            tp_client_do_work(client);
         }
     }
 
-    tp_producer_poll_control(&producer, 10);
-    drive_keepalives(&client);
+    tp_producer_poll_control(producer, 10);
+    drive_keepalives(client);
 
     result = 0;
 
 cleanup:
-    if (driver_inited && driver.active_lease_id != 0 && driver.publication != NULL)
+    if (driver_inited &&
+        tp_driver_client_active_lease_id(driver) != 0 &&
+        tp_driver_client_publication(driver) != NULL)
     {
         if (tp_driver_detach(
-                &driver,
+                driver,
                 0,
-                driver.active_lease_id,
-                driver.active_stream_id,
-                driver.client_id,
-                driver.role) < 0)
+                tp_driver_client_active_lease_id(driver),
+                tp_driver_client_active_stream_id(driver),
+                tp_driver_client_id(driver),
+                tp_driver_client_role(driver)) < 0)
         {
             fprintf(stderr, "Driver detach failed: %s\n", tp_errmsg());
         }
     }
     if (producer_inited)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     free(pool_cfg);
     if (attach_info_valid)
@@ -619,11 +603,11 @@ cleanup:
     }
     if (driver_inited)
     {
-        tp_driver_client_close(&driver);
+        tp_driver_client_close(driver);
     }
     if (client_inited)
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     return result;
 }

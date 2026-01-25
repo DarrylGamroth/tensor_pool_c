@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/internal/tp_control_adapter.h"
 

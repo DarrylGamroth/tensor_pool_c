@@ -1,3 +1,4 @@
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_control_poller.h"
 
 #include <assert.h>

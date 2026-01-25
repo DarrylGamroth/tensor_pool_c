@@ -132,15 +132,15 @@ static void tp_example_detach_driver(tp_driver_client_t *driver)
     {
         return;
     }
-    if (driver->active_lease_id != 0 && driver->publication != NULL)
+    if (tp_driver_client_active_lease_id(driver) != 0 && tp_driver_client_publication(driver) != NULL)
     {
         if (tp_driver_detach(
             driver,
             0,
-            driver->active_lease_id,
-            driver->active_stream_id,
-            driver->client_id,
-            driver->role) < 0)
+            tp_driver_client_active_lease_id(driver),
+            tp_driver_client_active_stream_id(driver),
+            tp_driver_client_id(driver),
+            tp_driver_client_role(driver)) < 0)
         {
             fprintf(stderr, "Driver detach failed: %s\n", tp_errmsg());
         }
@@ -175,12 +175,12 @@ static void drive_keepalives(tp_client_t *client)
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
-    tp_client_t client;
-    tp_driver_client_t driver;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_consumer_context_t consumer_context;
-    tp_consumer_t consumer;
+    tp_consumer_t *consumer = NULL;
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t *pool_cfg = NULL;
     tp_consumer_sample_state_t state;
@@ -435,14 +435,14 @@ int main(int argc, char **argv)
     memset(&error_state, 0, sizeof(error_state));
     tp_client_context_set_error_handler(&client_context, on_error, &error_state);
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;
     }
     client_inited = true;
 
-    if (tp_driver_client_init(&driver, &client) < 0)
+    if (tp_driver_client_init(&driver, client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -466,7 +466,7 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(&driver, &request, &info, attach_timeout_ns) < 0)
+    if (tp_driver_attach(driver, &request, &info, attach_timeout_ns) < 0)
     {
         if (!silent_attach)
         {
@@ -485,7 +485,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    resolved_client_id = driver.client_id;
+    resolved_client_id = tp_driver_client_id(driver);
     if (resolved_client_id == 0)
     {
         resolved_client_id = request.client_id;
@@ -527,20 +527,20 @@ int main(int argc, char **argv)
         consumer_context.hello.control_channel = request_ctrl_channel;
     }
 
-    if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
+    if (tp_consumer_init(&consumer, client, &consumer_context) < 0)
     {
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
         goto cleanup;
     }
     consumer_inited = true;
 
-    last_descriptor_subscription = consumer.descriptor_subscription;
-    last_control_subscription = consumer.control_subscription;
+    last_descriptor_subscription = tp_consumer_descriptor_subscription(consumer);
+    last_control_subscription = tp_consumer_control_subscription(consumer);
 
     if (verbose)
     {
-        tp_example_log_publication_status("Control", consumer.control_publication);
-        tp_example_log_publication_status("QoS", consumer.qos_publication);
+        tp_example_log_publication_status("Control", tp_consumer_control_publication(consumer));
+        tp_example_log_publication_status("QoS", tp_consumer_qos_publication(consumer));
     }
 
     memset(&consumer_cfg, 0, sizeof(consumer_cfg));
@@ -552,22 +552,22 @@ int main(int argc, char **argv)
     consumer_cfg.pools = pool_cfg;
     consumer_cfg.pool_count = info.pool_count;
 
-    if (tp_consumer_attach(&consumer, &consumer_cfg) < 0)
+    if (tp_consumer_attach(consumer, &consumer_cfg) < 0)
     {
         fprintf(stderr, "Consumer attach failed: %s\n", tp_errmsg());
         goto cleanup;
     }
 
-    state.consumer = &consumer;
+    state.consumer = consumer;
     state.received = 0;
     state.limit = max_frames;
     state.progress_received = 0;
     state.verbose = verbose;
 
-    tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &state);
+    tp_consumer_set_descriptor_handler(consumer, on_descriptor, &state);
     if (poll_progress)
     {
-        if (tp_consumer_set_progress_handler(&consumer, on_progress, &state) < 0)
+        if (tp_consumer_set_progress_handler(consumer, on_progress, &state) < 0)
         {
             fprintf(stderr, "Progress handler setup failed: %s\n", tp_errmsg());
             loop_failed = 1;
@@ -590,13 +590,13 @@ int main(int argc, char **argv)
     start_ns = (uint64_t)tp_clock_now_ns();
     while (!loop_failed && state.received < state.limit)
     {
-        int work = tp_client_do_work(&client);
-        int ctrl_fragments = tp_consumer_poll_control(&consumer, 10);
-        int desc_fragments = tp_consumer_poll_descriptors(&consumer, 10);
+        int work = tp_client_do_work(client);
+        int ctrl_fragments = tp_consumer_poll_control(consumer, 10);
+        int desc_fragments = tp_consumer_poll_descriptors(consumer, 10);
         int progress_fragments = 0;
         if (poll_progress)
         {
-            progress_fragments = tp_consumer_poll_progress(&consumer, 10);
+            progress_fragments = tp_consumer_poll_progress(consumer, 10);
         }
         if (work < 0)
         {
@@ -624,46 +624,48 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, "Polled control=%d descriptor=%d\n", ctrl_fragments, desc_fragments);
         }
-        if (consumer.descriptor_subscription != last_descriptor_subscription)
+        if (tp_consumer_descriptor_subscription(consumer) != last_descriptor_subscription)
         {
             fprintf(stderr, "Descriptor subscription switched\n");
-            last_descriptor_subscription = consumer.descriptor_subscription;
+            last_descriptor_subscription = tp_consumer_descriptor_subscription(consumer);
         }
-        if (consumer.control_subscription != last_control_subscription && consumer.control_subscription != NULL)
+        if (tp_consumer_control_subscription(consumer) != last_control_subscription &&
+            tp_consumer_control_subscription(consumer) != NULL)
         {
             fprintf(stderr, "Per-consumer control subscription active\n");
-            last_control_subscription = consumer.control_subscription;
+            last_control_subscription = tp_consumer_control_subscription(consumer);
         }
         if (request_desc_stream_id != 0 &&
-            consumer.assigned_descriptor_stream_id == request_desc_stream_id)
+            tp_consumer_assigned_descriptor_stream_id(consumer) == request_desc_stream_id)
         {
             desc_assigned = 1;
         }
         if (request_ctrl_stream_id != 0 &&
-            consumer.assigned_control_stream_id == request_ctrl_stream_id)
+            tp_consumer_assigned_control_stream_id(consumer) == request_ctrl_stream_id)
         {
             ctrl_assigned = 1;
         }
-        if (!descriptor_connected && consumer.descriptor_subscription &&
-            tp_subscription_is_connected(consumer.descriptor_subscription))
+        if (!descriptor_connected &&
+            tp_consumer_descriptor_subscription(consumer) &&
+            tp_subscription_is_connected(tp_consumer_descriptor_subscription(consumer)))
         {
             descriptor_connected = 1;
             fprintf(stderr, "Descriptor subscription connected\n");
         }
-        if (!control_connected && tp_client_control_subscription(&client) &&
-            tp_subscription_is_connected(tp_client_control_subscription(&client)))
+        if (!control_connected && tp_client_control_subscription(client) &&
+            tp_subscription_is_connected(tp_client_control_subscription(client)))
         {
             control_connected = 1;
             fprintf(stderr, "Control subscription connected\n");
         }
         tp_example_log_subscription_status(
             "Descriptor subscription",
-            consumer.descriptor_subscription,
+            tp_consumer_descriptor_subscription(consumer),
             &desc_images,
             &desc_status);
         tp_example_log_subscription_status(
             "Control subscription",
-            tp_client_control_subscription(&client),
+            tp_client_control_subscription(client),
             &ctrl_images,
             &ctrl_status);
         if (state.received >= state.limit)
@@ -684,7 +686,7 @@ int main(int argc, char **argv)
 
     if (!expect_lease_expire)
     {
-        drive_keepalives(&client);
+        drive_keepalives(client);
     }
 
     result = exit_status;
@@ -692,7 +694,7 @@ int main(int argc, char **argv)
 cleanup:
     if (consumer_inited)
     {
-        tp_consumer_close(&consumer);
+        tp_consumer_close(consumer);
     }
     free(pool_cfg);
     if (attach_info_valid)
@@ -701,12 +703,12 @@ cleanup:
     }
     if (driver_inited)
     {
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
+        tp_example_detach_driver(driver);
+        tp_driver_client_close(driver);
     }
     if (client_inited)
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
 
     if (require_per_consumer)

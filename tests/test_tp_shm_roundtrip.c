@@ -1,6 +1,6 @@
-#include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_types.h"
 
@@ -134,7 +134,7 @@ void tp_test_shm_roundtrip(void)
         goto cleanup;
     }
 
-    if (tp_consumer_read_frame(&consumer, seq, &view) != 0)
+    if ( tp_consumer_read_frame(&consumer, seq, &view) != 0)
     {
         goto cleanup;
     }

@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/tp_types.h"
 
 #include "driver/tensor_pool/messageHeader.h"
@@ -984,11 +985,10 @@ static void test_driver_keepalive_errors(void)
 
 static void test_driver_client_init_errors(void)
 {
-    tp_driver_client_t client;
+    tp_driver_client_t *client = NULL;
     tp_client_t base;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
     memset(&base, 0, sizeof(base));
 
     assert(tp_driver_client_init(NULL, NULL) < 0);

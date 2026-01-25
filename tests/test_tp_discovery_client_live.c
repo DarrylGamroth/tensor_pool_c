@@ -299,7 +299,7 @@ static void tp_on_discovery_response(void *clientd, const tp_discovery_response_
 void tp_test_discovery_client_live(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_discovery_context_t discovery_ctx;
     tp_discovery_client_t discovery;
     tp_discovery_request_t request;
@@ -321,7 +321,7 @@ void tp_test_discovery_client_live(void)
     }
 
     memset(&ctx, 0, sizeof(ctx));
-    memset(&client, 0, sizeof(client));
+    client = NULL;
     memset(&discovery_ctx, 0, sizeof(discovery_ctx));
     memset(&discovery, 0, sizeof(discovery));
     memset(&request, 0, sizeof(request));
@@ -344,7 +344,7 @@ void tp_test_discovery_client_live(void)
     tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
 
     step = 2;
-    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(client) < 0)
     {
         goto cleanup;
     }
@@ -358,33 +358,33 @@ void tp_test_discovery_client_live(void)
     tp_discovery_context_set_response_channel(&discovery_ctx, "aeron:ipc", 1501);
 
     step = 4;
-    if (tp_discovery_client_init(&discovery, &client, &discovery_ctx) < 0)
+    if (tp_discovery_client_init(&discovery, client, &discovery_ctx) < 0)
     {
         goto cleanup;
     }
 
     step = 5;
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1500, &request_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1500, &request_sub) < 0)
     {
         goto cleanup;
     }
 
     step = 6;
-    if (tp_test_add_publication(&client, "aeron:ipc", 1501, &response_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1501, &response_pub) < 0)
     {
         goto cleanup;
     }
 
     step = 7;
-    if (tp_test_wait_for_publication(&client, discovery.publication) < 0 ||
-        tp_test_wait_for_publication(&client, response_pub) < 0)
+    if (tp_test_wait_for_publication(client, discovery.publication) < 0 ||
+        tp_test_wait_for_publication(client, response_pub) < 0)
     {
         goto cleanup;
     }
 
     step = 8;
-    if (tp_test_wait_for_subscription(&client, request_sub) < 0 ||
-        tp_test_wait_for_subscription(&client, discovery.subscription) < 0)
+    if (tp_test_wait_for_subscription(client, request_sub) < 0 ||
+        tp_test_wait_for_subscription(client, discovery.subscription) < 0)
     {
         goto cleanup;
     }
@@ -412,7 +412,7 @@ void tp_test_discovery_client_live(void)
 
     {
         size_t len = tp_test_encode_discovery_response(buffer, sizeof(buffer), request.request_id);
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -442,7 +442,7 @@ void tp_test_discovery_client_live(void)
 
     {
         size_t len = tp_test_encode_discovery_response(buffer, sizeof(buffer), 100);
-        if (len == 0 || tp_test_offer(&client, response_pub, buffer, len) < 0)
+        if (len == 0 || tp_test_offer(client, response_pub, buffer, len) < 0)
         {
             goto cleanup;
         }
@@ -456,7 +456,7 @@ void tp_test_discovery_client_live(void)
         {
             goto cleanup;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
 
     if (state.count != 1 || state.last_request != 100)
@@ -485,6 +485,6 @@ cleanup:
         tp_subscription_close(&request_sub);
     }
     tp_discovery_client_close(&discovery);
-    tp_client_close(&client);
+    tp_client_close(client);
     assert(result == 0);
 }

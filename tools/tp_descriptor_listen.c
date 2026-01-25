@@ -233,7 +233,7 @@ int main(int argc, char **argv)
     int32_t descriptor_stream_id = 1100;
     tp_listen_state_t state;
     tp_client_context_t context;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_subscription_t *descriptor_subscription = NULL;
     tp_fragment_assembler_t *assembler = NULL;
     int opt;
@@ -312,20 +312,20 @@ int main(int argc, char **argv)
     tp_client_context_set_qos_channel(&context, channel, 1200);
     tp_client_context_set_metadata_channel(&context, channel, 1300);
 
-    if (tp_client_init(&client, &context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Aeron init failed: %s\n", tp_errmsg());
         return 1;
     }
 
     if (tp_client_async_add_subscription(
-        &client,
+        client,
         channel,
         descriptor_stream_id,
         &async_add) < 0)
     {
         fprintf(stderr, "Descriptor subscription add failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -334,17 +334,17 @@ int main(int argc, char **argv)
         if (tp_client_async_add_subscription_poll(&descriptor_subscription, async_add) < 0)
         {
             fprintf(stderr, "Descriptor subscription poll failed: %s\n", tp_errmsg());
-            tp_client_close(&client);
+            tp_client_close(client);
             return 1;
         }
-        tp_client_do_work(&client);
+        tp_client_do_work(client);
     }
 
     if (tp_fragment_assembler_create(&assembler, tp_on_descriptor_fragment, &state) < 0)
     {
         fprintf(stderr, "Fragment assembler failed: %s\n", tp_errmsg());
         tp_subscription_close(&descriptor_subscription);
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -383,7 +383,7 @@ int main(int argc, char **argv)
     {
         fclose(state.raw_out);
     }
-    tp_client_close(&client);
+    tp_client_close(client);
 
     return 0;
 }

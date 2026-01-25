@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_context.h"
 
@@ -34,12 +35,12 @@ static void test_producer_offer_errors(void)
     frame.payload_len = 0;
     frame.pool_id = 0;
 
-    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+    assert( tp_producer_offer_frame(&producer, &frame, NULL) < 0);
 
     producer.header_nslots = 4;
     producer.pool_count = 0;
     producer.header_region.addr = NULL;
-    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+    assert( tp_producer_offer_frame(&producer, &frame, NULL) < 0);
 }
 
 static void test_producer_claim_errors(void)
@@ -51,14 +52,14 @@ static void test_producer_claim_errors(void)
     memset(&claim, 0, sizeof(claim));
 
     assert(tp_producer_try_claim(NULL, 0, NULL) < 0);
-    assert(tp_producer_try_claim(&producer, 64, &claim) < 0);
+    assert( tp_producer_try_claim(&producer, 64, &claim) < 0);
 
     assert(tp_producer_commit_claim(NULL, NULL, NULL) < 0);
-    assert(tp_producer_commit_claim(&producer, NULL, NULL) < 0);
+    assert( tp_producer_commit_claim(&producer, NULL, NULL) < 0);
     assert(tp_producer_abort_claim(NULL, NULL) < 0);
     assert(tp_producer_abort_claim(&producer, NULL) < 0);
     assert(tp_producer_queue_claim(NULL, NULL) < 0);
-    assert(tp_producer_queue_claim(&producer, NULL) < 0);
+    assert( tp_producer_queue_claim(&producer, NULL) < 0);
 }
 
 static void test_producer_publication_errors(void)
@@ -69,7 +70,7 @@ static void test_producer_publication_errors(void)
     memset(&producer, 0, sizeof(producer));
     memset(&progress, 0, sizeof(progress));
 
-    assert(tp_producer_offer_progress(&producer, &progress) < 0);
+    assert( tp_producer_offer_progress(&producer, &progress) < 0);
 }
 
 static void test_producer_publish_frame_errors(void)

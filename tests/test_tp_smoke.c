@@ -5,8 +5,8 @@
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_context.h"
-#include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_uri.h"
@@ -43,6 +43,7 @@ void tp_test_decode_meta_blobs(void);
 void tp_test_decode_shm_pool_announce(void);
 void tp_test_control_listen_json(void);
 void tp_test_agent_runner(void);
+void tp_test_accessors(void);
 void tp_test_consumer_registry(void);
 void tp_test_aeron_client(void);
 void tp_test_client_errors(void);
@@ -573,12 +574,12 @@ static void test_driver_attach_rejects_manual_config(void)
     memset(&producer, 0, sizeof(producer));
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer.context.use_driver = true;
-    assert(tp_producer_attach(&producer, &producer_cfg) < 0);
+    assert( tp_producer_attach(&producer, &producer_cfg) < 0);
 
     memset(&consumer, 0, sizeof(consumer));
     memset(&consumer_cfg, 0, sizeof(consumer_cfg));
     consumer.context.use_driver = true;
-    assert(tp_consumer_attach(&consumer, &consumer_cfg) < 0);
+    assert( tp_consumer_attach(&consumer, &consumer_cfg) < 0);
 }
 
 int main(void)
@@ -608,6 +609,7 @@ int main(void)
     tp_test_decode_shm_pool_announce();
     tp_test_control_listen_json();
     tp_test_agent_runner();
+    tp_test_accessors();
     tp_test_consumer_registry();
     tp_test_aeron_client();
     tp_test_client_errors();

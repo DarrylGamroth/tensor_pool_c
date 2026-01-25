@@ -110,3 +110,18 @@ clear lifecycle semantics and consistent naming.
   that returns `tp_driver_attach_info_t`. Producer/consumer attach wrappers are optional
   convenience built on top and are not the primary API.
 - Decide whether `tp_context_t` stays opaque (Aeron core) or public struct (Aeron archive).
+
+## Checklist (Tracking)
+- [x] Opaque handles for `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`
+  with accessors to avoid Aeron/SBE leakage.
+- [x] `tp_client_start` starts a conductor agent when `use_agent_invoker` is false.
+- [x] Add unit coverage for new accessor APIs.
+- [ ] Move internal-only headers out of public include tree (Phase 4).
+- [ ] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user-facing docs (Phase 5).
+- [ ] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md` for the new API.
+- [ ] Expand integration coverage for agent-invoker vs background agent and async wrappers.
+- [x] Run coverage + fuzzing for the new API work and record results.
+
+## Latest Runs
+- Coverage (build-coverage): lines 58.5%, functions 81.0%, branches 47.4% (gcovr warned on negative hits).
+- Fuzz smoke: `tools/run_fuzz_smoke.sh` completed.

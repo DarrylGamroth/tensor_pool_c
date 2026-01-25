@@ -410,19 +410,18 @@ static void test_discovery_client_init_errors(void)
 {
     tp_discovery_client_t client;
     tp_discovery_context_t ctx;
-    tp_client_t base;
+    tp_client_t *base = NULL;
     int result = -1;
 
     memset(&client, 0, sizeof(client));
     memset(&ctx, 0, sizeof(ctx));
-    memset(&base, 0, sizeof(base));
 
     assert(tp_discovery_client_init(NULL, NULL, NULL) < 0);
     assert(tp_discovery_client_init(&client, NULL, &ctx) < 0);
-    assert(tp_discovery_client_init(&client, &base, NULL) < 0);
+    assert(tp_discovery_client_init(&client, base, NULL) < 0);
 
     assert(tp_discovery_context_init(&ctx) == 0);
-    assert(tp_discovery_client_init(&client, &base, &ctx) < 0);
+    assert(tp_discovery_client_init(&client, base, &ctx) < 0);
 
     result = 0;
 

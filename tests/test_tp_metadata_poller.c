@@ -1,3 +1,4 @@
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_metadata_poller.h"
 
 #include "wire/tensor_pool/messageHeader.h"

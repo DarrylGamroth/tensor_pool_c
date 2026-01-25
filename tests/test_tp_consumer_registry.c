@@ -1,6 +1,7 @@
 #include "tensor_pool/internal/tp_consumer_registry.h"
 #include "tensor_pool/internal/tp_consumer_manager.h"
 #include "tensor_pool/internal/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_types.h"
 
 #include <assert.h>

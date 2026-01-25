@@ -174,15 +174,14 @@ static int tp_test_driver_attach_with_config(
     tp_driver_config_t driver_config;
     tp_driver_t driver;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     int result = -1;
 
     memset(&driver, 0, sizeof(driver));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
+    client = NULL;
     memset(&info, 0, sizeof(info));
 
     if (tp_driver_config_init(&driver_config) < 0)
@@ -221,12 +220,12 @@ static int tp_test_driver_attach_with_config(
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
@@ -241,7 +240,7 @@ static int tp_test_driver_attach_with_config(
     request.require_hugepages = 0;
     request.desired_node_id = 0;
 
-    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -257,8 +256,8 @@ static int tp_test_driver_attach_with_config(
 
 cleanup:
     tp_driver_attach_info_close(&info);
-    tp_driver_client_close(&driver_client);
-    tp_client_close(&client);
+    tp_driver_client_close(driver_client);
+    tp_client_close(client);
     tp_driver_close(&driver);
     return result;
 }
@@ -270,8 +269,8 @@ void tp_test_driver_discovery_integration(void)
     tp_discovery_service_config_t discovery_config;
     tp_discovery_service_t discovery;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
     tp_driver_attach_request_t attach_request;
     tp_driver_attach_info_t attach_info;
     tp_shm_pool_announce_pool_t *announce_pools = NULL;
@@ -284,8 +283,7 @@ void tp_test_driver_discovery_integration(void)
 
     memset(&driver, 0, sizeof(driver));
     memset(&discovery, 0, sizeof(discovery));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
+    client = NULL;
     memset(&attach_request, 0, sizeof(attach_request));
     memset(&attach_info, 0, sizeof(attach_info));
     memset(&announce, 0, sizeof(announce));
@@ -345,12 +343,12 @@ void tp_test_driver_discovery_integration(void)
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
@@ -364,7 +362,7 @@ void tp_test_driver_discovery_integration(void)
     attach_request.desired_node_id = 0;
     if (tp_test_driver_attach_with_work(
             &driver,
-            &driver_client,
+            driver_client,
             &attach_request,
             &attach_info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -441,13 +439,13 @@ void tp_test_driver_discovery_integration(void)
 
 cleanup:
     tp_driver_attach_info_close(&attach_info);
-    tp_driver_client_close(&driver_client);
+    tp_driver_client_close(driver_client);
     if (response.result_count > 0)
     {
         tp_discovery_response_close(&response);
     }
     free(announce_pools);
-    tp_client_close(&client);
+    tp_client_close(client);
     tp_discovery_service_close(&discovery);
     tp_driver_close(&driver);
 
@@ -464,10 +462,10 @@ void tp_test_driver_exclusive_producer(void)
     tp_driver_config_t driver_config;
     tp_driver_t driver;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
-    tp_driver_client_t producer_client;
-    tp_driver_client_t producer_client2;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
+    tp_driver_client_t *producer_client = NULL;
+    tp_driver_client_t *producer_client2 = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_driver_attach_info_t producer_info;
@@ -476,10 +474,7 @@ void tp_test_driver_exclusive_producer(void)
     int step = 0;
 
     memset(&driver, 0, sizeof(driver));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
-    memset(&producer_client, 0, sizeof(producer_client));
-    memset(&producer_client2, 0, sizeof(producer_client2));
+    client = NULL;
     memset(&info, 0, sizeof(info));
     memset(&producer_info, 0, sizeof(producer_info));
     memset(&producer_info2, 0, sizeof(producer_info2));
@@ -513,20 +508,20 @@ void tp_test_driver_exclusive_producer(void)
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
-    if (tp_driver_client_init(&producer_client, &client) < 0)
+    if (tp_driver_client_init(&producer_client, client) < 0)
     {
         goto cleanup;
     }
-    if (tp_driver_client_init(&producer_client2, &client) < 0)
+    if (tp_driver_client_init(&producer_client2, client) < 0)
     {
         goto cleanup;
     }
@@ -543,7 +538,7 @@ void tp_test_driver_exclusive_producer(void)
 
     if (tp_test_driver_attach_with_work(
             &driver,
-            &driver_client,
+            driver_client,
             &request,
             &info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -560,7 +555,7 @@ void tp_test_driver_exclusive_producer(void)
     request.role = tensor_pool_role_PRODUCER;
     if (tp_test_driver_attach_with_work(
             &driver,
-            &producer_client,
+            producer_client,
             &request,
             &producer_info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -575,7 +570,7 @@ void tp_test_driver_exclusive_producer(void)
     request.client_id = 0;
     if (tp_test_driver_attach_with_work(
             &driver,
-            &producer_client2,
+            producer_client2,
             &request,
             &producer_info2,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -592,10 +587,10 @@ cleanup:
     tp_driver_attach_info_close(&info);
     tp_driver_attach_info_close(&producer_info);
     tp_driver_attach_info_close(&producer_info2);
-    tp_driver_client_close(&driver_client);
-    tp_driver_client_close(&producer_client);
-    tp_driver_client_close(&producer_client2);
-    tp_client_close(&client);
+    tp_driver_client_close(driver_client);
+    tp_driver_client_close(producer_client);
+    tp_driver_client_close(producer_client2);
+    tp_client_close(client);
     tp_driver_close(&driver);
 
     if (result != 0)
@@ -611,8 +606,8 @@ void tp_test_driver_publish_mode_hugepages(void)
     tp_driver_config_t driver_config;
     tp_driver_t driver;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     int result = -1;
@@ -620,8 +615,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     int expect_hugepages_ok;
 
     memset(&driver, 0, sizeof(driver));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
+    client = NULL;
     memset(&info, 0, sizeof(info));
 
     if (tp_driver_config_init(&driver_config) < 0)
@@ -657,12 +651,12 @@ void tp_test_driver_publish_mode_hugepages(void)
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
@@ -677,7 +671,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     request.require_hugepages = 0;
     request.desired_node_id = 0;
 
-    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -693,7 +687,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
     request.require_hugepages = tensor_pool_hugepagesPolicy_HUGEPAGES;
 
-    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -701,7 +695,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     if (expect_hugepages_ok)
     {
         assert(info.code == tensor_pool_responseCode_OK);
-        if (tp_test_driver_detach_with_work(&driver, &driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+        if (tp_test_driver_detach_with_work(&driver, driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
         {
             goto cleanup;
         }
@@ -715,8 +709,8 @@ void tp_test_driver_publish_mode_hugepages(void)
 
 cleanup:
     tp_driver_attach_info_close(&info);
-    tp_driver_client_close(&driver_client);
-    tp_client_close(&client);
+    tp_driver_client_close(driver_client);
+    tp_client_close(client);
     tp_driver_close(&driver);
 
     if (result != 0)
@@ -732,8 +726,8 @@ void tp_test_driver_node_id_cooldown(void)
     tp_driver_config_t driver_config;
     tp_driver_t driver;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_driver_attach_info_t info2;
@@ -741,8 +735,7 @@ void tp_test_driver_node_id_cooldown(void)
     int step = 0;
 
     memset(&driver, 0, sizeof(driver));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
+    client = NULL;
     memset(&info, 0, sizeof(info));
     memset(&info2, 0, sizeof(info2));
 
@@ -780,12 +773,12 @@ void tp_test_driver_node_id_cooldown(void)
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
@@ -800,20 +793,20 @@ void tp_test_driver_node_id_cooldown(void)
     request.require_hugepages = 0;
     request.desired_node_id = 4242;
 
-    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
     step = 1;
     assert(info.code == tensor_pool_responseCode_OK);
 
-    if (tp_test_driver_detach_with_work(&driver, &driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_detach_with_work(&driver, driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
 
     request.correlation_id++;
-    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info2, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info2, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -825,8 +818,8 @@ void tp_test_driver_node_id_cooldown(void)
 cleanup:
     tp_driver_attach_info_close(&info);
     tp_driver_attach_info_close(&info2);
-    tp_driver_client_close(&driver_client);
-    tp_client_close(&client);
+    tp_driver_client_close(driver_client);
+    tp_client_close(client);
     tp_driver_close(&driver);
 
     if (result != 0)
@@ -867,8 +860,8 @@ void tp_test_driver_lease_expiry(void)
     tp_driver_config_t driver_config;
     tp_driver_t driver;
     tp_client_context_t ctx;
-    tp_client_t client;
-    tp_driver_client_t driver_client;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     int expired = 0;
@@ -877,8 +870,7 @@ void tp_test_driver_lease_expiry(void)
     int64_t deadline_ns;
 
     memset(&driver, 0, sizeof(driver));
-    memset(&client, 0, sizeof(client));
-    memset(&driver_client, 0, sizeof(driver_client));
+    client = NULL;
     memset(&info, 0, sizeof(info));
 
     if (tp_driver_config_init(&driver_config) < 0)
@@ -913,12 +905,12 @@ void tp_test_driver_lease_expiry(void)
     {
         goto cleanup;
     }
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_driver_client_init(&driver_client, &client) < 0)
+    if (tp_driver_client_init(&driver_client, client) < 0)
     {
         goto cleanup;
     }
@@ -935,7 +927,7 @@ void tp_test_driver_lease_expiry(void)
 
     if (tp_test_driver_attach_with_work(
             &driver,
-            &driver_client,
+            driver_client,
             &request,
             &info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -949,7 +941,7 @@ void tp_test_driver_lease_expiry(void)
     while (tp_clock_now_ns() < deadline_ns && !expired)
     {
         tp_driver_do_work(&driver);
-        expired = tp_driver_client_lease_expired(&driver_client, (uint64_t)tp_clock_now_ns());
+        expired = tp_driver_client_lease_expired(driver_client, (uint64_t)tp_clock_now_ns());
         tp_test_sleep_ms(1);
     }
 
@@ -960,8 +952,8 @@ void tp_test_driver_lease_expiry(void)
 
 cleanup:
     tp_driver_attach_info_close(&info);
-    tp_driver_client_close(&driver_client);
-    tp_client_close(&client);
+    tp_driver_client_close(driver_client);
+    tp_client_close(client);
     tp_driver_close(&driver);
 
     if (result != 0)

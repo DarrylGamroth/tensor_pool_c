@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 #include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_seqlock.h"
@@ -88,7 +89,7 @@ static void test_consumer_read_frame_errors(void)
     consumer.shm_mapped = true;
     consumer.header_nslots = 0;
 
-    if (tp_consumer_read_frame(&consumer, 0, &view) < 0)
+    if ( tp_consumer_read_frame(&consumer, 0, &view) < 0)
     {
         result = 0;
     }
@@ -165,7 +166,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     tp_test_write_slot(
         slot,
@@ -176,7 +177,7 @@ static void test_consumer_read_frame_validation_failures(void)
         4,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     tp_test_write_slot(
         slot,
@@ -187,7 +188,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     tp_test_write_slot(
         slot,
@@ -198,7 +199,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     tp_test_write_slot(
         slot,
@@ -209,7 +210,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     tp_test_write_slot(
         slot,
@@ -220,7 +221,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         1);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     {
         struct tensor_pool_messageHeader msg_header;
@@ -242,7 +243,7 @@ static void test_consumer_read_frame_validation_failures(void)
             0,
             header_bytes,
             header_len);
-        assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+        assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
     }
 
     tp_test_write_slot(
@@ -254,7 +255,7 @@ static void test_consumer_read_frame_validation_failures(void)
         0,
         header_bytes,
         header_len);
-    assert(tp_consumer_read_frame(&consumer, seq, &view) == 1);
+    assert( tp_consumer_read_frame(&consumer, seq, &view) == 1);
 
     result = 0;
 

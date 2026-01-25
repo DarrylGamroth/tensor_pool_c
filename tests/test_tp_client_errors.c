@@ -1,5 +1,5 @@
-#include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
 
 #include <assert.h>
 #include <string.h>
@@ -16,7 +16,7 @@ static void test_client_null_inputs(void)
     memset(&context, 0, sizeof(context));
 
     assert(tp_client_init(NULL, &context) < 0);
-    assert(tp_client_init((tp_client_t *)1, NULL) < 0);
+    assert(tp_client_init((tp_client_t **)1, NULL) < 0);
     assert(tp_client_start(NULL) < 0);
     assert(tp_client_do_work(NULL) < 0);
     assert(tp_client_close(NULL) < 0);

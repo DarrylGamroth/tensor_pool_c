@@ -924,8 +924,14 @@ void tp_driver_config_close(tp_driver_config_t *config)
 
     if (NULL != config->base)
     {
-        tp_context_close(config->base);
+        tp_context_t *base = config->base;
+
+        tp_context_close(base);
         config->base = NULL;
+        if (config->supervisor_config.base == base)
+        {
+            config->supervisor_config.base = NULL;
+        }
     }
 
     tp_supervisor_config_close(&config->supervisor_config);

@@ -2,9 +2,9 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/tp_clock.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_trace.h"
 #include "tensor_pool/tp_tracelink.h"
 #include "tp_aeron_wrap.h"
@@ -728,7 +728,7 @@ static int tp_test_tracelink_validator_fail(const tp_tracelink_set_t *set, void 
 static void test_tracelink_send(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_t producer;
     tp_publication_t *control_pub = NULL;
     uint64_t parents[80];
@@ -743,7 +743,7 @@ static void test_tracelink_send(void)
     }
 
     memset(&ctx, 0, sizeof(ctx));
-    memset(&client, 0, sizeof(client));
+    client = NULL;
     memset(&producer, 0, sizeof(producer));
     memset(&set, 0, sizeof(set));
 
@@ -759,18 +759,18 @@ static void test_tracelink_send(void)
     tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
     tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
 
-    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(client) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_add_publication(&client, "aeron:ipc", 1000, &control_pub) < 0)
+    if (tp_test_add_publication(client, "aeron:ipc", 1000, &control_pub) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_publication(&client, control_pub) < 0 ||
-        tp_test_wait_for_subscription(&client, tp_client_control_subscription(&client)) < 0)
+    if (tp_test_wait_for_publication(client, control_pub) < 0 ||
+        tp_test_wait_for_subscription(client, tp_client_control_subscription(client)) < 0)
     {
         goto cleanup;
     }
@@ -813,7 +813,7 @@ static void test_tracelink_send(void)
 
 cleanup:
     tp_publication_close(&control_pub);
-    tp_client_close(&client);
+    tp_client_close(client);
     assert(result == 0);
 }
 

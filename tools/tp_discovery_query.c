@@ -79,7 +79,7 @@ static void print_json(const tp_discovery_response_t *resp)
 int main(int argc, char **argv)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_discovery_context_t disco_ctx;
     tp_discovery_client_t disco;
     tp_discovery_request_t request;
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
     tp_client_context_set_aeron_dir(&ctx, aeron_dir);
 
     tp_client_init(&client, &ctx);
-    if (tp_client_start(&client) < 0)
+    if (tp_client_start(client) < 0)
     {
         fprintf(stderr, "client start failed: %s\n", tp_errmsg());
         return 1;
@@ -165,10 +165,10 @@ int main(int argc, char **argv)
     tp_discovery_context_set_channel(&disco_ctx, request_channel, request_stream_id);
     tp_discovery_context_set_response_channel(&disco_ctx, response_channel, response_stream_id);
 
-    if (tp_discovery_client_init(&disco, &client, &disco_ctx) < 0)
+    if (tp_discovery_client_init(&disco, client, &disco_ctx) < 0)
     {
         fprintf(stderr, "discovery client init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "discovery request failed: %s\n", tp_errmsg());
         tp_discovery_client_close(&disco);
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
@@ -191,13 +191,13 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "discovery poll failed: %s\n", tp_errmsg());
         tp_discovery_client_close(&disco);
-        tp_client_close(&client);
+        tp_client_close(client);
         return 1;
     }
 
     print_json(&response);
     tp_discovery_response_close(&response);
     tp_discovery_client_close(&disco);
-    tp_client_close(&client);
+    tp_client_close(client);
     return 0;
 }

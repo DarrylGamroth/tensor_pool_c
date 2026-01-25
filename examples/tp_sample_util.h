@@ -15,14 +15,14 @@ int tp_example_init_client_context(
     const char *aeron_dir,
     const char *channel,
     int32_t announce_stream_id,
-    const char *const *allowed_paths,
+    const char **allowed_paths,
     size_t allowed_path_count);
 
 int tp_example_init_client_context_nodriver(
     tp_client_context_t *ctx,
     const char *aeron_dir,
     const char *channel,
-    const char *const *allowed_paths,
+    const char **allowed_paths,
     size_t allowed_path_count);
 
 void tp_example_log_publication_status(const char *label, tp_publication_t *publication);

@@ -34,15 +34,15 @@ static void tp_example_detach_driver(tp_driver_client_t *driver)
     {
         return;
     }
-    if (driver->active_lease_id != 0 && driver->publication != NULL)
+    if (tp_driver_client_active_lease_id(driver) != 0 && tp_driver_client_publication(driver) != NULL)
     {
         if (tp_driver_detach(
             driver,
             0,
-            driver->active_lease_id,
-            driver->active_stream_id,
-            driver->client_id,
-            driver->role) < 0)
+            tp_driver_client_active_lease_id(driver),
+            tp_driver_client_active_stream_id(driver),
+            tp_driver_client_id(driver),
+            tp_driver_client_role(driver)) < 0)
         {
             fprintf(stderr, "Driver detach failed: %s\n", tp_errmsg());
         }
@@ -52,12 +52,12 @@ static void tp_example_detach_driver(tp_driver_client_t *driver)
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
-    tp_client_t client;
-    tp_driver_client_t driver;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
     tp_payload_pool_config_t *pool_cfg = NULL;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
     tp_tensor_header_t header;
@@ -136,14 +136,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;
     }
     client_inited = true;
 
-    if (tp_driver_client_init(&driver, &client) < 0)
+    if (tp_driver_client_init(&driver, client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_driver_attach(driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    resolved_client_id = driver.client_id;
+    resolved_client_id = tp_driver_client_id(driver);
     if (resolved_client_id == 0)
     {
         resolved_client_id = request.client_id;
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
     producer_context.producer_id = resolved_client_id;
     producer_context.fixed_pool_mode = true;
 
-    if (tp_producer_init(&producer, &client, &producer_context) < 0)
+    if (tp_producer_init(&producer, client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -224,7 +224,7 @@ int main(int argc, char **argv)
     producer_cfg.pools = pool_cfg;
     producer_cfg.pool_count = info.pool_count;
 
-    if (tp_producer_attach(&producer, &producer_cfg) < 0)
+    if (tp_producer_attach(producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 
     for (i = 0; i < slot_count; i++)
     {
-        if (tp_producer_try_claim(&producer, pool_cfg[0].stride_bytes, &slots[i].claim) < 0)
+        if (tp_producer_try_claim(producer, pool_cfg[0].stride_bytes, &slots[i].claim) < 0)
         {
             fprintf(stderr, "try_claim failed: %s\n", tp_errmsg());
             goto cleanup;
@@ -265,11 +265,11 @@ int main(int argc, char **argv)
             continue;
         }
         memset(claim->payload, 0, claim->payload_len);
-        if (tp_producer_commit_claim(&producer, claim, &meta) < 0)
+        if (tp_producer_commit_claim(producer, claim, &meta) < 0)
         {
             fprintf(stderr, "commit failed: %s\n", tp_errmsg());
         }
-        if (tp_producer_queue_claim(&producer, claim) < 0)
+        if (tp_producer_queue_claim(producer, claim) < 0)
         {
             fprintf(stderr, "queue failed: %s\n", tp_errmsg());
         }
@@ -281,7 +281,7 @@ cleanup:
     free(slots);
     if (producer_inited)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     free(pool_cfg);
     if (attach_info_valid)
@@ -290,12 +290,12 @@ cleanup:
     }
     if (driver_inited)
     {
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
+        tp_example_detach_driver(driver);
+        tp_driver_client_close(driver);
     }
     if (client_inited)
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     return result;
 }

@@ -2,10 +2,10 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_tensor.h"
@@ -276,7 +276,7 @@ static int tp_test_add_subscription(tp_client_t *client, const char *channel, in
     return 0;
 }
 
-static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, const char *aeron_dir)
+static int tp_test_start_client(tp_client_t **client, tp_client_context_t *ctx, const char *aeron_dir)
 {
     const char *allowed_paths[] = { "/tmp" };
 
@@ -303,16 +303,16 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
         return -1;
     }
 
-    if (tp_client_start(client) < 0)
+    if (tp_client_start(*client) < 0)
     {
-        tp_client_close(client);
+        tp_client_close(*client);
         return -1;
     }
 
     return 0;
 }
 
-static int tp_test_start_client_any(tp_client_t *client, tp_client_context_t *ctx)
+static int tp_test_start_client_any(tp_client_t **client, tp_client_context_t *ctx)
 {
     char default_dir[AERON_MAX_PATH];
     const char *env_dir = getenv("AERON_DIR");
@@ -351,12 +351,10 @@ static int tp_test_init_producer(
     const tp_producer_context_t *producer_ctx,
     const char *header_uri,
     const char *pool_uri,
-    tp_producer_t *out_producer)
+    tp_producer_t **out_producer)
 {
     tp_producer_config_t config;
     tp_payload_pool_config_t pool_cfg;
-
-    memset(out_producer, 0, sizeof(*out_producer));
 
     if (tp_producer_init(out_producer, client, producer_ctx) < 0)
     {
@@ -379,9 +377,9 @@ static int tp_test_init_producer(
     config.pools = &pool_cfg;
     config.pool_count = 1;
 
-    if (tp_producer_attach(out_producer, &config) < 0)
+    if (tp_producer_attach(*out_producer, &config) < 0)
     {
-        tp_producer_close(out_producer);
+        tp_producer_close(*out_producer);
         return -1;
     }
 
@@ -391,9 +389,9 @@ static int tp_test_init_producer(
 static void tp_test_claim_lifecycle(bool fixed_pool_mode)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_subscription_t *descriptor_sub = NULL;
     tp_buffer_claim_t claim;
     tp_frame_metadata_t meta;
@@ -410,8 +408,8 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     size_t pool_size = TP_SUPERBLOCK_SIZE_BYTES + 128 * 4;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
     memset(&claim, 0, sizeof(claim));
 
     header_fd = mkstemp(header_path);
@@ -438,7 +436,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -450,22 +448,22 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
 
     tp_producer_context_set_fixed_pool_mode(&producer_ctx, fixed_pool_mode);
 
-    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    if (tp_test_init_producer(client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_connected(client, producer->descriptor_publication) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_producer_try_claim(&producer, 32, &claim) < 0)
+    if (tp_producer_try_claim(producer, 32, &claim) < 0)
     {
         goto cleanup;
     }
 
-    slot = tp_slot_at(producer.header_region.addr, claim.header_index);
+    slot = tp_slot_at(producer->header_region.addr, claim.header_index);
     observed = tp_atomic_load_u64((uint64_t *)slot);
     assert(!tp_seq_is_committed(observed));
     assert(tp_seq_value(observed) == claim.seq);
@@ -485,7 +483,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     meta.timestamp_ns = 55;
     meta.meta_version = 2;
 
-    if (tp_producer_commit_claim(&producer, &claim, &meta) < 0)
+    if (tp_producer_commit_claim(producer, &claim, &meta) < 0)
     {
         goto cleanup;
     }
@@ -553,7 +551,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
 
     if (fixed_pool_mode)
     {
-        int64_t queued = tp_producer_queue_claim(&producer, &claim);
+        int64_t queued =  tp_producer_queue_claim(producer, &claim);
         assert(queued >= 0);
         observed = tp_atomic_load_u64((uint64_t *)slot);
         assert(!tp_seq_is_committed(observed));
@@ -561,24 +559,24 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     }
     else
     {
-        int64_t queued = tp_producer_queue_claim(&producer, &claim);
+        int64_t queued =  tp_producer_queue_claim(producer, &claim);
         assert(queued == TP_ADMIN_ACTION);
     }
 
     result = 0;
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (descriptor_sub)
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -597,9 +595,9 @@ cleanup:
 static void tp_test_producer_invalid_tensor_header(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_subscription_t *descriptor_sub = NULL;
     int header_fd = -1;
     int pool_fd = -1;
@@ -613,8 +611,8 @@ static void tp_test_producer_invalid_tensor_header(void)
     tp_frame_t frame;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
 
     header_fd = mkstemp(header_path);
     pool_fd = mkstemp(pool_path);
@@ -640,7 +638,7 @@ static void tp_test_producer_invalid_tensor_header(void)
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -650,12 +648,12 @@ static void tp_test_producer_invalid_tensor_header(void)
         goto cleanup;
     }
 
-    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    if (tp_test_init_producer(client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_connected(client, producer->descriptor_publication) < 0)
     {
         goto cleanup;
     }
@@ -670,32 +668,32 @@ static void tp_test_producer_invalid_tensor_header(void)
     tensor.progress_unit = tensor_pool_progressUnit_NONE;
 
     tensor.ndims = 0;
-    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+    assert( tp_producer_offer_frame(producer, &frame, NULL) < 0);
 
     tensor.ndims = 1;
     tensor.dims[0] = 8;
     tensor.strides[0] = -4;
-    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+    assert( tp_producer_offer_frame(producer, &frame, NULL) < 0);
 
     tensor.strides[0] = 4;
     tensor.progress_unit = tensor_pool_progressUnit_ROWS;
     tensor.progress_stride_bytes = 8;
-    assert(tp_producer_offer_frame(&producer, &frame, NULL) < 0);
+    assert( tp_producer_offer_frame(producer, &frame, NULL) < 0);
 
     result = 0;
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (descriptor_sub)
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -714,9 +712,9 @@ cleanup:
 static void tp_test_producer_offer_pool_selection(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_subscription_t *descriptor_sub = NULL;
     tp_payload_pool_config_t pools[2];
     tp_producer_config_t config;
@@ -742,8 +740,8 @@ static void tp_test_producer_offer_pool_selection(void)
     int result = -1;
     int step = 0;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
 
     if (tp_test_start_client_any(&client, &ctx) < 0)
     {
@@ -757,7 +755,7 @@ static void tp_test_producer_offer_pool_selection(void)
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -807,19 +805,19 @@ static void tp_test_producer_offer_pool_selection(void)
     pools[1].uri = pool2_uri;
 
     step = 6;
-    if (tp_producer_init(&producer, &client, &producer_ctx) < 0)
+    if (tp_producer_init(&producer, client, &producer_ctx) < 0)
     {
         goto cleanup;
     }
 
     step = 7;
-    if (tp_producer_attach(&producer, &config) < 0)
+    if (tp_producer_attach(producer, &config) < 0)
     {
         goto cleanup;
     }
 
     step = 8;
-    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_connected(client, producer->descriptor_publication) < 0)
     {
         goto cleanup;
     }
@@ -840,14 +838,14 @@ static void tp_test_producer_offer_pool_selection(void)
     memset(&meta, 0, sizeof(meta));
 
     step = 9;
-    if (tp_test_offer_frame_retry(&producer, &frame, &meta, &seq) < 0)
+    if (tp_test_offer_frame_retry(producer, &frame, &meta, &seq) < 0)
     {
         goto cleanup;
     }
 
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
-    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
+        TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
     {
         goto cleanup;
     }
@@ -855,13 +853,13 @@ static void tp_test_producer_offer_pool_selection(void)
 
     frame.payload_len = 80;
     tensor.dims[0] = 80;
-    if (tp_test_offer_frame_retry(&producer, &frame, &meta, &seq) < 0)
+    if (tp_test_offer_frame_retry(producer, &frame, &meta, &seq) < 0)
     {
         goto cleanup;
     }
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
-    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
+        TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
     {
         goto cleanup;
     }
@@ -870,7 +868,7 @@ static void tp_test_producer_offer_pool_selection(void)
     frame.payload_len = 256;
     tensor.dims[0] = 256;
     step = 11;
-    if (tp_producer_offer_frame(&producer, &frame, &meta) >= 0)
+    if (tp_producer_offer_frame(producer, &frame, &meta) >= 0)
     {
         goto cleanup;
     }
@@ -878,17 +876,17 @@ static void tp_test_producer_offer_pool_selection(void)
     result = 0;
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (descriptor_sub)
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -916,9 +914,9 @@ cleanup:
 static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timestamp)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_subscription_t *descriptor_sub = NULL;
     tp_descriptor_capture_state_t state;
     tp_tensor_header_t tensor;
@@ -938,8 +936,8 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
     uint64_t null_timestamp = tensor_pool_frameDescriptor_timestampNs_null_value();
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
     memset(&state, 0, sizeof(state));
 
     header_fd = mkstemp(header_path);
@@ -966,7 +964,7 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -978,12 +976,12 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
 
     tp_producer_context_set_publish_descriptor_timestamp(&producer_ctx, publish_descriptor_timestamp);
 
-    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    if (tp_test_init_producer(client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_connected(client, producer->descriptor_publication) < 0)
     {
         goto cleanup;
     }
@@ -1005,15 +1003,15 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
     meta.timestamp_ns = 123;
     meta.meta_version = 0;
 
-    seq = (uint64_t)tp_producer_offer_frame(&producer, &frame, &meta);
+    seq = (uint64_t) tp_producer_offer_frame(producer, &frame, &meta);
     if ((int64_t)seq < 0)
     {
         goto cleanup;
     }
 
-    header_index = (uint32_t)(seq & (producer.header_nslots - 1));
-    if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-            TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
+    header_index = (uint32_t)(seq & (producer->header_nslots - 1));
+    if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
+            TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
     {
         goto cleanup;
     }
@@ -1024,7 +1022,7 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
     }
 
     state.expected_seq = seq;
-    if (tp_test_wait_for_descriptor(&client, descriptor_sub, &state) < 0)
+    if (tp_test_wait_for_descriptor(client, descriptor_sub, &state) < 0)
     {
         goto cleanup;
     }
@@ -1047,17 +1045,17 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
     result = 0;
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (descriptor_sub)
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {
@@ -1076,9 +1074,9 @@ cleanup:
 static void tp_test_producer_payload_flush(void)
 {
     tp_client_context_t ctx;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_subscription_t *descriptor_sub = NULL;
     tp_frame_metadata_t meta;
     tp_frame_t frame;
@@ -1096,8 +1094,8 @@ static void tp_test_producer_payload_flush(void)
     int flush_calls = 0;
     int result = -1;
 
-    memset(&client, 0, sizeof(client));
-    memset(&producer, 0, sizeof(producer));
+    client = NULL;
+    producer = NULL;
     memset(&claim, 0, sizeof(claim));
 
     header_fd = mkstemp(header_path);
@@ -1124,7 +1122,7 @@ static void tp_test_producer_payload_flush(void)
         goto cleanup;
     }
 
-    if (tp_test_add_subscription(&client, "aeron:ipc", 1100, &descriptor_sub) < 0)
+    if (tp_test_add_subscription(client, "aeron:ipc", 1100, &descriptor_sub) < 0)
     {
         goto cleanup;
     }
@@ -1136,12 +1134,12 @@ static void tp_test_producer_payload_flush(void)
 
     tp_producer_context_set_payload_flush(&producer_ctx, tp_test_payload_flush, &flush_calls);
 
-    if (tp_test_init_producer(&client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
+    if (tp_test_init_producer(client, &producer_ctx, header_uri, pool_uri, &producer) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_test_wait_for_connected(&client, producer.descriptor_publication) < 0)
+    if (tp_test_wait_for_connected(client, producer->descriptor_publication) < 0)
     {
         goto cleanup;
     }
@@ -1160,7 +1158,7 @@ static void tp_test_producer_payload_flush(void)
     frame.payload = payload;
     frame.payload_len = (uint32_t)sizeof(payload);
 
-    if (tp_test_offer_frame_retry(&producer, &frame, &meta, NULL) < 0)
+    if (tp_test_offer_frame_retry(producer, &frame, &meta, NULL) < 0)
     {
         goto cleanup;
     }
@@ -1168,7 +1166,7 @@ static void tp_test_producer_payload_flush(void)
     assert(flush_calls >= 1);
     assert(tp_payload_flush_last_len == sizeof(payload));
 
-    if (tp_producer_try_claim(&producer, 16, &claim) < 0)
+    if (tp_producer_try_claim(producer, 16, &claim) < 0)
     {
         goto cleanup;
     }
@@ -1185,7 +1183,7 @@ static void tp_test_producer_payload_flush(void)
     memset(&meta, 0, sizeof(meta));
     meta.timestamp_ns = 101;
 
-    if (tp_producer_commit_claim(&producer, &claim, &meta) < 0)
+    if (tp_producer_commit_claim(producer, &claim, &meta) < 0)
     {
         goto cleanup;
     }
@@ -1196,17 +1194,17 @@ static void tp_test_producer_payload_flush(void)
     result = 0;
 
 cleanup:
-    if (producer.client)
+    if (producer->client)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (descriptor_sub)
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (tp_test_has_aeron_dir(&client))
+    if (tp_test_has_aeron_dir(client))
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     if (header_fd >= 0)
     {

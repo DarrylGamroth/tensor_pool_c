@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 #include "tensor_pool/internal/tp_progress_poller.h"
 #include "tp_aeron_wrap.h"
 

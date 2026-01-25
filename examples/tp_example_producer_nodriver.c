@@ -39,9 +39,9 @@ static void usage(const char *name)
 int main(int argc, char **argv)
 {
     tp_client_context_t client_context;
-    tp_client_t client;
+    tp_client_t *client = NULL;
     tp_payload_pool_config_t pool_cfg;
-    tp_producer_t producer;
+    tp_producer_t *producer = NULL;
     tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
     tp_frame_t frame;
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
+    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -178,7 +178,7 @@ int main(int argc, char **argv)
     producer_context.stream_id = stream_id;
     producer_context.producer_id = client_id;
 
-    if (tp_producer_init(&producer, &client, &producer_context) < 0)
+    if (tp_producer_init(&producer, client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
         goto cleanup;
@@ -195,13 +195,13 @@ int main(int argc, char **argv)
     producer_cfg.pools = &pool_cfg;
     producer_cfg.pool_count = 1;
 
-    if (tp_producer_attach(&producer, &producer_cfg) < 0)
+    if (tp_producer_attach(producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
         goto cleanup;
     }
 
-    if (tp_example_wait_for_publication(&client, producer.descriptor_publication, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_example_wait_for_publication(client, tp_producer_descriptor_publication(producer), 2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Descriptor publication not connected\n");
         goto cleanup;
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 
         for (int i = 0; i < frame_count; i++)
         {
-            int64_t position = tp_producer_offer_frame(&producer, &frame, &meta);
+            int64_t position = tp_producer_offer_frame(producer, &frame, &meta);
             if (position < 0)
             {
                 fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
@@ -258,11 +258,11 @@ int main(int argc, char **argv)
 cleanup:
     if (producer_inited)
     {
-        tp_producer_close(&producer);
+        tp_producer_close(producer);
     }
     if (client_inited)
     {
-        tp_client_close(&client);
+        tp_client_close(client);
     }
     return result;
 }
