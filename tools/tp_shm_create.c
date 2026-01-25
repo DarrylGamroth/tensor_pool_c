@@ -8,6 +8,7 @@
 #include "wire/tensor_pool/shmRegionSuperblock.h"
 
 #include <errno.h>
+#include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +29,20 @@ static void usage(const char *name)
         "       --stream-id <id> --epoch <epoch> --pool-id <pool_id> --nslots <nslots> \\\n"
         "       --stride-bytes <stride_bytes> --layout-version <layout_version>\n"
         "  Explicit path (non-canonical, test-only):\n"
-        "    %s --allow-noncompliant --noncanonical <path> <region> <stream_id> <epoch> <pool_id> <nslots> <stride_bytes> <layout_version>\n",
+        "    %s --allow-noncompliant --noncanonical <path> <region> <stream_id> <epoch> <pool_id> <nslots> <stride_bytes> <layout_version>\n"
+        "Options:\n"
+        "  -b, --shm-base-dir <dir>     Base SHM directory\n"
+        "  -n, --namespace <ns>         Namespace (e.g., default)\n"
+        "  -r, --region <header|pool>   Region type\n"
+        "  -s, --stream-id <id>         Stream id\n"
+        "  -e, --epoch <epoch>          Epoch\n"
+        "  -p, --pool-id <id>           Pool id\n"
+        "  -N, --nslots <nslots>        Slots per ring\n"
+        "  -S, --stride-bytes <bytes>   Slot stride bytes\n"
+        "  -l, --layout-version <ver>   Layout version\n"
+        "  -x, --noncanonical <path>    Explicit path (requires --allow-noncompliant)\n"
+        "  -A, --allow-noncompliant     Allow non-canonical paths\n"
+        "  -h, --help                   Show help\n",
         name,
         name);
 }
@@ -173,110 +187,126 @@ int main(int argc, char **argv)
     char path_buf[4096];
     struct passwd *pw = NULL;
 
-    if (argc < 2)
     {
-        usage(argv[0]);
-        return 1;
+        const char *noncanonical_path = NULL;
+        int opt;
+        int option_index = 0;
+        static struct option long_opts[] = {
+            {"shm-base-dir", required_argument, NULL, 'b'},
+            {"namespace", required_argument, NULL, 'n'},
+            {"region", required_argument, NULL, 'r'},
+            {"stream-id", required_argument, NULL, 's'},
+            {"epoch", required_argument, NULL, 'e'},
+            {"pool-id", required_argument, NULL, 'p'},
+            {"nslots", required_argument, NULL, 'N'},
+            {"stride-bytes", required_argument, NULL, 'S'},
+            {"layout-version", required_argument, NULL, 'l'},
+            {"noncanonical", required_argument, NULL, 'x'},
+            {"allow-noncompliant", no_argument, NULL, 'A'},
+            {"help", no_argument, NULL, 'h'},
+            {NULL, 0, NULL, 0}
+        };
+
+        while ((opt = getopt_long(argc, argv, "b:n:r:s:e:p:N:S:l:x:Ah", long_opts, &option_index)) != -1)
+        {
+            switch (opt)
+            {
+                case 'b':
+                    shm_base_dir = optarg;
+                    break;
+                case 'n':
+                    namespace = optarg;
+                    break;
+                case 'r':
+                    region_str = optarg;
+                    break;
+                case 's':
+                    stream_id_str = optarg;
+                    break;
+                case 'e':
+                    epoch_str = optarg;
+                    break;
+                case 'p':
+                    pool_id_str = optarg;
+                    break;
+                case 'N':
+                    nslots_str = optarg;
+                    break;
+                case 'S':
+                    stride_str = optarg;
+                    break;
+                case 'l':
+                    layout_str = optarg;
+                    break;
+                case 'x':
+                    noncanonical_path = optarg;
+                    break;
+                case 'A':
+                    allow_noncompliant = 1;
+                    break;
+                case 'h':
+                    usage(argv[0]);
+                    return 0;
+                default:
+                    usage(argv[0]);
+                    return 1;
+            }
+        }
+
+        if (noncanonical_path)
+        {
+            use_noncanonical = 1;
+            if (!allow_noncompliant)
+            {
+                fprintf(stderr, "Noncanonical layout requires --allow-noncompliant\n");
+                usage(argv[0]);
+                return 1;
+            }
+            fprintf(stderr, "Warning: using noncanonical SHM paths (test-only)\n");
+            path = noncanonical_path;
+        }
     }
 
-    if (0 == strcmp(argv[1], "--allow-noncompliant"))
+    if (use_noncanonical)
     {
-        allow_noncompliant = 1;
-        if (argc < 3)
+        if (optind < argc && NULL == region_str) { region_str = argv[optind++]; }
+        if (optind < argc && NULL == stream_id_str) { stream_id_str = argv[optind++]; }
+        if (optind < argc && NULL == epoch_str) { epoch_str = argv[optind++]; }
+        if (optind < argc && NULL == pool_id_str) { pool_id_str = argv[optind++]; }
+        if (optind < argc && NULL == nslots_str) { nslots_str = argv[optind++]; }
+        if (optind < argc && NULL == stride_str) { stride_str = argv[optind++]; }
+        if (optind < argc && NULL == layout_str) { layout_str = argv[optind++]; }
+        if (optind < argc)
         {
             usage(argv[0]);
             return 1;
         }
     }
-
-    if (0 == strcmp(argv[allow_noncompliant ? 2 : 1], "--noncanonical"))
+    else
     {
-        use_noncanonical = 1;
-        if (!allow_noncompliant)
-        {
-            fprintf(stderr, "Noncanonical layout requires --allow-noncompliant\n");
-            usage(argv[0]);
-            return 1;
-        }
-        if (argc != (allow_noncompliant ? 11 : 10))
-        {
-            usage(argv[0]);
-            return 1;
-        }
-
-        fprintf(stderr, "Warning: using noncanonical SHM paths (test-only)\n");
-        path = argv[allow_noncompliant ? 3 : 2];
-        region_str = argv[allow_noncompliant ? 4 : 3];
-        stream_id_str = argv[allow_noncompliant ? 5 : 4];
-        epoch_str = argv[allow_noncompliant ? 6 : 5];
-        pool_id_str = argv[allow_noncompliant ? 7 : 6];
-        nslots_str = argv[allow_noncompliant ? 8 : 7];
-        stride_str = argv[allow_noncompliant ? 9 : 8];
-        layout_str = argv[allow_noncompliant ? 10 : 9];
-    }
-    else if (0 == strncmp(argv[allow_noncompliant ? 2 : 1], "--", 2))
-    {
-        int i;
-
         if (allow_noncompliant)
         {
             fprintf(stderr, "--allow-noncompliant is only valid with --noncanonical\n");
             return 1;
         }
         use_canonical = 1;
-        for (i = 1; i + 1 < argc; i += 2)
+        if (optind < argc)
         {
-            const char *key = argv[i];
-            const char *value = argv[i + 1];
-
-            if (0 == strcmp(key, "--shm-base-dir"))
-            {
-                shm_base_dir = value;
-            }
-            else if (0 == strcmp(key, "--namespace"))
-            {
-                namespace = value;
-            }
-            else if (0 == strcmp(key, "--region"))
-            {
-                region_str = value;
-            }
-            else if (0 == strcmp(key, "--stream-id"))
-            {
-                stream_id_str = value;
-            }
-            else if (0 == strcmp(key, "--epoch"))
-            {
-                epoch_str = value;
-            }
-            else if (0 == strcmp(key, "--pool-id"))
-            {
-                pool_id_str = value;
-            }
-            else if (0 == strcmp(key, "--nslots"))
-            {
-                nslots_str = value;
-            }
-            else if (0 == strcmp(key, "--stride-bytes"))
-            {
-                stride_str = value;
-            }
-            else if (0 == strcmp(key, "--layout-version"))
-            {
-                layout_str = value;
-            }
-            else
-            {
-                fprintf(stderr, "Unknown option: %s\n", key);
-                return 1;
-            }
+            shm_base_dir = shm_base_dir ? shm_base_dir : argv[optind++];
+            namespace = namespace ? namespace : argv[optind++];
+            region_str = region_str ? region_str : argv[optind++];
+            stream_id_str = stream_id_str ? stream_id_str : argv[optind++];
+            epoch_str = epoch_str ? epoch_str : argv[optind++];
+            pool_id_str = pool_id_str ? pool_id_str : argv[optind++];
+            nslots_str = nslots_str ? nslots_str : argv[optind++];
+            stride_str = stride_str ? stride_str : argv[optind++];
+            layout_str = layout_str ? layout_str : argv[optind++];
         }
-    }
-    else
-    {
-        fprintf(stderr, "Explicit paths require --noncanonical\n");
-        usage(argv[0]);
-        return 1;
+        if (optind < argc)
+        {
+            usage(argv[0]);
+            return 1;
+        }
     }
 
     if (NULL == region_str || parse_region(region_str, &region_type) < 0)

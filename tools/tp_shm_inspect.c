@@ -3,6 +3,7 @@
 
 #include "wire/tensor_pool/shmRegionSuperblock.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,7 +13,11 @@
 static void usage(const char *name)
 {
     fprintf(stderr,
-        "Usage: %s [--json] --allow <dir> [--allow <dir> ...] <shm-uri>\n"
+        "Usage: %s [options] <shm-uri>\n"
+        "Options:\n"
+        "  -a, --allow <dir>  Allow SHM base dir (repeatable)\n"
+        "  -j, --json         JSON output\n"
+        "  -h, --help         Show help\n"
         "Example shm-uri: shm:file?path=/dev/shm/tensorpool-${USER}/demo/10000/1/header.ring\n",
         name);
 }
@@ -26,31 +31,47 @@ int main(int argc, char **argv)
     size_t allowed_count = 0;
     const char *uri = NULL;
     int json = 0;
-    int i;
+    int opt;
+    int option_index = 0;
+    static struct option long_opts[] = {
+        {"allow", required_argument, NULL, 'a'},
+        {"json", no_argument, NULL, 'j'},
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0}
+    };
 
-    for (i = 1; i < argc; i++)
+    while ((opt = getopt_long(argc, argv, "a:jh", long_opts, &option_index)) != -1)
     {
-        if (strcmp(argv[i], "--json") == 0)
+        switch (opt)
         {
-            json = 1;
-            continue;
-        }
-        if (strcmp(argv[i], "--allow") == 0)
-        {
-            if (i + 1 >= argc || allowed_count >= (sizeof(allowed_paths) / sizeof(allowed_paths[0])))
-            {
+            case 'a':
+                if (allowed_count >= (sizeof(allowed_paths) / sizeof(allowed_paths[0])))
+                {
+                    usage(argv[0]);
+                    return 1;
+                }
+                allowed_paths[allowed_count++] = optarg;
+                break;
+            case 'j':
+                json = 1;
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
                 usage(argv[0]);
                 return 1;
-            }
-            allowed_paths[allowed_count++] = argv[++i];
-            continue;
         }
-        if (argv[i][0] == '-')
-        {
-            usage(argv[0]);
-            return 1;
-        }
-        uri = argv[i];
+    }
+
+    if (optind < argc)
+    {
+        uri = argv[optind++];
+    }
+    if (optind < argc)
+    {
+        usage(argv[0]);
+        return 1;
     }
 
     if (NULL == uri || allowed_count == 0)

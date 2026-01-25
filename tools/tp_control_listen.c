@@ -23,6 +23,7 @@
 #include "wire/tensor_pool/mode.h"
 #include "wire/tensor_pool/shmPoolAnnounce.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <signal.h>
 #include <stdio.h>
@@ -39,6 +40,25 @@ static void tp_handle_sigint(int signo)
 {
     (void)signo;
     tp_running = 0;
+}
+
+static void usage(const char *name)
+{
+    fprintf(stderr,
+        "Usage: %s [options] [aeron_dir [control_channel [control_stream_id]]]\n"
+        "Options:\n"
+        "  -a <dir>     Aeron directory\n"
+        "  -c <chan>    Control channel (default: aeron:ipc)\n"
+        "  -C <id>      Control stream id (default: 1000)\n"
+        "  -m <chan>    Metadata channel (default: control channel)\n"
+        "  -M <id>      Metadata stream id (default: 1300)\n"
+        "  -q <chan>    QoS channel (default: control channel)\n"
+        "  -Q <id>      QoS stream id (default: 1200)\n"
+        "  -j           JSON output\n"
+        "  -r           Dump raw fragments to stderr\n"
+        "  -o <path>    Dump raw fragments to file\n"
+        "  -h           Show help\n",
+        name);
 }
 
 typedef struct tp_listen_state_stct
@@ -836,8 +856,8 @@ int main(int argc, char **argv)
 {
     const char *aeron_dir = NULL;
     const char *control_channel = "aeron:ipc";
-    const char *metadata_channel = "aeron:ipc";
-    const char *qos_channel = "aeron:ipc";
+    const char *metadata_channel = NULL;
+    const char *qos_channel = NULL;
     int32_t control_stream_id = 1000;
     int32_t metadata_stream_id = 1300;
     int32_t qos_stream_id = 1200;
@@ -850,56 +870,87 @@ int main(int argc, char **argv)
     tp_fragment_assembler_t *control_assembler = NULL;
     tp_fragment_assembler_t *metadata_assembler = NULL;
     tp_fragment_assembler_t *qos_assembler = NULL;
-    int arg_index = 1;
+    int opt;
+    int metadata_channel_set = 0;
+    int qos_channel_set = 0;
 
     memset(&state, 0, sizeof(state));
 
-    while (arg_index < argc && strncmp(argv[arg_index], "--", 2) == 0)
+    while ((opt = getopt(argc, argv, "a:c:C:m:M:q:Q:jro:h")) != -1)
     {
-        if (strcmp(argv[arg_index], "--json") == 0)
+        switch (opt)
         {
-            state.json = 1;
-        }
-        else if (strcmp(argv[arg_index], "--raw") == 0)
-        {
-            state.raw = 1;
-        }
-        else if (strcmp(argv[arg_index], "--raw-out") == 0)
-        {
-            if (arg_index + 1 >= argc)
-            {
-                fprintf(stderr, "Missing path for --raw-out\n");
+            case 'a':
+                aeron_dir = optarg;
+                break;
+            case 'c':
+                control_channel = optarg;
+                break;
+            case 'C':
+                control_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 'm':
+                metadata_channel = optarg;
+                metadata_channel_set = 1;
+                break;
+            case 'M':
+                metadata_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 'q':
+                qos_channel = optarg;
+                qos_channel_set = 1;
+                break;
+            case 'Q':
+                qos_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 'j':
+                state.json = 1;
+                break;
+            case 'r':
+                state.raw = 1;
+                break;
+            case 'o':
+                state.raw_out = fopen(optarg, "w");
+                if (NULL == state.raw_out)
+                {
+                    fprintf(stderr, "Failed to open raw output: %s\n", optarg);
+                    return 1;
+                }
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
                 return 1;
-            }
-            state.raw_out = fopen(argv[arg_index + 1], "w");
-            if (NULL == state.raw_out)
-            {
-                fprintf(stderr, "Failed to open raw output: %s\n", argv[arg_index + 1]);
-                return 1;
-            }
-            arg_index++;
         }
-        else
-        {
-            fprintf(stderr, "Unknown option: %s\n", argv[arg_index]);
-            return 1;
-        }
-        arg_index++;
     }
 
-    if (arg_index < argc)
+    if (optind < argc)
     {
-        aeron_dir = argv[arg_index++];
+        aeron_dir = argv[optind++];
     }
-    if (arg_index < argc)
+    if (optind < argc)
     {
-        control_channel = argv[arg_index++];
+        control_channel = argv[optind++];
+    }
+    if (optind < argc)
+    {
+        control_stream_id = (int32_t)strtol(argv[optind++], NULL, 10);
+    }
+    if (optind < argc)
+    {
+        usage(argv[0]);
+        return 1;
+    }
+
+    if (!metadata_channel_set)
+    {
         metadata_channel = control_channel;
-        qos_channel = control_channel;
     }
-    if (arg_index < argc)
+    if (!qos_channel_set)
     {
-        control_stream_id = (int32_t)strtol(argv[arg_index++], NULL, 10);
+        qos_channel = control_channel;
     }
 
     if (tp_client_context_init(&context) < 0)

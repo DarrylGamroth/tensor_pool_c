@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +13,17 @@
 static void usage(const char *name)
 {
     fprintf(stderr,
-        "Usage: %s <aeron_dir> <request_channel> <request_stream_id> <response_channel> <response_stream_id> [stream_id]\n",
+        "Usage: %s -a <aeron_dir> -r <request_channel> -s <request_stream_id> \\\n"
+        "          -R <response_channel> -S <response_stream_id> [-t <stream_id>] [-i <client_id>]\n"
+        "Options:\n"
+        "  -a <dir>     Aeron directory\n"
+        "  -r <chan>    Discovery request channel\n"
+        "  -s <id>      Discovery request stream id\n"
+        "  -R <chan>    Response channel\n"
+        "  -S <id>      Response stream id\n"
+        "  -t <id>      Stream id filter (optional)\n"
+        "  -i <id>      Client id (optional, default 1)\n"
+        "  -h           Show help\n",
         name);
 }
 
@@ -75,21 +86,73 @@ int main(int argc, char **argv)
     tp_discovery_response_t response;
     uint64_t request_id = 1;
     uint32_t stream_id = TP_NULL_U32;
+    uint32_t client_id = 1;
     int64_t timeout_ns = 5 * 1000 * 1000 * 1000LL;
+    const char *aeron_dir = NULL;
+    const char *request_channel = NULL;
+    const char *response_channel = NULL;
+    int32_t request_stream_id = 0;
+    int32_t response_stream_id = 0;
+    int opt;
 
-    if (argc < 6)
+    while ((opt = getopt(argc, argv, "a:r:s:R:S:t:i:h")) != -1)
+    {
+        switch (opt)
+        {
+            case 'a':
+                aeron_dir = optarg;
+                break;
+            case 'r':
+                request_channel = optarg;
+                break;
+            case 's':
+                request_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 'R':
+                response_channel = optarg;
+                break;
+            case 'S':
+                response_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 't':
+                stream_id = (uint32_t)strtoul(optarg, NULL, 10);
+                break;
+            case 'i':
+                client_id = (uint32_t)strtoul(optarg, NULL, 10);
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if ((NULL == aeron_dir || NULL == request_channel || NULL == response_channel ||
+            request_stream_id == 0 || response_stream_id == 0) &&
+        (argc - optind) >= 5)
+    {
+        aeron_dir = argv[optind++];
+        request_channel = argv[optind++];
+        request_stream_id = (int32_t)strtol(argv[optind++], NULL, 10);
+        response_channel = argv[optind++];
+        response_stream_id = (int32_t)strtol(argv[optind++], NULL, 10);
+        if (optind < argc)
+        {
+            stream_id = (uint32_t)strtoul(argv[optind++], NULL, 10);
+        }
+    }
+
+    if (NULL == aeron_dir || NULL == request_channel || NULL == response_channel ||
+        request_stream_id == 0 || response_stream_id == 0 || optind < argc)
     {
         usage(argv[0]);
         return 1;
     }
 
-    if (argc > 6)
-    {
-        stream_id = (uint32_t)strtoul(argv[6], NULL, 10);
-    }
-
     tp_client_context_init(&ctx);
-    tp_client_context_set_aeron_dir(&ctx, argv[1]);
+    tp_client_context_set_aeron_dir(&ctx, aeron_dir);
 
     tp_client_init(&client, &ctx);
     if (tp_client_start(&client) < 0)
@@ -99,8 +162,8 @@ int main(int argc, char **argv)
     }
 
     tp_discovery_context_init(&disco_ctx);
-    tp_discovery_context_set_channel(&disco_ctx, argv[2], (int32_t)strtol(argv[3], NULL, 10));
-    tp_discovery_context_set_response_channel(&disco_ctx, argv[4], (int32_t)strtol(argv[5], NULL, 10));
+    tp_discovery_context_set_channel(&disco_ctx, request_channel, request_stream_id);
+    tp_discovery_context_set_response_channel(&disco_ctx, response_channel, response_stream_id);
 
     if (tp_discovery_client_init(&disco, &client, &disco_ctx) < 0)
     {
@@ -111,9 +174,9 @@ int main(int argc, char **argv)
 
     tp_discovery_request_init(&request);
     request.request_id = request_id;
-    request.client_id = 1;
-    request.response_channel = argv[4];
-    request.response_stream_id = (uint32_t)strtoul(argv[5], NULL, 10);
+    request.client_id = client_id;
+    request.response_channel = response_channel;
+    request.response_stream_id = (uint32_t)response_stream_id;
     request.stream_id = stream_id;
 
     if (tp_discovery_request(&disco, &request) < 0)

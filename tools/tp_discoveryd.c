@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp.h"
 
+#include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +21,12 @@ static void tp_discovery_handle_signal(int sig)
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <config.toml>\n", name);
+    fprintf(stderr,
+        "Usage: %s -c <config.toml>\n"
+        "Options:\n"
+        "  -c <path>  Discovery config file\n"
+        "  -h         Show help\n",
+        name);
 }
 
 static void tp_discovery_apply_log_level(tp_log_t *log)
@@ -57,8 +63,31 @@ int main(int argc, char **argv)
     tp_discovery_service_config_t config;
     tp_discovery_service_t service;
     uint64_t sleep_ns = 1000000ULL;
+    const char *config_path = NULL;
+    int opt;
 
-    if (argc < 2)
+    while ((opt = getopt(argc, argv, "c:h")) != -1)
+    {
+        switch (opt)
+        {
+            case 'c':
+                config_path = optarg;
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (NULL == config_path && optind < argc)
+    {
+        config_path = argv[optind++];
+    }
+
+    if (NULL == config_path || optind < argc)
     {
         usage(argv[0]);
         return 1;
@@ -70,7 +99,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_discovery_service_config_load(&config, argv[1]) < 0)
+    if (tp_discovery_service_config_load(&config, config_path) < 0)
     {
         fprintf(stderr, "Discovery config load failed: %s\n", tp_errmsg());
         tp_discovery_service_config_close(&config);

@@ -10,6 +10,7 @@
 #include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/messageHeader.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <signal.h>
@@ -212,7 +213,17 @@ static void tp_on_descriptor_fragment(
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s [--json] [--raw] [--raw-out <path>] [aeron_dir] [channel] [descriptor_stream_id]\n", name);
+    fprintf(stderr,
+        "Usage: %s [options] [aeron_dir [channel [descriptor_stream_id]]]\n"
+        "Options:\n"
+        "  -a <dir>     Aeron directory\n"
+        "  -c <chan>    Descriptor channel (default: aeron:ipc)\n"
+        "  -s <id>      Descriptor stream id (default: 1100)\n"
+        "  -j           JSON output\n"
+        "  -r           Dump raw fragments to stderr\n"
+        "  -o <path>    Dump raw fragments to file\n"
+        "  -h           Show help\n",
+        name);
 }
 
 int main(int argc, char **argv)
@@ -225,58 +236,65 @@ int main(int argc, char **argv)
     tp_client_t client;
     tp_subscription_t *descriptor_subscription = NULL;
     tp_fragment_assembler_t *assembler = NULL;
-    int arg_index = 1;
+    int opt;
     tp_async_add_subscription_t *async_add = NULL;
 
     memset(&state, 0, sizeof(state));
     state.last_images = -1;
     state.last_status = INT64_MIN;
 
-    while (arg_index < argc && strncmp(argv[arg_index], "--", 2) == 0)
+    while ((opt = getopt(argc, argv, "a:c:s:jro:h")) != -1)
     {
-        if (strcmp(argv[arg_index], "--json") == 0)
+        switch (opt)
         {
-            state.json = 1;
-        }
-        else if (strcmp(argv[arg_index], "--raw") == 0)
-        {
-            state.raw = 1;
-        }
-        else if (strcmp(argv[arg_index], "--raw-out") == 0)
-        {
-            if (arg_index + 1 >= argc)
-            {
-                fprintf(stderr, "Missing path for --raw-out\n");
+            case 'a':
+                aeron_dir = optarg;
+                break;
+            case 'c':
+                channel = optarg;
+                break;
+            case 's':
+                descriptor_stream_id = (int32_t)strtol(optarg, NULL, 10);
+                break;
+            case 'j':
+                state.json = 1;
+                break;
+            case 'r':
+                state.raw = 1;
+                break;
+            case 'o':
+                state.raw_out = fopen(optarg, "w");
+                if (NULL == state.raw_out)
+                {
+                    fprintf(stderr, "Failed to open raw output: %s\n", optarg);
+                    return 1;
+                }
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
                 return 1;
-            }
-            state.raw_out = fopen(argv[arg_index + 1], "w");
-            if (NULL == state.raw_out)
-            {
-                fprintf(stderr, "Failed to open raw output: %s\n", argv[arg_index + 1]);
-                return 1;
-            }
-            arg_index++;
         }
-        else
-        {
-            fprintf(stderr, "Unknown option: %s\n", argv[arg_index]);
-            usage(argv[0]);
-            return 1;
-        }
-        arg_index++;
     }
 
-    if (arg_index < argc)
+    if (optind < argc)
     {
-        aeron_dir = argv[arg_index++];
+        aeron_dir = argv[optind++];
     }
-    if (arg_index < argc)
+    if (optind < argc)
     {
-        channel = argv[arg_index++];
+        channel = argv[optind++];
     }
-    if (arg_index < argc)
+    if (optind < argc)
     {
-        descriptor_stream_id = (int32_t)strtol(argv[arg_index++], NULL, 10);
+        descriptor_stream_id = (int32_t)strtol(argv[optind++], NULL, 10);
+    }
+    if (optind < argc)
+    {
+        usage(argv[0]);
+        return 1;
     }
 
     if (tp_client_context_init(&context) < 0)
