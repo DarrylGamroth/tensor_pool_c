@@ -1,0 +1,72 @@
+# Reference Implementation Plan (C)
+
+This plan consolidates the conductor, driver, discovery, and supervisor work
+into a single ordered set of steps. Specs are authoritative:
+- `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md`
+- `docs/SHM_Driver_Model_Spec_v1.0.md`
+- `docs/SHM_Discovery_Service_Spec_v_1.0.md`
+- `docs/SHM_TraceLink_Spec_v1.0.md`
+- `docs/SHM_Join_Barrier_Spec_v1.0.md`
+
+Related design docs:
+- `docs/CLIENT_CONDUCTOR_DESIGN.md`
+- `docs/AERON_LIKE_API_PROPOSAL.md`
+- `docs/IMPLEMENTATION_GUIDE.md`
+
+## Phase 0: Baseline Tracking
+- [ ] Ensure compliance and traceability matrices reflect missing items.
+- [ ] Confirm requirements-to-tests checklist coverage for new work.
+- [ ] Mark conductor/driver/discovery/supervisor as MISSING where applicable.
+
+## Phase 1: Client Conductor (Aeron-style)
+- [ ] Implement MPSC command queue (C11 atomics) for async add operations.
+- [ ] Move control/QoS/metadata/descriptor subscriptions into conductor-owned state.
+- [ ] Add client-level handler registration and dispatch in `tp_client_do_work`.
+- [ ] Remove public Aeron types from user-facing headers (opaque handles).
+- [ ] Route per-producer/consumer polling through conductor (or deprecate).
+- [ ] Add unit tests for conductor lifecycle and handler dispatch.
+
+## Phase 2: Code Organization
+- [ ] Migrate implementation into `src/client`, `src/common`, `src/driver`.
+- [ ] Split public headers to match the new layout.
+- [ ] Update CMake targets to build client/driver libs cleanly.
+
+## Phase 3: C Driver (Authoritative Control Plane)
+- [ ] Implement attach request handling and policy checks per driver spec.
+- [ ] Create SHM regions (header + pools) in canonical layout.
+- [ ] Publish ShmPoolAnnounce and manage epochs.
+- [ ] Track leases and keepalive expiry; revoke with correct reason codes.
+- [ ] Implement GC/retention for old epochs.
+- [ ] Provide `tp_driver` executable with config + logging.
+
+## Phase 4: Discovery Service (Advisory)
+- [ ] Implement discovery registry and stream index.
+- [ ] Serve DiscoveryRequest/DiscoveryResponse with filter semantics.
+- [ ] Respect authority rules (driver authoritative, discovery advisory).
+- [ ] Provide `tp_discoveryd` executable and JSON output tooling.
+
+## Phase 5: Supervisor / Unified Management
+- [ ] Implement supervisor/console agent.
+- [ ] Subscribe to announce/QoS/metadata/health streams.
+- [ ] Emit ConsumerConfig for per-consumer streams and rate limits.
+- [ ] Provide `tp_supervisord` executable or integrate into driver.
+
+## Phase 6: Integration + Interop
+- [ ] Add integration tests for driver + discovery + client conductor.
+- [ ] Add interop tests against Julia driver/client for wire compatibility.
+- [ ] Add failure-mode tests (expired lease, remap, invalid layout).
+
+## Phase 7: Documentation & Usage
+- [ ] Update `docs/C_CLIENT_API_USAGE.md` to use conductor-only APIs.
+- [ ] Add examples for driver/discovery/supervisor usage.
+- [ ] Keep `docs/IMPLEMENTATION_GUIDE.md` checklist in sync.
+
+## Progress
+- Phase 0: Not started
+- Phase 1: Not started
+- Phase 2: Not started
+- Phase 3: Not started
+- Phase 4: Not started
+- Phase 5: Not started
+- Phase 6: Not started
+- Phase 7: Not started
