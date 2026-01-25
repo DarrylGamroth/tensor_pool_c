@@ -3,10 +3,10 @@
 #endif
 
 #include "tensor_pool/tp.h"
-#include "tp_aeron_wrap.h"
 
 #include <getopt.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +41,7 @@ static int wait_for_publication(tp_client_t *client, tp_publication_t *publicati
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(tp_publication_handle(publication)))
+        if (tp_publication_is_connected(publication))
         {
             return 0;
         }
@@ -79,6 +79,9 @@ int main(int argc, char **argv)
     const char *aeron_dir = NULL;
     const char *channel = NULL;
     int frame_count = 0;
+    int result = 1;
+    bool client_inited = false;
+    bool producer_inited = false;
     int opt;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
 
@@ -177,8 +180,9 @@ int main(int argc, char **argv)
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
-        return 1;
+        goto cleanup;
     }
+    client_inited = true;
 
     memset(&pool_cfg, 0, sizeof(pool_cfg));
     pool_cfg.pool_id = pool_id;
@@ -189,8 +193,7 @@ int main(int argc, char **argv)
     if (tp_producer_context_init(&producer_context) < 0)
     {
         fprintf(stderr, "Producer context init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     producer_context.stream_id = stream_id;
@@ -199,9 +202,9 @@ int main(int argc, char **argv)
     if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    producer_inited = true;
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer_cfg.stream_id = stream_id;
@@ -216,17 +219,13 @@ int main(int argc, char **argv)
     if (tp_producer_attach(&producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
-        tp_producer_close(&producer);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     if (wait_for_publication(&client, producer.descriptor_publication) < 0)
     {
         fprintf(stderr, "Descriptor publication not connected\n");
-        tp_producer_close(&producer);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     memset(&header, 0, sizeof(header));
@@ -263,7 +262,7 @@ int main(int argc, char **argv)
             if (position < 0)
             {
                 fprintf(stderr, "Publish failed: %s\n", tp_errmsg());
-                break;
+                goto cleanup;
             }
             printf("Published frame pool_id=%u seq=%" PRIi64 "\n", pool_id, position);
             if (delay_us > 0)
@@ -275,8 +274,16 @@ int main(int argc, char **argv)
     }
 
 
-    tp_producer_close(&producer);
-    tp_client_close(&client);
+    result = 0;
 
-    return 0;
+cleanup:
+    if (producer_inited)
+    {
+        tp_producer_close(&producer);
+    }
+    if (client_inited)
+    {
+        tp_client_close(&client);
+    }
+    return result;
 }

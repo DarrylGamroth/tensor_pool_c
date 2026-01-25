@@ -3,12 +3,12 @@
 #endif
 
 #include "tensor_pool/tp.h"
-#include "tp_aeron_wrap.h"
 
 #include <getopt.h>
 #include <inttypes.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -139,8 +139,8 @@ static void log_subscription_status(
         return;
     }
 
-    image_count = aeron_subscription_image_count(tp_subscription_handle(subscription));
-    status = aeron_subscription_channel_status(tp_subscription_handle(subscription));
+    image_count = tp_subscription_image_count(subscription);
+    status = tp_subscription_channel_status(subscription);
     if (image_count != *last_images || status != *last_status)
     {
         fprintf(stderr, "%s images=%d channel_status=%" PRId64 "\n", label, image_count, status);
@@ -160,10 +160,10 @@ static void log_publication_status(const char *label, tp_publication_t *publicat
     fprintf(stderr,
         "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
         label,
-        aeron_publication_channel(tp_publication_handle(publication)),
-        aeron_publication_stream_id(tp_publication_handle(publication)),
-        aeron_publication_channel_status(tp_publication_handle(publication)),
-        aeron_publication_is_connected(tp_publication_handle(publication)) ? 1 : 0);
+        tp_publication_channel(publication),
+        tp_publication_stream_id(publication),
+        tp_publication_channel_status(publication),
+        tp_publication_is_connected(publication) ? 1 : 0);
 }
 
 static void tp_example_detach_driver(tp_driver_client_t *driver)
@@ -269,6 +269,11 @@ int main(int argc, char **argv)
     int progress_min = 0;
     int silent_attach = 0;
     int64_t attach_timeout_ns = 2 * 1000 * 1000 * 1000LL;
+    int result = 1;
+    bool client_inited = false;
+    bool driver_inited = false;
+    bool attach_info_valid = false;
+    bool consumer_inited = false;
     const char *request_desc_channel = NULL;
     const char *request_ctrl_channel = NULL;
     tp_subscription_t *last_descriptor_subscription = NULL;
@@ -466,21 +471,23 @@ int main(int argc, char **argv)
         tp_client_context_set_keepalive_interval_ns(&client_context, keepalive_ns);
     }
 
+    memset(&state, 0, sizeof(state));
     memset(&error_state, 0, sizeof(error_state));
     tp_client_context_set_error_handler(&client_context, on_error, &error_state);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
-        return 1;
+        goto cleanup;
     }
+    client_inited = true;
 
     if (tp_driver_client_init(&driver, &client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    driver_inited = true;
 
     memset(&request, 0, sizeof(request));
     request.correlation_id = 0;
@@ -505,10 +512,9 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
         }
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    attach_info_valid = true;
 
     if (info.code != TP_RESPONSE_OK)
     {
@@ -516,11 +522,7 @@ int main(int argc, char **argv)
         {
             fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
         }
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     resolved_client_id = driver.client_id;
@@ -533,11 +535,7 @@ int main(int argc, char **argv)
     if (NULL == pool_cfg)
     {
         fprintf(stderr, "Allocation failed\n");
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     for (i = 0; i < info.pool_count; i++)
@@ -551,12 +549,7 @@ int main(int argc, char **argv)
     if (tp_consumer_context_init(&consumer_context) < 0)
     {
         fprintf(stderr, "Consumer context init failed: %s\n", tp_errmsg());
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     consumer_context.stream_id = info.stream_id;
@@ -577,13 +570,9 @@ int main(int argc, char **argv)
     if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
     {
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    consumer_inited = true;
 
     last_descriptor_subscription = consumer.descriptor_subscription;
     last_control_subscription = consumer.control_subscription;
@@ -702,13 +691,13 @@ int main(int argc, char **argv)
             ctrl_assigned = 1;
         }
         if (!descriptor_connected && consumer.descriptor_subscription &&
-            aeron_subscription_is_connected(tp_subscription_handle(consumer.descriptor_subscription)))
+            tp_subscription_is_connected(consumer.descriptor_subscription))
         {
             descriptor_connected = 1;
             fprintf(stderr, "Descriptor subscription connected\n");
         }
         if (!control_connected && tp_client_control_subscription(&client) &&
-            aeron_subscription_is_connected(tp_subscription_handle(tp_client_control_subscription(&client))))
+            tp_subscription_is_connected(tp_client_control_subscription(&client)))
         {
             control_connected = 1;
             fprintf(stderr, "Control subscription connected\n");
@@ -744,24 +733,39 @@ int main(int argc, char **argv)
         drive_keepalives(&client);
     }
 
-    tp_consumer_close(&consumer);
+    result = exit_status;
+
+cleanup:
+    if (consumer_inited)
+    {
+        tp_consumer_close(&consumer);
+    }
     free(pool_cfg);
-    tp_driver_attach_info_close(&info);
-    tp_example_detach_driver(&driver);
-    tp_driver_client_close(&driver);
-    tp_client_close(&client);
+    if (attach_info_valid)
+    {
+        tp_driver_attach_info_close(&info);
+    }
+    if (driver_inited)
+    {
+        tp_example_detach_driver(&driver);
+        tp_driver_client_close(&driver);
+    }
+    if (client_inited)
+    {
+        tp_client_close(&client);
+    }
 
     if (require_per_consumer)
     {
         if (request_desc_stream_id != 0 && !desc_assigned)
         {
             fprintf(stderr, "Per-consumer descriptor stream not assigned\n");
-            return 1;
+            result = 1;
         }
         if (request_ctrl_stream_id != 0 && !ctrl_assigned)
         {
             fprintf(stderr, "Per-consumer control stream not assigned\n");
-            exit_status = 1;
+            result = 1;
         }
     }
     if (require_progress && state.progress_received < progress_min)
@@ -769,21 +773,21 @@ int main(int argc, char **argv)
         fprintf(stderr, "Progress updates missing (got=%d expected=%d)\n",
             state.progress_received,
             progress_min);
-        exit_status = 1;
+        result = 1;
     }
     if (expect_lease_expire && !error_state.lease_expired)
     {
         fprintf(stderr, "Expected lease expiry not observed\n");
-        exit_status = 1;
+        result = 1;
     }
     if (!expect_lease_expire && max_wait_ns > 0 && state.received < state.limit)
     {
-        exit_status = 1;
+        result = 1;
     }
     if (loop_failed)
     {
-        exit_status = 1;
+        result = 1;
     }
 
-    return exit_status;
+    return result;
 }

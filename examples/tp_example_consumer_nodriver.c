@@ -3,10 +3,10 @@
 #endif
 
 #include "tensor_pool/tp.h"
-#include "tp_aeron_wrap.h"
 
 #include <getopt.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +105,7 @@ static int wait_for_subscription(tp_client_t *client, tp_subscription_t *subscri
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_subscription_is_connected(tp_subscription_handle(subscription)))
+        if (tp_subscription_is_connected(subscription))
         {
             return 0;
         }
@@ -140,6 +140,9 @@ int main(int argc, char **argv)
     const char *pool_uri = NULL;
     const char *aeron_dir = NULL;
     const char *channel = NULL;
+    int result = 1;
+    bool client_inited = false;
+    bool consumer_inited = false;
     int opt;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
 
@@ -232,8 +235,9 @@ int main(int argc, char **argv)
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
-        return 1;
+        goto cleanup;
     }
+    client_inited = true;
 
     memset(&pool_cfg, 0, sizeof(pool_cfg));
     pool_cfg.pool_id = pool_id;
@@ -244,8 +248,7 @@ int main(int argc, char **argv)
     if (tp_consumer_context_init(&consumer_context) < 0)
     {
         fprintf(stderr, "Consumer context init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     consumer_context.stream_id = stream_id;
@@ -254,9 +257,9 @@ int main(int argc, char **argv)
     if (tp_consumer_init(&consumer, &client, &consumer_context) < 0)
     {
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    consumer_inited = true;
 
     memset(&consumer_cfg, 0, sizeof(consumer_cfg));
     consumer_cfg.stream_id = stream_id;
@@ -270,17 +273,13 @@ int main(int argc, char **argv)
     if (tp_consumer_attach(&consumer, &consumer_cfg) < 0)
     {
         fprintf(stderr, "Consumer attach failed: %s\n", tp_errmsg());
-        tp_consumer_close(&consumer);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     if (wait_for_subscription(&client, consumer.descriptor_subscription) < 0)
     {
         fprintf(stderr, "Descriptor subscription not connected\n");
-        tp_consumer_close(&consumer);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     state.consumer = &consumer;
@@ -308,8 +307,16 @@ int main(int argc, char **argv)
         }
     }
 
-    tp_consumer_close(&consumer);
-    tp_client_close(&client);
+    result = state.errors == 0 ? 0 : 2;
 
-    return state.errors == 0 ? 0 : 2;
+cleanup:
+    if (consumer_inited)
+    {
+        tp_consumer_close(&consumer);
+    }
+    if (client_inited)
+    {
+        tp_client_close(&client);
+    }
+    return result;
 }

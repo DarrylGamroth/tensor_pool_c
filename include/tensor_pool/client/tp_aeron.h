@@ -2,6 +2,7 @@
 #define TENSOR_POOL_TP_AERON_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
@@ -31,6 +32,15 @@ int tp_aeron_add_subscription(
     tp_aeron_client_t *client,
     const char *channel,
     int32_t stream_id);
+
+const char *tp_publication_channel(const tp_publication_t *pub);
+int32_t tp_publication_stream_id(const tp_publication_t *pub);
+int64_t tp_publication_channel_status(const tp_publication_t *pub);
+bool tp_publication_is_connected(const tp_publication_t *pub);
+
+int tp_subscription_image_count(const tp_subscription_t *sub);
+int64_t tp_subscription_channel_status(const tp_subscription_t *sub);
+bool tp_subscription_is_connected(const tp_subscription_t *sub);
 
 #ifdef __cplusplus
 }

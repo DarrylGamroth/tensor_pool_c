@@ -165,3 +165,73 @@ int tp_aeron_add_subscription(
 
     return 0;
 }
+
+const char *tp_publication_channel(const tp_publication_t *pub)
+{
+    if (NULL == pub || NULL == tp_publication_handle((tp_publication_t *)pub))
+    {
+        return NULL;
+    }
+
+    return aeron_publication_channel(tp_publication_handle((tp_publication_t *)pub));
+}
+
+int32_t tp_publication_stream_id(const tp_publication_t *pub)
+{
+    if (NULL == pub || NULL == tp_publication_handle((tp_publication_t *)pub))
+    {
+        return 0;
+    }
+
+    return aeron_publication_stream_id(tp_publication_handle((tp_publication_t *)pub));
+}
+
+int64_t tp_publication_channel_status(const tp_publication_t *pub)
+{
+    if (NULL == pub || NULL == tp_publication_handle((tp_publication_t *)pub))
+    {
+        return -1;
+    }
+
+    return aeron_publication_channel_status(tp_publication_handle((tp_publication_t *)pub));
+}
+
+bool tp_publication_is_connected(const tp_publication_t *pub)
+{
+    if (NULL == pub || NULL == tp_publication_handle((tp_publication_t *)pub))
+    {
+        return false;
+    }
+
+    return aeron_publication_is_connected(tp_publication_handle((tp_publication_t *)pub));
+}
+
+int tp_subscription_image_count(const tp_subscription_t *sub)
+{
+    if (NULL == sub || NULL == tp_subscription_handle((tp_subscription_t *)sub))
+    {
+        return 0;
+    }
+
+    return aeron_subscription_image_count(tp_subscription_handle((tp_subscription_t *)sub));
+}
+
+int64_t tp_subscription_channel_status(const tp_subscription_t *sub)
+{
+    if (NULL == sub || NULL == tp_subscription_handle((tp_subscription_t *)sub))
+    {
+        return -1;
+    }
+
+    return aeron_subscription_channel_status(tp_subscription_handle((tp_subscription_t *)sub));
+}
+
+bool tp_subscription_is_connected(const tp_subscription_t *sub)
+{
+    if (NULL == sub || NULL == tp_subscription_handle((tp_subscription_t *)sub))
+    {
+        return false;
+    }
+
+    return aeron_subscription_is_connected(tp_subscription_handle((tp_subscription_t *)sub));
+}

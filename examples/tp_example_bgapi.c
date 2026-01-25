@@ -2,6 +2,7 @@
 
 #include <getopt.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,6 +69,11 @@ int main(int argc, char **argv)
     uint32_t resolved_client_id = 0;
     const char *aeron_dir = NULL;
     const char *channel = NULL;
+    int result = 1;
+    bool client_inited = false;
+    bool driver_inited = false;
+    bool attach_info_valid = false;
+    bool producer_inited = false;
     int opt;
     size_t i;
 
@@ -133,15 +139,16 @@ int main(int argc, char **argv)
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
-        return 1;
+        goto cleanup;
     }
+    client_inited = true;
 
     if (tp_driver_client_init(&driver, &client) < 0)
     {
         fprintf(stderr, "Driver init failed: %s\n", tp_errmsg());
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    driver_inited = true;
 
     memset(&request, 0, sizeof(request));
     request.correlation_id = 0;
@@ -159,18 +166,14 @@ int main(int argc, char **argv)
     if (tp_driver_attach(&driver, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    attach_info_valid = true;
 
     if (info.code != TP_RESPONSE_OK)
     {
         fprintf(stderr, "Attach rejected: code=%d error=%s\n", info.code, info.error_message);
-        tp_driver_attach_info_close(&info);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     resolved_client_id = driver.client_id;
@@ -183,11 +186,7 @@ int main(int argc, char **argv)
     if (NULL == pool_cfg)
     {
         fprintf(stderr, "Allocation failed\n");
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     for (i = 0; i < info.pool_count; i++)
@@ -201,12 +200,7 @@ int main(int argc, char **argv)
     if (tp_producer_context_init(&producer_context) < 0)
     {
         fprintf(stderr, "Producer context init failed: %s\n", tp_errmsg());
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     producer_context.stream_id = info.stream_id;
@@ -216,13 +210,9 @@ int main(int argc, char **argv)
     if (tp_producer_init(&producer, &client, &producer_context) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
+    producer_inited = true;
 
     memset(&producer_cfg, 0, sizeof(producer_cfg));
     producer_cfg.stream_id = info.stream_id;
@@ -237,26 +227,14 @@ int main(int argc, char **argv)
     if (tp_producer_attach(&producer, &producer_cfg) < 0)
     {
         fprintf(stderr, "Producer attach failed: %s\n", tp_errmsg());
-        tp_producer_close(&producer);
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     slots = calloc(slot_count, sizeof(*slots));
     if (NULL == slots)
     {
         fprintf(stderr, "Slot allocation failed\n");
-        tp_producer_close(&producer);
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     memset(&header, 0, sizeof(header));
@@ -274,7 +252,7 @@ int main(int argc, char **argv)
         if (tp_producer_try_claim(&producer, pool_cfg[0].stride_bytes, &slots[i].claim) < 0)
         {
             fprintf(stderr, "try_claim failed: %s\n", tp_errmsg());
-            break;
+            goto cleanup;
         }
         slots[i].claim.tensor = header;
     }
@@ -297,12 +275,27 @@ int main(int argc, char **argv)
         }
     }
 
+    result = 0;
+
+cleanup:
     free(slots);
-    tp_producer_close(&producer);
+    if (producer_inited)
+    {
+        tp_producer_close(&producer);
+    }
     free(pool_cfg);
-    tp_driver_attach_info_close(&info);
-    tp_example_detach_driver(&driver);
-    tp_driver_client_close(&driver);
-    tp_client_close(&client);
-    return 0;
+    if (attach_info_valid)
+    {
+        tp_driver_attach_info_close(&info);
+    }
+    if (driver_inited)
+    {
+        tp_example_detach_driver(&driver);
+        tp_driver_client_close(&driver);
+    }
+    if (client_inited)
+    {
+        tp_client_close(&client);
+    }
+    return result;
 }
