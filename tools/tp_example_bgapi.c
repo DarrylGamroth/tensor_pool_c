@@ -1,5 +1,6 @@
 #include "tensor_pool/tp.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +14,16 @@ tp_bgapi_slot_t;
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "Usage: %s <aeron_dir> <control_channel> <stream_id> <client_id> [slots]\n", name);
+    fprintf(stderr,
+        "Usage: %s [options] -a <aeron_dir> -c <channel> -s <stream_id>\n"
+        "Options:\n"
+        "  -a <dir>     Aeron directory\n"
+        "  -c <chan>    Control channel\n"
+        "  -s <id>      Stream id\n"
+        "  -i <id>      Client id (0 = auto-assign)\n"
+        "  -n <count>   Slots to announce (default: 8)\n"
+        "  -h           Show help\n",
+        name);
 }
 
 static void tp_example_detach_driver(tp_driver_client_t *driver)
@@ -53,22 +63,58 @@ int main(int argc, char **argv)
     tp_bgapi_slot_t *slots = NULL;
     const char *allowed_paths[] = { "/dev/shm", "/tmp" };
     size_t slot_count = 8;
-    uint32_t stream_id;
-    uint32_t client_id;
+    uint32_t stream_id = 0;
+    uint32_t client_id = 0;
     uint32_t resolved_client_id = 0;
+    const char *aeron_dir = NULL;
+    const char *channel = NULL;
+    int opt;
     size_t i;
 
-    if (argc < 5 || argc > 6)
+    while ((opt = getopt(argc, argv, "a:c:s:i:n:h")) != -1)
+    {
+        switch (opt)
+        {
+            case 'a':
+                aeron_dir = optarg;
+                break;
+            case 'c':
+                channel = optarg;
+                break;
+            case 's':
+                stream_id = (uint32_t)strtoul(optarg, NULL, 10);
+                break;
+            case 'i':
+                client_id = (uint32_t)strtoul(optarg, NULL, 10);
+                break;
+            case 'n':
+                slot_count = (size_t)strtoul(optarg, NULL, 10);
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if ((NULL == aeron_dir || NULL == channel || stream_id == 0) && (argc - optind) >= 4)
+    {
+        aeron_dir = argv[optind++];
+        channel = argv[optind++];
+        stream_id = (uint32_t)strtoul(argv[optind++], NULL, 10);
+        client_id = (uint32_t)strtoul(argv[optind++], NULL, 10);
+        if (optind < argc)
+        {
+            slot_count = (size_t)strtoul(argv[optind++], NULL, 10);
+        }
+    }
+
+    if (NULL == aeron_dir || NULL == channel || stream_id == 0 || optind < argc)
     {
         usage(argv[0]);
         return 1;
-    }
-
-    stream_id = (uint32_t)strtoul(argv[3], NULL, 10);
-    client_id = (uint32_t)strtoul(argv[4], NULL, 10);
-    if (argc == 6)
-    {
-        slot_count = (size_t)strtoul(argv[5], NULL, 10);
     }
 
     if (tp_client_context_init(&client_context) < 0)
@@ -77,8 +123,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    tp_client_context_set_aeron_dir(&client_context, argv[1]);
-    tp_client_context_set_control_channel(&client_context, argv[2], 1000);
+    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
+    tp_client_context_set_control_channel(&client_context, channel, 1000);
     tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
     tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
     tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);

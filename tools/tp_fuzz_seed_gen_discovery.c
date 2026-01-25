@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,10 +195,32 @@ int main(int argc, char **argv)
 {
     const char *base = "fuzz/corpus";
     char dir[512];
+    int opt;
 
-    if (argc > 1 && argv[1][0] != '\0')
+    while ((opt = getopt(argc, argv, "o:h")) != -1)
     {
-        base = argv[1];
+        switch (opt)
+        {
+            case 'o':
+                base = optarg;
+                break;
+            case 'h':
+                fprintf(stderr, "Usage: %s [-o <out_dir>]\n", argv[0]);
+                return 0;
+            default:
+                fprintf(stderr, "Usage: %s [-o <out_dir>]\n", argv[0]);
+                return 1;
+        }
+    }
+
+    if (optind < argc)
+    {
+        base = argv[optind++];
+    }
+    if (optind < argc)
+    {
+        fprintf(stderr, "Usage: %s [-o <out_dir>]\n", argv[0]);
+        return 1;
     }
 
     if (tp_fuzz_mkdir("fuzz") < 0 || tp_fuzz_mkdir(base) < 0)

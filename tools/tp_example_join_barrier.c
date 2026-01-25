@@ -1,5 +1,6 @@
 #include "tensor_pool/tp_join_barrier.h"
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -146,8 +147,34 @@ cleanup:
     return result;
 }
 
-int main(void)
+static void usage(const char *name)
 {
+    fprintf(stderr, "Usage: %s [-h]\n", name);
+}
+
+int main(int argc, char **argv)
+{
+    int opt;
+
+    while ((opt = getopt(argc, argv, "h")) != -1)
+    {
+        switch (opt)
+        {
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (optind < argc)
+    {
+        usage(argv[0]);
+        return 1;
+    }
+
     if (tp_demo_sequence() < 0)
     {
         fprintf(stderr, "sequence demo failed\n");

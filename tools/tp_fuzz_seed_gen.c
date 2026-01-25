@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -842,6 +843,11 @@ static int tp_fuzz_prepare_dir(const char *base, const char *name, char *out, si
     return tp_fuzz_mkdir(out);
 }
 
+static void usage(const char *name)
+{
+    fprintf(stderr, "Usage: %s [-o <out_dir>]\n", name);
+}
+
 int main(int argc, char **argv)
 {
     const char *base = "fuzz/corpus";
@@ -850,9 +856,32 @@ int main(int argc, char **argv)
     char control_decode_dir[512];
     char metadata_poller_dir[512];
 
-    if (argc > 1 && argv[1][0] != '\0')
+    int opt;
+
+    while ((opt = getopt(argc, argv, "o:h")) != -1)
     {
-        base = argv[1];
+        switch (opt)
+        {
+            case 'o':
+                base = optarg;
+                break;
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (optind < argc)
+    {
+        base = argv[optind++];
+    }
+    if (optind < argc)
+    {
+        usage(argv[0]);
+        return 1;
     }
 
     if (tp_fuzz_mkdir("fuzz") < 0 || tp_fuzz_mkdir(base) < 0)
