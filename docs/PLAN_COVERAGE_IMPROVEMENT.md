@@ -18,9 +18,9 @@ Baseline (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 - branches: 44.8% (1983 / 4427)
 
 Current (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
-- lines: 70.3% (4758 / 6772)
-- functions: 90.6% (346 / 382)
-- branches: 57.2% (2532 / 4427)
+- lines: 65.9% (6893 / 10453)
+- functions: 85.1% (497 / 584)
+- branches: 53.6% (3549 / 6627)
 
 Bottom 10 files by line coverage (baseline):
 - `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
