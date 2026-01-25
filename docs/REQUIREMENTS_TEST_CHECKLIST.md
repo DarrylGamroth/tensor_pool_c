@@ -11,7 +11,8 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 ## Review Notes
 
 - Coverage uplift tests added for driver attach/detach, discovery live polling, tracelink send, progress poller misc paths, tensor header validation, and FrameProgress monotonic capacity.
-- We SHOULD implement an Aeron-style client conductor per spec guidance (tracked as W-15.15-1). Until implemented, this remains a design-review item with no automated test.
+- Client conductor is implemented and covered by `tests/test_tp_client_conductor.c`.
+- Driver server-side behavior still lacks end-to-end integration tests; see Traceability rows D-2.1/D-4.3-1/D-4.8-1 for pending coverage.
 
 ## Config-Matrix Integration Tests
 
