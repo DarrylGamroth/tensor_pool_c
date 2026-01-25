@@ -20,16 +20,16 @@ Related design docs:
 
 ## Phase 1: Client Conductor (Aeron-style)
 - [x] Implement MPSC command queue (C11 atomics) for async add operations.
-- [ ] Move control/QoS/metadata/descriptor subscriptions into conductor-owned state.
-- [ ] Add client-level handler registration and dispatch in `tp_client_do_work`.
+- [x] Move shared control/QoS/metadata/announce subscriptions into conductor-owned state.
+- [x] Add client-level handler registration and dispatch in `tp_client_do_work`.
 - [x] Remove public Aeron types from user-facing headers (opaque handles).
-- [ ] Route per-producer/consumer polling through conductor (or deprecate).
-- [ ] Add unit tests for conductor lifecycle and handler dispatch.
+- [x] Route per-producer/consumer polling through conductor (or deprecate).
+- [x] Add unit tests for conductor lifecycle and handler dispatch.
 
 ## Phase 2: Code Organization
-- [ ] Migrate implementation into `src/client`, `src/common`, `src/driver`.
-- [ ] Split public headers to match the new layout.
-- [ ] Update CMake targets to build client/driver libs cleanly.
+- [x] Migrate implementation into `src/client`, `src/common`, `src/driver`.
+- [x] Split public headers to match the new layout.
+- [x] Update CMake targets to build client/driver libs cleanly.
 
 ## Phase 3: C Driver (Authoritative Control Plane)
 - [ ] Implement attach request handling and policy checks per driver spec.
@@ -64,8 +64,8 @@ Related design docs:
 
 ## Progress
 - Phase 0: Completed
-- Phase 1: In progress (MPSC queue + opaque handles done; conductor-owned subscriptions pending)
-- Phase 2: Not started
+- Phase 1: Completed
+- Phase 2: Completed
 - Phase 3: Not started
 - Phase 4: Not started
 - Phase 5: Not started
