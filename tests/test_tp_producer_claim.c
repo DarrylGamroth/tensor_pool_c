@@ -10,6 +10,7 @@
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_version.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/dtype.h"
 #include "wire/tensor_pool/frameDescriptor.h"
@@ -110,13 +111,13 @@ static void tp_test_write_superblock(
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }
 
-static int tp_test_wait_for_connected(tp_client_t *client, aeron_publication_t *publication)
+static int tp_test_wait_for_connected(tp_client_t *client, tp_publication_t *publication)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(publication))
+        if (aeron_publication_is_connected(tp_publication_handle(publication)))
         {
             return 0;
         }
@@ -186,7 +187,7 @@ static void tp_on_descriptor_capture(void *clientd, const uint8_t *buffer, size_
 
 static int tp_test_wait_for_descriptor(
     tp_client_t *client,
-    aeron_subscription_t *subscription,
+    tp_subscription_t *subscription,
     tp_descriptor_capture_state_t *state)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
@@ -198,7 +199,7 @@ static int tp_test_wait_for_descriptor(
 
     while (tp_clock_now_ns() < deadline)
     {
-        aeron_subscription_poll(subscription, tp_on_descriptor_capture, state, 10);
+        aeron_subscription_poll(tp_subscription_handle(subscription), tp_on_descriptor_capture, state, 10);
         tp_client_do_work(client);
         if (state->saw)
         {
@@ -247,11 +248,11 @@ static int tp_test_offer_frame_retry(
     return -1;
 }
 
-static int tp_test_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, aeron_subscription_t **out)
+static int tp_test_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, tp_subscription_t **out)
 {
-    aeron_async_add_subscription_t *async_add = NULL;
+    tp_async_add_subscription_t *async_add = NULL;
 
-    if (tp_client_async_add_subscription(client, channel, stream_id, NULL, NULL, NULL, NULL, &async_add) < 0)
+    if (tp_client_async_add_subscription(client, channel, stream_id, &async_add) < 0)
     {
         return -1;
     }
@@ -387,7 +388,7 @@ static void tp_test_claim_lifecycle(bool fixed_pool_mode)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_subscription_t *descriptor_sub = NULL;
+    tp_subscription_t *descriptor_sub = NULL;
     tp_buffer_claim_t claim;
     tp_frame_metadata_t meta;
     uint8_t *slot;
@@ -567,7 +568,7 @@ cleanup:
     }
     if (descriptor_sub)
     {
-        aeron_subscription_close(descriptor_sub, NULL, NULL);
+        tp_subscription_close(&descriptor_sub);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {
@@ -593,7 +594,7 @@ static void tp_test_producer_invalid_tensor_header(void)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_subscription_t *descriptor_sub = NULL;
+    tp_subscription_t *descriptor_sub = NULL;
     int header_fd = -1;
     int pool_fd = -1;
     char header_path[] = "/tmp/tp_header_invalidXXXXXX";
@@ -684,7 +685,7 @@ cleanup:
     }
     if (descriptor_sub)
     {
-        aeron_subscription_close(descriptor_sub, NULL, NULL);
+        tp_subscription_close(&descriptor_sub);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {
@@ -710,7 +711,7 @@ static void tp_test_producer_offer_pool_selection(void)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_subscription_t *descriptor_sub = NULL;
+    tp_subscription_t *descriptor_sub = NULL;
     tp_payload_pool_config_t pools[2];
     tp_producer_config_t config;
     tp_frame_t frame;
@@ -877,7 +878,7 @@ cleanup:
     }
     if (descriptor_sub)
     {
-        aeron_subscription_close(descriptor_sub, NULL, NULL);
+        tp_subscription_close(&descriptor_sub);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {
@@ -912,7 +913,7 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_subscription_t *descriptor_sub = NULL;
+    tp_subscription_t *descriptor_sub = NULL;
     tp_descriptor_capture_state_t state;
     tp_tensor_header_t tensor;
     tp_frame_t frame;
@@ -1046,7 +1047,7 @@ cleanup:
     }
     if (descriptor_sub)
     {
-        aeron_subscription_close(descriptor_sub, NULL, NULL);
+        tp_subscription_close(&descriptor_sub);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {
@@ -1072,7 +1073,7 @@ static void tp_test_producer_payload_flush(void)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_subscription_t *descriptor_sub = NULL;
+    tp_subscription_t *descriptor_sub = NULL;
     tp_frame_metadata_t meta;
     tp_frame_t frame;
     tp_tensor_header_t tensor;
@@ -1195,7 +1196,7 @@ cleanup:
     }
     if (descriptor_sub)
     {
-        aeron_subscription_close(descriptor_sub, NULL, NULL);
+        tp_subscription_close(&descriptor_sub);
     }
     if (client.context.base.aeron_dir[0] != '\0')
     {

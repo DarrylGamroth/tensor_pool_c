@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 #include "aeron_agent.h"
 
 int tp_aeron_client_init(tp_aeron_client_t *client, const tp_context_t *context)
@@ -16,37 +17,38 @@ int tp_aeron_client_init(tp_aeron_client_t *client, const tp_context_t *context)
 
     memset(client, 0, sizeof(*client));
 
-    if (aeron_context_init(&client->context) < 0)
+    aeron_context_t *ctx = NULL;
+    aeron_t *aeron = NULL;
+
+    if (aeron_context_init(&ctx) < 0)
     {
         return -1;
     }
 
     if (context->aeron_dir[0] != '\0')
     {
-        if (aeron_context_set_dir(client->context, context->aeron_dir) < 0)
+        if (aeron_context_set_dir(ctx, context->aeron_dir) < 0)
         {
-            aeron_context_close(client->context);
-            client->context = NULL;
+            aeron_context_close(ctx);
             return -1;
         }
     }
 
-    if (aeron_init(&client->aeron, client->context) < 0)
+    if (aeron_init(&aeron, ctx) < 0)
     {
-        aeron_context_close(client->context);
-        client->context = NULL;
+        aeron_context_close(ctx);
         return -1;
     }
 
-    if (aeron_start(client->aeron) < 0)
+    if (aeron_start(aeron) < 0)
     {
-        aeron_close(client->aeron);
-        client->aeron = NULL;
-        aeron_context_close(client->context);
-        client->context = NULL;
+        aeron_close(aeron);
+        aeron_context_close(ctx);
         return -1;
     }
 
+    client->context = ctx;
+    client->aeron = aeron;
     return 0;
 }
 
@@ -59,13 +61,13 @@ int tp_aeron_client_close(tp_aeron_client_t *client)
 
     if (NULL != client->aeron)
     {
-        aeron_close(client->aeron);
+        aeron_close((aeron_t *)client->aeron);
         client->aeron = NULL;
     }
 
     if (NULL != client->context)
     {
-        aeron_context_close(client->context);
+        aeron_context_close((aeron_context_t *)client->context);
         client->context = NULL;
     }
 
@@ -73,13 +75,15 @@ int tp_aeron_client_close(tp_aeron_client_t *client)
 }
 
 int tp_aeron_add_publication(
-    aeron_publication_t **pub,
+    tp_publication_t **pub,
     tp_aeron_client_t *client,
     const char *channel,
     int32_t stream_id)
 {
     aeron_async_add_publication_t *async_add = NULL;
     uint64_t sleep_ns = 1;
+    aeron_publication_t *raw_pub = NULL;
+    aeron_t *aeron = NULL;
 
     if (NULL == pub || NULL == client || NULL == client->aeron || NULL == channel)
     {
@@ -87,7 +91,8 @@ int tp_aeron_add_publication(
         return -1;
     }
 
-    if (aeron_async_add_publication(&async_add, client->aeron, channel, stream_id) < 0)
+    aeron = (aeron_t *)client->aeron;
+    if (aeron_async_add_publication(&async_add, aeron, channel, stream_id) < 0)
     {
         return -1;
     }
@@ -95,9 +100,14 @@ int tp_aeron_add_publication(
     *pub = NULL;
     while (NULL == *pub)
     {
-        int work = aeron_async_add_publication_poll(pub, async_add);
+        int work = aeron_async_add_publication_poll(&raw_pub, async_add);
         if (work < 0)
         {
+            return -1;
+        }
+        if (raw_pub && tp_publication_wrap(pub, raw_pub) < 0)
+        {
+            aeron_publication_close(raw_pub, NULL, NULL);
             return -1;
         }
         aeron_idle_strategy_sleeping_idle(&sleep_ns, work);
@@ -107,17 +117,15 @@ int tp_aeron_add_publication(
 }
 
 int tp_aeron_add_subscription(
-    aeron_subscription_t **sub,
+    tp_subscription_t **sub,
     tp_aeron_client_t *client,
     const char *channel,
-    int32_t stream_id,
-    aeron_on_available_image_t on_available,
-    void *available_clientd,
-    aeron_on_unavailable_image_t on_unavailable,
-    void *unavailable_clientd)
+    int32_t stream_id)
 {
     aeron_async_add_subscription_t *async_add = NULL;
     uint64_t sleep_ns = 1;
+    aeron_subscription_t *raw_sub = NULL;
+    aeron_t *aeron = NULL;
 
     if (NULL == sub || NULL == client || NULL == client->aeron || NULL == channel)
     {
@@ -125,15 +133,16 @@ int tp_aeron_add_subscription(
         return -1;
     }
 
+    aeron = (aeron_t *)client->aeron;
     if (aeron_async_add_subscription(
         &async_add,
-        client->aeron,
+        aeron,
         channel,
         stream_id,
-        on_available,
-        available_clientd,
-        on_unavailable,
-        unavailable_clientd) < 0)
+        NULL,
+        NULL,
+        NULL,
+        NULL) < 0)
     {
         return -1;
     }
@@ -141,9 +150,14 @@ int tp_aeron_add_subscription(
     *sub = NULL;
     while (NULL == *sub)
     {
-        int work = aeron_async_add_subscription_poll(sub, async_add);
+        int work = aeron_async_add_subscription_poll(&raw_sub, async_add);
         if (work < 0)
         {
+            return -1;
+        }
+        if (raw_sub && tp_subscription_wrap(sub, raw_sub) < 0)
+        {
+            aeron_subscription_close(raw_sub, NULL, NULL);
             return -1;
         }
         aeron_idle_strategy_sleeping_idle(&sleep_ns, work);

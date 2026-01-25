@@ -30,12 +30,18 @@
 #include "wire/tensor_pool/tensorHeader.h"
 #include "wire/tensor_pool/regionType.h"
 
+#include "tp_aeron_wrap.h"
+
+enum { TP_PRODUCER_DEFAULT_FRAGMENT_LIMIT = 10 };
+
 typedef struct tp_tracelink_entry_stct
 {
     uint64_t seq;
     uint64_t trace_id;
 }
 tp_tracelink_entry_t;
+
+static int tp_producer_poll_dispatch(void *clientd, int fragment_limit);
 
 static tp_payload_pool_t *tp_find_pool_for_length(tp_producer_t *producer, size_t length);
 
@@ -352,7 +358,7 @@ static void tp_producer_fill_driver_request(tp_producer_t *producer, tp_driver_a
 
 int tp_producer_publish_descriptor_to(
     tp_producer_t *producer,
-    aeron_publication_t *publication,
+    tp_publication_t *publication,
     uint64_t seq,
     uint64_t timestamp_ns,
     uint32_t meta_version,
@@ -422,7 +428,7 @@ int tp_producer_publish_descriptor_to(
     }
 
     result = aeron_publication_offer(
-        publication,
+        tp_publication_handle(publication),
         buffer,
         header_len + body_len,
         NULL,
@@ -564,9 +570,9 @@ static int tp_producer_add_publication(
     tp_producer_t *producer,
     const char *channel,
     int32_t stream_id,
-    aeron_publication_t **out_pub)
+    tp_publication_t **out_pub)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (NULL == producer || NULL == producer->client || NULL == out_pub || NULL == channel || stream_id < 0)
     {
@@ -602,7 +608,18 @@ int tp_producer_context_init(tp_producer_context_t *ctx)
 
     memset(ctx, 0, sizeof(*ctx));
     ctx->driver_request.desired_node_id = TP_NULL_U32;
+    ctx->use_conductor_polling = true;
     return 0;
+}
+
+void tp_producer_context_set_use_conductor_polling(tp_producer_context_t *ctx, bool enabled)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->use_conductor_polling = enabled;
 }
 
 void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled)
@@ -928,7 +945,7 @@ static int tp_producer_poll_qos(tp_producer_t *producer, int fragment_limit)
 {
     tp_qos_handlers_t handlers;
 
-    if (NULL == producer || NULL == producer->client || NULL == producer->client->qos_subscription)
+    if (NULL == producer || NULL == producer->client || NULL == tp_client_qos_subscription(producer->client))
     {
         return 0;
     }
@@ -1029,6 +1046,19 @@ int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_prod
         {
             return -1;
         }
+    }
+
+    if (producer->context.use_conductor_polling && producer->client)
+    {
+        if (tp_client_register_poller(
+            producer->client,
+            tp_producer_poll_dispatch,
+            producer,
+            TP_PRODUCER_DEFAULT_FRAGMENT_LIMIT) < 0)
+        {
+            return -1;
+        }
+        producer->conductor_poll_registered = true;
     }
 
     return 0;
@@ -1501,7 +1531,7 @@ int tp_producer_publish_frame(
 
 int tp_producer_publish_progress_to(
     tp_producer_t *producer,
-    aeron_publication_t *publication,
+    tp_publication_t *publication,
     uint64_t seq,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state)
@@ -1537,7 +1567,12 @@ int tp_producer_publish_progress_to(
     tensor_pool_frameProgress_set_payloadBytesFilled(&progress, payload_bytes_filled);
     tensor_pool_frameProgress_set_state(&progress, (enum tensor_pool_frameProgressState)state);
 
-    result = aeron_publication_offer(publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -1843,21 +1878,21 @@ int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity
     return 0;
 }
 
-int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
+static int tp_producer_poll_control_internal(tp_producer_t *producer, int fragment_limit, bool drive_client)
 {
     uint64_t now_ns;
     uint64_t stale_ns = 5ULL * 1000 * 1000 * 1000ULL;
     int fragments;
     int qos_fragments;
 
-    if (NULL == producer || NULL == producer->client || NULL == producer->client->control_subscription)
+    if (NULL == producer || NULL == producer->client || NULL == tp_client_control_subscription(producer->client))
     {
         return 0;
     }
 
     if (NULL == producer->control_assembler)
     {
-        if (aeron_fragment_assembler_create(
+        if (tp_fragment_assembler_create(
             &producer->control_assembler,
             tp_producer_control_handler,
             producer) < 0)
@@ -1867,9 +1902,9 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
     }
 
     fragments = aeron_subscription_poll(
-        producer->client->control_subscription,
+        tp_subscription_handle(tp_client_control_subscription(producer->client)),
         aeron_fragment_assembler_handler,
-        producer->control_assembler,
+        tp_fragment_assembler_handle(producer->control_assembler),
         fragment_limit);
     if (fragments < 0)
     {
@@ -1937,8 +1972,28 @@ int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
         }
     }
 
-    tp_client_do_work(producer->client);
+    if (drive_client)
+    {
+        tp_client_do_work(producer->client);
+    }
     return fragments;
+}
+
+int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit)
+{
+    return tp_producer_poll_control_internal(producer, fragment_limit, true);
+}
+
+static int tp_producer_poll_dispatch(void *clientd, int fragment_limit)
+{
+    tp_producer_t *producer = (tp_producer_t *)clientd;
+
+    if (NULL == producer)
+    {
+        return 0;
+    }
+
+    return tp_producer_poll_control_internal(producer, fragment_limit, false);
 }
 
 int tp_producer_set_data_source_announce(tp_producer_t *producer, const tp_data_source_announce_t *announce)
@@ -2065,43 +2120,22 @@ int tp_producer_close(tp_producer_t *producer)
         return -1;
     }
 
-    if (producer->descriptor_publication)
+    if (producer->conductor_poll_registered && producer->client)
     {
-        aeron_publication_close(producer->descriptor_publication, NULL, NULL);
-        producer->descriptor_publication = NULL;
+        tp_client_unregister_poller(producer->client, tp_producer_poll_dispatch, producer);
+        producer->conductor_poll_registered = false;
     }
 
-    if (producer->control_publication)
-    {
-        aeron_publication_close(producer->control_publication, NULL, NULL);
-        producer->control_publication = NULL;
-    }
+    tp_publication_close(&producer->descriptor_publication);
+    tp_publication_close(&producer->control_publication);
+    tp_publication_close(&producer->qos_publication);
+    tp_publication_close(&producer->metadata_publication);
 
-    if (producer->qos_publication)
-    {
-        aeron_publication_close(producer->qos_publication, NULL, NULL);
-        producer->qos_publication = NULL;
-    }
-
-    if (producer->metadata_publication)
-    {
-        aeron_publication_close(producer->metadata_publication, NULL, NULL);
-        producer->metadata_publication = NULL;
-    }
-
-    if (producer->control_assembler)
-    {
-        aeron_fragment_assembler_delete(producer->control_assembler);
-        producer->control_assembler = NULL;
-    }
+    tp_fragment_assembler_close(&producer->control_assembler);
 
     if (producer->qos_poller)
     {
-        if (producer->qos_poller->assembler)
-        {
-            aeron_fragment_assembler_delete(producer->qos_poller->assembler);
-            producer->qos_poller->assembler = NULL;
-        }
+        tp_fragment_assembler_close(&producer->qos_poller->assembler);
         aeron_free(producer->qos_poller);
         producer->qos_poller = NULL;
     }

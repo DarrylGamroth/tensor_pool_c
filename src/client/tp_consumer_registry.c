@@ -6,6 +6,7 @@
 #include "aeron_alloc.h"
 
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 
 static int tp_copy_string_view(char *dst, size_t dst_len, const tp_string_view_t *view)
 {
@@ -107,16 +108,8 @@ void tp_consumer_registry_close(tp_consumer_registry_t *registry)
     for (i = 0; i < registry->capacity; i++)
     {
         tp_consumer_entry_t *entry = &registry->entries[i];
-        if (entry->descriptor_publication)
-        {
-            aeron_publication_close(entry->descriptor_publication, NULL, NULL);
-            entry->descriptor_publication = NULL;
-        }
-        if (entry->control_publication)
-        {
-            aeron_publication_close(entry->control_publication, NULL, NULL);
-            entry->control_publication = NULL;
-        }
+        tp_publication_close(&entry->descriptor_publication);
+        tp_publication_close(&entry->control_publication);
     }
 
     aeron_free(registry->entries);
@@ -247,16 +240,8 @@ int tp_consumer_registry_sweep(tp_consumer_registry_t *registry, uint64_t now_ns
 
         if (now_ns - entry->last_seen_ns > stale_ns)
         {
-            if (entry->descriptor_publication)
-            {
-                aeron_publication_close(entry->descriptor_publication, NULL, NULL);
-                entry->descriptor_publication = NULL;
-            }
-            if (entry->control_publication)
-            {
-                aeron_publication_close(entry->control_publication, NULL, NULL);
-                entry->control_publication = NULL;
-            }
+            tp_publication_close(&entry->descriptor_publication);
+            tp_publication_close(&entry->control_publication);
             entry->in_use = false;
             cleaned++;
         }

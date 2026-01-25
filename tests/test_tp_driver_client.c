@@ -1001,7 +1001,6 @@ static void test_driver_client_init_errors(void)
 
     base.context.base.control_stream_id = 1000;
     snprintf(base.context.base.control_channel, sizeof(base.context.base.control_channel), "aeron:ipc");
-    base.control_subscription = NULL;
     assert(tp_driver_client_init(&client, &base) < 0);
 
     result = 0;

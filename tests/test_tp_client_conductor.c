@@ -33,6 +33,18 @@ static int tp_test_driver_active(const char *aeron_dir)
     return heartbeat > 0 && age_ms <= 1000;
 }
 
+static int tp_test_poller(void *clientd, int fragment_limit)
+{
+    int *count = (int *)clientd;
+
+    (void)fragment_limit;
+    if (count)
+    {
+        (*count)++;
+    }
+    return 1;
+}
+
 static void test_client_conductor_lifecycle(void)
 {
     tp_context_t context;
@@ -83,6 +95,25 @@ static void test_client_conductor_lifecycle(void)
         goto cleanup;
     }
 
+    {
+        int poll_count = 0;
+        if (tp_client_conductor_register_poller(&conductor, tp_test_poller, &poll_count, 1) != 0)
+        {
+            goto cleanup;
+        }
+        if (tp_client_conductor_do_work(&conductor) < 0)
+        {
+            tp_client_conductor_unregister_poller(&conductor, tp_test_poller, &poll_count);
+            goto cleanup;
+        }
+        if (poll_count <= 0)
+        {
+            tp_client_conductor_unregister_poller(&conductor, tp_test_poller, &poll_count);
+            goto cleanup;
+        }
+        tp_client_conductor_unregister_poller(&conductor, tp_test_poller, &poll_count);
+    }
+
     if (tp_client_conductor_do_work(&conductor) < 0)
     {
         goto cleanup;
@@ -109,14 +140,14 @@ static void test_client_conductor_errors(void)
     assert(tp_client_conductor_set_idle_sleep_duration_ns(NULL, 1) < 0);
     assert(tp_client_conductor_async_add_publication(NULL, NULL, "aeron:ipc", 1) < 0);
     {
-        aeron_async_add_publication_t *async = NULL;
+        tp_async_add_publication_t *async = NULL;
         assert(tp_client_conductor_async_add_publication(&async, NULL, "aeron:ipc", 1) < 0);
     }
     assert(tp_client_conductor_async_add_publication_poll(NULL, NULL) < 0);
-    assert(tp_client_conductor_async_add_subscription(NULL, NULL, "aeron:ipc", 1, NULL, NULL, NULL, NULL) < 0);
+    assert(tp_client_conductor_async_add_subscription(NULL, NULL, "aeron:ipc", 1) < 0);
     {
-        aeron_async_add_subscription_t *async = NULL;
-        assert(tp_client_conductor_async_add_subscription(&async, NULL, "aeron:ipc", 1, NULL, NULL, NULL, NULL) < 0);
+        tp_async_add_subscription_t *async = NULL;
+        assert(tp_client_conductor_async_add_subscription(&async, NULL, "aeron:ipc", 1) < 0);
     }
     assert(tp_client_conductor_async_add_subscription_poll(NULL, NULL) < 0);
 

@@ -6,17 +6,18 @@
 #include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tp_aeron_wrap.h"
 
 int tp_producer_publish_descriptor_to(
     tp_producer_t *producer,
-    aeron_publication_t *publication,
+    tp_publication_t *publication,
     uint64_t seq,
     uint64_t timestamp_ns,
     uint32_t meta_version,
     uint64_t trace_id);
 int tp_producer_publish_progress_to(
     tp_producer_t *producer,
-    aeron_publication_t *publication,
+    tp_publication_t *publication,
     uint64_t seq,
     uint64_t payload_bytes_filled,
     tp_progress_state_t state);
@@ -25,9 +26,9 @@ static int tp_consumer_manager_add_publication(
     tp_producer_t *producer,
     const char *channel,
     int32_t stream_id,
-    aeron_publication_t **out_pub)
+    tp_publication_t **out_pub)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (NULL == producer || NULL == producer->client || NULL == out_pub || NULL == channel || stream_id < 0)
     {
@@ -195,8 +196,7 @@ int tp_consumer_manager_handle_hello(
     }
     else if (entry->descriptor_publication)
     {
-        aeron_publication_close(entry->descriptor_publication, NULL, NULL);
-        entry->descriptor_publication = NULL;
+        tp_publication_close(&entry->descriptor_publication);
     }
 
     if (request.control_requested)
@@ -221,8 +221,7 @@ int tp_consumer_manager_handle_hello(
     }
     else if (entry->control_publication)
     {
-        aeron_publication_close(entry->control_publication, NULL, NULL);
-        entry->control_publication = NULL;
+        tp_publication_close(&entry->control_publication);
     }
 
     memset(&config, 0, sizeof(config));
@@ -363,7 +362,7 @@ int tp_consumer_manager_publish_descriptor(
     uint64_t trace_id)
 {
     tp_consumer_entry_t *entry;
-    aeron_publication_t *publication = NULL;
+    tp_publication_t *publication = NULL;
 
     if (NULL == manager || NULL == manager->producer)
     {
@@ -398,7 +397,7 @@ int tp_consumer_manager_publish_progress(
     tp_progress_state_t state)
 {
     tp_consumer_entry_t *entry;
-    aeron_publication_t *publication = NULL;
+    tp_publication_t *publication = NULL;
 
     if (NULL == manager || NULL == manager->producer)
     {

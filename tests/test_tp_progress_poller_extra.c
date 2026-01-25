@@ -1,5 +1,6 @@
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_progress_poller.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/frameProgress.h"
 #include "wire/tensor_pool/messageHeader.h"
@@ -102,6 +103,7 @@ void tp_test_progress_poller_monotonic_capacity(void)
     tp_progress_poller_t poller;
     tp_progress_handlers_t handlers;
     tp_consumer_t consumer;
+    tp_subscription_t *subscription = NULL;
     uint8_t buffer[128];
     uint32_t stream_id = 1;
     uint64_t epoch = 1;
@@ -117,7 +119,12 @@ void tp_test_progress_poller_monotonic_capacity(void)
     handlers.on_progress = tp_on_progress_count;
     handlers.clientd = &count;
 
-    if (tp_progress_poller_init_with_subscription(&poller, (aeron_subscription_t *)0x1, &handlers) < 0)
+    if (tp_subscription_wrap(&subscription, (aeron_subscription_t *)0x1) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_progress_poller_init_with_subscription(&poller, subscription, &handlers) < 0)
     {
         goto cleanup;
     }
@@ -147,11 +154,8 @@ void tp_test_progress_poller_monotonic_capacity(void)
     result = 0;
 
 cleanup:
-    if (poller.assembler)
-    {
-        aeron_fragment_assembler_delete(poller.assembler);
-        poller.assembler = NULL;
-    }
+    tp_subscription_close(&subscription);
+    tp_fragment_assembler_close(&poller.assembler);
     free(poller.tracker);
     assert(result == 0);
 }

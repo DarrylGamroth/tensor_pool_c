@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_aeron_wrap.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -83,13 +84,13 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
     }
 }
 
-static int wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+static int wait_for_subscription(tp_client_t *client, tp_subscription_t *subscription)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_subscription_is_connected(subscription))
+        if (aeron_subscription_is_connected(tp_subscription_handle(subscription)))
         {
             return 0;
         }

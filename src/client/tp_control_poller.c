@@ -6,6 +6,7 @@
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_merge_map.h"
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 
 static void tp_control_poller_handle_meta(
     tp_control_poller_t *poller,
@@ -158,7 +159,7 @@ void tp_control_poller_handle_fragment(tp_control_poller_t *poller, const uint8_
 
 int tp_control_poller_init(tp_control_poller_t *poller, tp_client_t *client, const tp_control_handlers_t *handlers)
 {
-    if (NULL == poller || NULL == client || NULL == client->control_subscription)
+    if (NULL == poller || NULL == client || NULL == tp_client_control_subscription(client))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_control_poller_init: invalid input");
         return -1;
@@ -171,7 +172,7 @@ int tp_control_poller_init(tp_control_poller_t *poller, tp_client_t *client, con
         poller->handlers = *handlers;
     }
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_control_poller_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_control_poller_handler, poller) < 0)
     {
         return -1;
     }
@@ -181,15 +182,16 @@ int tp_control_poller_init(tp_control_poller_t *poller, tp_client_t *client, con
 
 int tp_control_poll(tp_control_poller_t *poller, int fragment_limit)
 {
-    if (NULL == poller || NULL == poller->assembler || NULL == poller->client || NULL == poller->client->control_subscription)
+    if (NULL == poller || NULL == poller->assembler || NULL == poller->client ||
+        NULL == tp_client_control_subscription(poller->client))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_control_poll: poller not initialized");
         return -1;
     }
 
     return aeron_subscription_poll(
-        poller->client->control_subscription,
+        tp_subscription_handle(tp_client_control_subscription(poller->client)),
         aeron_fragment_assembler_handler,
-        poller->assembler,
+        tp_fragment_assembler_handle(poller->assembler),
         fragment_limit);
 }

@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/mode.h"
@@ -42,7 +43,12 @@ int tp_qos_publish_producer(tp_producer_t *producer, uint64_t current_seq, uint3
     tensor_pool_qosProducer_set_currentSeq(&qos, current_seq);
     tensor_pool_qosProducer_set_watermark(&qos, watermark);
 
-    result = aeron_publication_offer(producer->qos_publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(producer->qos_publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -92,7 +98,12 @@ int tp_qos_publish_consumer(
     tensor_pool_qosConsumer_set_dropsLate(&qos, drops_late);
     tensor_pool_qosConsumer_set_mode(&qos, (enum tensor_pool_mode)mode);
 
-    result = aeron_publication_offer(consumer->qos_publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(consumer->qos_publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -196,7 +207,7 @@ void tp_qos_poller_handle_fragment(tp_qos_poller_t *poller, const uint8_t *buffe
 
 int tp_qos_poller_init(tp_qos_poller_t *poller, tp_client_t *client, const tp_qos_handlers_t *handlers)
 {
-    if (NULL == poller || NULL == client || NULL == client->qos_subscription)
+    if (NULL == poller || NULL == client || NULL == tp_client_qos_subscription(client))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_qos_poller_init: invalid input");
         return -1;
@@ -209,7 +220,7 @@ int tp_qos_poller_init(tp_qos_poller_t *poller, tp_client_t *client, const tp_qo
         poller->handlers = *handlers;
     }
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_qos_poller_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_qos_poller_handler, poller) < 0)
     {
         return -1;
     }
@@ -219,15 +230,16 @@ int tp_qos_poller_init(tp_qos_poller_t *poller, tp_client_t *client, const tp_qo
 
 int tp_qos_poll(tp_qos_poller_t *poller, int fragment_limit)
 {
-    if (NULL == poller || NULL == poller->assembler || NULL == poller->client || NULL == poller->client->qos_subscription)
+    if (NULL == poller || NULL == poller->assembler || NULL == poller->client ||
+        NULL == tp_client_qos_subscription(poller->client))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_qos_poll: poller not initialized");
         return -1;
     }
 
     return aeron_subscription_poll(
-        poller->client->qos_subscription,
+        tp_subscription_handle(tp_client_qos_subscription(poller->client)),
         aeron_fragment_assembler_handler,
-        poller->assembler,
+        tp_fragment_assembler_handle(poller->assembler),
         fragment_limit);
 }

@@ -8,7 +8,7 @@
 #include "tensor_pool/tp_merge_map.h"
 #include "tensor_pool/tp_tracelink.h"
 
-#include "aeron_fragment_assembler.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
@@ -844,12 +844,12 @@ int main(int argc, char **argv)
     tp_listen_state_t state;
     tp_client_context_t context;
     tp_client_t client;
-    aeron_subscription_t *control_subscription = NULL;
-    aeron_subscription_t *metadata_subscription = NULL;
-    aeron_subscription_t *qos_subscription = NULL;
-    aeron_fragment_assembler_t *control_assembler = NULL;
-    aeron_fragment_assembler_t *metadata_assembler = NULL;
-    aeron_fragment_assembler_t *qos_assembler = NULL;
+    tp_subscription_t *control_subscription = NULL;
+    tp_subscription_t *metadata_subscription = NULL;
+    tp_subscription_t *qos_subscription = NULL;
+    tp_fragment_assembler_t *control_assembler = NULL;
+    tp_fragment_assembler_t *metadata_assembler = NULL;
+    tp_fragment_assembler_t *qos_assembler = NULL;
     int arg_index = 1;
 
     memset(&state, 0, sizeof(state));
@@ -923,9 +923,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    control_subscription = client.control_subscription;
-    metadata_subscription = client.metadata_subscription;
-    qos_subscription = client.qos_subscription;
+    control_subscription = tp_client_control_subscription(&client);
+    metadata_subscription = tp_client_metadata_subscription(&client);
+    qos_subscription = tp_client_qos_subscription(&client);
 
     if (NULL == control_subscription || NULL == metadata_subscription || NULL == qos_subscription)
     {
@@ -934,35 +934,26 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (aeron_fragment_assembler_create(&control_assembler, tp_on_control_fragment, &state) < 0)
+    if (tp_fragment_assembler_create(&control_assembler, tp_on_control_fragment, &state) < 0)
     {
         fprintf(stderr, "Fragment assembler failed: %s\n", tp_errmsg());
-        aeron_subscription_close(qos_subscription, NULL, NULL);
-        aeron_subscription_close(metadata_subscription, NULL, NULL);
-        aeron_subscription_close(control_subscription, NULL, NULL);
         tp_client_close(&client);
         return 1;
     }
 
-    if (aeron_fragment_assembler_create(&metadata_assembler, tp_on_metadata_fragment, &state) < 0)
+    if (tp_fragment_assembler_create(&metadata_assembler, tp_on_metadata_fragment, &state) < 0)
     {
         fprintf(stderr, "Metadata assembler failed: %s\n", tp_errmsg());
-        aeron_fragment_assembler_delete(control_assembler);
-        aeron_subscription_close(qos_subscription, NULL, NULL);
-        aeron_subscription_close(metadata_subscription, NULL, NULL);
-        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_fragment_assembler_close(&control_assembler);
         tp_client_close(&client);
         return 1;
     }
 
-    if (aeron_fragment_assembler_create(&qos_assembler, tp_on_qos_fragment, &state) < 0)
+    if (tp_fragment_assembler_create(&qos_assembler, tp_on_qos_fragment, &state) < 0)
     {
         fprintf(stderr, "QoS assembler failed: %s\n", tp_errmsg());
-        aeron_fragment_assembler_delete(metadata_assembler);
-        aeron_fragment_assembler_delete(control_assembler);
-        aeron_subscription_close(qos_subscription, NULL, NULL);
-        aeron_subscription_close(metadata_subscription, NULL, NULL);
-        aeron_subscription_close(control_subscription, NULL, NULL);
+        tp_fragment_assembler_close(&metadata_assembler);
+        tp_fragment_assembler_close(&control_assembler);
         tp_client_close(&client);
         return 1;
     }
@@ -978,21 +969,33 @@ int main(int argc, char **argv)
     {
         int fragments;
 
-        fragments = aeron_subscription_poll(control_subscription, aeron_fragment_assembler_handler, control_assembler, 10);
+        fragments = aeron_subscription_poll(
+            tp_subscription_handle(control_subscription),
+            aeron_fragment_assembler_handler,
+            tp_fragment_assembler_handle(control_assembler),
+            10);
         if (fragments < 0)
         {
             fprintf(stderr, "Control poll failed: %d\n", fragments);
             break;
         }
 
-        fragments = aeron_subscription_poll(metadata_subscription, aeron_fragment_assembler_handler, metadata_assembler, 10);
+        fragments = aeron_subscription_poll(
+            tp_subscription_handle(metadata_subscription),
+            aeron_fragment_assembler_handler,
+            tp_fragment_assembler_handle(metadata_assembler),
+            10);
         if (fragments < 0)
         {
             fprintf(stderr, "Metadata poll failed: %d\n", fragments);
             break;
         }
 
-        fragments = aeron_subscription_poll(qos_subscription, aeron_fragment_assembler_handler, qos_assembler, 10);
+        fragments = aeron_subscription_poll(
+            tp_subscription_handle(qos_subscription),
+            aeron_fragment_assembler_handler,
+            tp_fragment_assembler_handle(qos_assembler),
+            10);
         if (fragments < 0)
         {
             fprintf(stderr, "QoS poll failed: %d\n", fragments);
@@ -1008,9 +1011,9 @@ int main(int argc, char **argv)
         }
     }
 
-    aeron_fragment_assembler_delete(qos_assembler);
-    aeron_fragment_assembler_delete(metadata_assembler);
-    aeron_fragment_assembler_delete(control_assembler);
+    tp_fragment_assembler_close(&qos_assembler);
+    tp_fragment_assembler_close(&metadata_assembler);
+    tp_fragment_assembler_close(&control_assembler);
     if (state.raw_out)
     {
         fclose(state.raw_out);

@@ -1,17 +1,6 @@
-#ifndef TENSOR_POOL_TP_CLOCK_H
-#define TENSOR_POOL_TP_CLOCK_H
+#ifndef TENSOR_POOL_tp_clock_h
+#define TENSOR_POOL_tp_clock_h
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-int64_t tp_clock_now_ns(void);
-int64_t tp_clock_now_realtime_ns(void);
-
-#ifdef __cplusplus
-}
-#endif
+#include "tensor_pool/common/tp_clock.h"
 
 #endif

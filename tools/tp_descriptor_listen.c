@@ -5,7 +5,7 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_error.h"
 
-#include "aeron_fragment_assembler.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/messageHeader.h"
@@ -109,7 +109,7 @@ static void tp_dump_raw_fragment(
     }
 }
 
-static void tp_log_subscription_status(tp_listen_state_t *state, aeron_subscription_t *subscription)
+static void tp_log_subscription_status(tp_listen_state_t *state, tp_subscription_t *subscription)
 {
     int image_count;
     int64_t status;
@@ -119,8 +119,8 @@ static void tp_log_subscription_status(tp_listen_state_t *state, aeron_subscript
         return;
     }
 
-    image_count = aeron_subscription_image_count(subscription);
-    status = aeron_subscription_channel_status(subscription);
+    image_count = aeron_subscription_image_count(tp_subscription_handle(subscription));
+    status = aeron_subscription_channel_status(tp_subscription_handle(subscription));
     if (image_count != state->last_images || status != state->last_status)
     {
         fprintf(stderr, "Descriptor subscription images=%d channel_status=%" PRId64 "\n", image_count, status);
@@ -128,7 +128,7 @@ static void tp_log_subscription_status(tp_listen_state_t *state, aeron_subscript
         state->last_status = status;
     }
 
-    if (!state->connected && aeron_subscription_is_connected(subscription))
+    if (!state->connected && aeron_subscription_is_connected(tp_subscription_handle(subscription)))
     {
         fprintf(stderr, "Descriptor subscription connected\n");
         state->connected = 1;
@@ -223,10 +223,10 @@ int main(int argc, char **argv)
     tp_listen_state_t state;
     tp_client_context_t context;
     tp_client_t client;
-    aeron_subscription_t *descriptor_subscription = NULL;
-    aeron_fragment_assembler_t *assembler = NULL;
+    tp_subscription_t *descriptor_subscription = NULL;
+    tp_fragment_assembler_t *assembler = NULL;
     int arg_index = 1;
-    aeron_async_add_subscription_t *async_add = NULL;
+    tp_async_add_subscription_t *async_add = NULL;
 
     memset(&state, 0, sizeof(state));
     state.last_images = -1;
@@ -304,10 +304,6 @@ int main(int argc, char **argv)
         &client,
         channel,
         descriptor_stream_id,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
         &async_add) < 0)
     {
         fprintf(stderr, "Descriptor subscription add failed: %s\n", tp_errmsg());
@@ -326,10 +322,10 @@ int main(int argc, char **argv)
         tp_client_do_work(&client);
     }
 
-    if (aeron_fragment_assembler_create(&assembler, tp_on_descriptor_fragment, &state) < 0)
+    if (tp_fragment_assembler_create(&assembler, tp_on_descriptor_fragment, &state) < 0)
     {
         fprintf(stderr, "Fragment assembler failed: %s\n", tp_errmsg());
-        aeron_subscription_close(descriptor_subscription, NULL, NULL);
+        tp_subscription_close(&descriptor_subscription);
         tp_client_close(&client);
         return 1;
     }
@@ -341,9 +337,9 @@ int main(int argc, char **argv)
     while (tp_running)
     {
         int fragments = aeron_subscription_poll(
-            descriptor_subscription,
+            tp_subscription_handle(descriptor_subscription),
             aeron_fragment_assembler_handler,
-            assembler,
+            tp_fragment_assembler_handle(assembler),
             10);
 
         if (fragments < 0)
@@ -363,8 +359,8 @@ int main(int argc, char **argv)
         }
     }
 
-    aeron_fragment_assembler_delete(assembler);
-    aeron_subscription_close(descriptor_subscription, NULL, NULL);
+    tp_fragment_assembler_close(&assembler);
+    tp_subscription_close(&descriptor_subscription);
     if (state.raw_out)
     {
         fclose(state.raw_out);

@@ -12,6 +12,7 @@
 #include "wire/tensor_pool/shmRegionSuperblock.h"
 
 #include "aeronc.h"
+#include "tp_aeron_wrap.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -86,13 +87,13 @@ static void tp_test_write_superblock(
     assert(pwrite(fd, buffer, sizeof(buffer), 0) == (ssize_t)sizeof(buffer));
 }
 
-static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+static int tp_test_wait_for_publication(tp_client_t *client, tp_publication_t *publication)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(publication))
+        if (aeron_publication_is_connected(tp_publication_handle(publication)))
         {
             return 0;
         }
@@ -106,13 +107,13 @@ static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t
     return -1;
 }
 
-static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+static int tp_test_wait_for_subscription(tp_client_t *client, tp_subscription_t *subscription)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_subscription_is_connected(subscription))
+        if (aeron_subscription_is_connected(tp_subscription_handle(subscription)))
         {
             return 0;
         }

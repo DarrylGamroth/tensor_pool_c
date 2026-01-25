@@ -7,6 +7,7 @@
 #include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_trace.h"
 #include "tensor_pool/tp_tracelink.h"
+#include "tp_aeron_wrap.h"
 
 #include "trace/tensor_pool/messageHeader.h"
 #include "trace/tensor_pool/traceLinkSet.h"
@@ -567,13 +568,13 @@ static int tp_test_driver_active(const char *aeron_dir)
     return heartbeat > 0 && age_ms <= 1000;
 }
 
-static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+static int tp_test_wait_for_publication(tp_client_t *client, tp_publication_t *publication)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(publication))
+        if (aeron_publication_is_connected(tp_publication_handle(publication)))
         {
             return 0;
         }
@@ -587,13 +588,13 @@ static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t
     return -1;
 }
 
-static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+static int tp_test_wait_for_subscription(tp_client_t *client, tp_subscription_t *subscription)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_subscription_is_connected(subscription))
+        if (aeron_subscription_is_connected(tp_subscription_handle(subscription)))
         {
             return 0;
         }
@@ -607,9 +608,9 @@ static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription
     return -1;
 }
 
-static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, aeron_publication_t **out)
+static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, tp_publication_t **out)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (tp_client_async_add_publication(client, channel, stream_id, &async_add) < 0)
     {
@@ -634,6 +635,7 @@ static void test_tracelink_send_errors(void)
     tp_producer_t producer;
     tp_tracelink_set_t set;
     uint64_t parent = 101;
+    tp_publication_t *publication = NULL;
     int result = -1;
 
     memset(&producer, 0, sizeof(producer));
@@ -649,7 +651,11 @@ static void test_tracelink_send_errors(void)
     assert(tp_producer_send_tracelink_set(NULL, NULL) < 0);
     assert(tp_producer_send_tracelink_set(&producer, &set) < 0);
 
-    producer.control_publication = (aeron_publication_t *)0x1;
+    if (tp_publication_wrap(&publication, (aeron_publication_t *)0x1) < 0)
+    {
+        goto cleanup;
+    }
+    producer.control_publication = publication;
     producer.stream_id = 10;
     producer.epoch = 20;
     assert(tp_producer_send_tracelink_set(&producer, NULL) < 0);
@@ -660,6 +666,8 @@ static void test_tracelink_send_errors(void)
 
     result = 0;
 
+cleanup:
+    tp_publication_close(&publication);
     assert(result == 0);
 }
 
@@ -720,7 +728,7 @@ static void test_tracelink_send(void)
     tp_client_context_t ctx;
     tp_client_t client;
     tp_producer_t producer;
-    aeron_publication_t *control_pub = NULL;
+    tp_publication_t *control_pub = NULL;
     uint64_t parents[80];
     tp_tracelink_set_t set;
     const char *aeron_dir = getenv("AERON_DIR");
@@ -760,7 +768,7 @@ static void test_tracelink_send(void)
     }
 
     if (tp_test_wait_for_publication(&client, control_pub) < 0 ||
-        tp_test_wait_for_subscription(&client, client.control_subscription) < 0)
+        tp_test_wait_for_subscription(&client, tp_client_control_subscription(&client)) < 0)
     {
         goto cleanup;
     }
@@ -802,10 +810,7 @@ static void test_tracelink_send(void)
     result = 0;
 
 cleanup:
-    if (control_pub)
-    {
-        aeron_publication_close(control_pub, NULL, NULL);
-    }
+    tp_publication_close(&control_pub);
     tp_client_close(&client);
     assert(result == 0);
 }

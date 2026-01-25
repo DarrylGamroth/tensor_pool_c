@@ -1,11 +1,23 @@
 #include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_client_conductor.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/tp_metadata_poller.h"
+#include "tensor_pool/tp_qos.h"
+#include "tp_aeron_wrap.h"
+
+enum { TP_CLIENT_DEFAULT_FRAGMENT_LIMIT = 10 };
+
+static int tp_client_poll_control(void *clientd, int fragment_limit);
+static int tp_client_poll_metadata(void *clientd, int fragment_limit);
+static int tp_client_poll_qos(void *clientd, int fragment_limit);
 
 static int tp_client_copy_context(tp_client_context_t *dst, const tp_client_context_t *src)
 {
@@ -48,7 +60,7 @@ void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir)
     tp_context_set_aeron_dir(&ctx->base, dir);
 }
 
-void tp_client_context_set_aeron(tp_client_context_t *ctx, aeron_t *aeron)
+void tp_client_context_set_aeron(tp_client_context_t *ctx, void *aeron)
 {
     if (NULL == ctx)
     {
@@ -244,10 +256,11 @@ static int tp_client_add_subscription(
     tp_client_t *client,
     const char *channel,
     int32_t stream_id,
-    aeron_subscription_t **out_sub)
+    tp_client_subscription_kind_t kind)
 {
-    aeron_async_add_subscription_t *async_add = NULL;
+    tp_async_add_subscription_t *async_add = NULL;
     int idle_count = 0;
+    tp_subscription_t *subscription = NULL;
 
     if (NULL == channel || stream_id < 0)
     {
@@ -258,30 +271,25 @@ static int tp_client_add_subscription(
         client,
         channel,
         stream_id,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
         &async_add) < 0)
     {
         return -1;
     }
 
-    *out_sub = NULL;
-    while (NULL == *out_sub)
+    while (NULL == subscription)
     {
-        if (tp_client_async_add_subscription_poll(out_sub, async_add) < 0)
+        if (tp_client_async_add_subscription_poll(&subscription, async_add) < 0)
         {
             return -1;
         }
-        tp_client_do_work(client);
+        tp_client_conductor_do_work(client->conductor);
         if (++idle_count > 1000)
         {
             idle_count = 0;
         }
     }
 
-    return 0;
+    return tp_client_conductor_set_subscription(client->conductor, kind, subscription);
 }
 
 int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
@@ -309,10 +317,17 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
         return -1;
     }
 
+    client->conductor = (tp_client_conductor_t *)calloc(1, sizeof(*client->conductor));
+    if (NULL == client->conductor)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_client_init: conductor alloc failed");
+        goto cleanup;
+    }
+
     if (NULL != ctx->aeron)
     {
         if (tp_client_conductor_init_with_aeron(
-            &client->conductor,
+            client->conductor,
             ctx->aeron,
             ctx->use_agent_invoker,
             ctx->owns_aeron_client) < 0)
@@ -322,7 +337,7 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
     }
     else
     {
-        if (tp_client_conductor_init_with_client_context(&client->conductor, ctx) < 0)
+        if (tp_client_conductor_init_with_client_context(client->conductor, ctx) < 0)
         {
             goto cleanup;
         }
@@ -334,6 +349,12 @@ cleanup:
     if (result < 0)
     {
         tp_context_clear_allowed_paths(&client->context.base);
+        if (client->conductor)
+        {
+            tp_client_conductor_close(client->conductor);
+            free(client->conductor);
+            client->conductor = NULL;
+        }
     }
     return result;
 }
@@ -346,7 +367,7 @@ int tp_client_start(tp_client_t *client)
         return -1;
     }
 
-    if (tp_client_conductor_start(&client->conductor) < 0)
+    if (tp_client_conductor_start(client->conductor) < 0)
     {
         return -1;
     }
@@ -355,7 +376,7 @@ int tp_client_start(tp_client_t *client)
         client,
         client->context.base.control_channel,
         client->context.base.control_stream_id,
-        &client->control_subscription) < 0)
+        TP_CLIENT_SUB_CONTROL) < 0)
     {
         return -1;
     }
@@ -369,7 +390,7 @@ int tp_client_start(tp_client_t *client)
             client,
             client->context.base.announce_channel,
             client->context.base.announce_stream_id,
-            &client->announce_subscription) < 0)
+            TP_CLIENT_SUB_ANNOUNCE) < 0)
         {
             return -1;
         }
@@ -379,7 +400,7 @@ int tp_client_start(tp_client_t *client)
         client,
         client->context.base.qos_channel,
         client->context.base.qos_stream_id,
-        &client->qos_subscription) < 0)
+        TP_CLIENT_SUB_QOS) < 0)
     {
         return -1;
     }
@@ -388,7 +409,16 @@ int tp_client_start(tp_client_t *client)
         client,
         client->context.base.metadata_channel,
         client->context.base.metadata_stream_id,
-        &client->metadata_subscription) < 0)
+        TP_CLIENT_SUB_METADATA) < 0)
+    {
+        return -1;
+    }
+
+    if (tp_client_add_subscription(
+        client,
+        client->context.base.descriptor_channel,
+        client->context.base.descriptor_stream_id,
+        TP_CLIENT_SUB_DESCRIPTOR) < 0)
     {
         return -1;
     }
@@ -412,7 +442,7 @@ int tp_client_do_work(tp_client_t *client)
         client->context.delegating_invoker(client->context.delegating_invoker_clientd);
     }
 
-    int work = tp_client_conductor_do_work(&client->conductor);
+    int work = tp_client_conductor_do_work(client->conductor);
     if (work < 0)
     {
         return -1;
@@ -466,34 +496,282 @@ int tp_client_close(tp_client_t *client)
         return -1;
     }
 
-    if (NULL != client->control_subscription)
+    if (client->control_poller_registered)
     {
-        aeron_subscription_close(client->control_subscription, NULL, NULL);
-        client->control_subscription = NULL;
+        tp_client_unregister_poller(client, tp_client_poll_control, client);
+        client->control_poller_registered = false;
+    }
+    if (client->metadata_poller_registered)
+    {
+        tp_client_unregister_poller(client, tp_client_poll_metadata, client);
+        client->metadata_poller_registered = false;
+    }
+    if (client->qos_poller_registered)
+    {
+        tp_client_unregister_poller(client, tp_client_poll_qos, client);
+        client->qos_poller_registered = false;
     }
 
-    if (NULL != client->announce_subscription)
+    if (client->control_poller)
     {
-        aeron_subscription_close(client->announce_subscription, NULL, NULL);
-        client->announce_subscription = NULL;
+        tp_control_poller_t *poller = (tp_control_poller_t *)client->control_poller;
+        tp_fragment_assembler_close(&poller->assembler);
+        free(poller);
+        client->control_poller = NULL;
     }
-
-    if (NULL != client->qos_subscription)
+    if (client->metadata_poller)
     {
-        aeron_subscription_close(client->qos_subscription, NULL, NULL);
-        client->qos_subscription = NULL;
+        tp_metadata_poller_t *poller = (tp_metadata_poller_t *)client->metadata_poller;
+        tp_fragment_assembler_close(&poller->assembler);
+        free(poller);
+        client->metadata_poller = NULL;
     }
-
-    if (NULL != client->metadata_subscription)
+    if (client->qos_poller)
     {
-        aeron_subscription_close(client->metadata_subscription, NULL, NULL);
-        client->metadata_subscription = NULL;
+        tp_qos_poller_t *poller = (tp_qos_poller_t *)client->qos_poller;
+        tp_fragment_assembler_close(&poller->assembler);
+        free(poller);
+        client->qos_poller = NULL;
     }
 
     client->driver_clients = NULL;
 
     tp_context_clear_allowed_paths(&client->context.base);
-    return tp_client_conductor_close(&client->conductor);
+    if (client->conductor)
+    {
+        tp_client_conductor_close(client->conductor);
+        free(client->conductor);
+        client->conductor = NULL;
+    }
+
+    return 0;
+}
+
+tp_subscription_t *tp_client_control_subscription(tp_client_t *client)
+{
+    if (NULL == client || NULL == client->conductor)
+    {
+        return NULL;
+    }
+
+    return tp_client_conductor_get_subscription(client->conductor, TP_CLIENT_SUB_CONTROL);
+}
+
+tp_subscription_t *tp_client_announce_subscription(tp_client_t *client)
+{
+    if (NULL == client || NULL == client->conductor)
+    {
+        return NULL;
+    }
+
+    return tp_client_conductor_get_subscription(client->conductor, TP_CLIENT_SUB_ANNOUNCE);
+}
+
+tp_subscription_t *tp_client_qos_subscription(tp_client_t *client)
+{
+    if (NULL == client || NULL == client->conductor)
+    {
+        return NULL;
+    }
+
+    return tp_client_conductor_get_subscription(client->conductor, TP_CLIENT_SUB_QOS);
+}
+
+tp_subscription_t *tp_client_metadata_subscription(tp_client_t *client)
+{
+    if (NULL == client || NULL == client->conductor)
+    {
+        return NULL;
+    }
+
+    return tp_client_conductor_get_subscription(client->conductor, TP_CLIENT_SUB_METADATA);
+}
+
+tp_subscription_t *tp_client_descriptor_subscription(tp_client_t *client)
+{
+    if (NULL == client || NULL == client->conductor)
+    {
+        return NULL;
+    }
+
+    return tp_client_conductor_get_subscription(client->conductor, TP_CLIENT_SUB_DESCRIPTOR);
+}
+
+static int tp_client_poll_control(void *clientd, int fragment_limit)
+{
+    tp_client_t *client = (tp_client_t *)clientd;
+    tp_control_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == client->control_poller)
+    {
+        return 0;
+    }
+
+    poller = (tp_control_poller_t *)client->control_poller;
+    return tp_control_poll(poller, fragment_limit);
+}
+
+static int tp_client_poll_metadata(void *clientd, int fragment_limit)
+{
+    tp_client_t *client = (tp_client_t *)clientd;
+    tp_metadata_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == client->metadata_poller)
+    {
+        return 0;
+    }
+
+    poller = (tp_metadata_poller_t *)client->metadata_poller;
+    return tp_metadata_poll(poller, fragment_limit);
+}
+
+static int tp_client_poll_qos(void *clientd, int fragment_limit)
+{
+    tp_client_t *client = (tp_client_t *)clientd;
+    tp_qos_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == client->qos_poller)
+    {
+        return 0;
+    }
+
+    poller = (tp_qos_poller_t *)client->qos_poller;
+    return tp_qos_poll(poller, fragment_limit);
+}
+
+int tp_client_set_control_handlers(tp_client_t *client, const tp_control_handlers_t *handlers, int fragment_limit)
+{
+    tp_control_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == handlers || fragment_limit <= 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_set_control_handlers: invalid input");
+        return -1;
+    }
+
+    if (NULL == client->control_poller)
+    {
+        poller = (tp_control_poller_t *)calloc(1, sizeof(*poller));
+        if (NULL == poller)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_client_set_control_handlers: alloc failed");
+            return -1;
+        }
+        if (tp_control_poller_init(poller, client, handlers) < 0)
+        {
+            free(poller);
+            return -1;
+        }
+        client->control_poller = poller;
+    }
+    else
+    {
+        poller = (tp_control_poller_t *)client->control_poller;
+        poller->handlers = *handlers;
+    }
+
+    if (client->control_poller_registered)
+    {
+        tp_client_unregister_poller(client, tp_client_poll_control, client);
+        client->control_poller_registered = false;
+    }
+
+    if (tp_client_register_poller(client, tp_client_poll_control, client, fragment_limit) < 0)
+    {
+        return -1;
+    }
+    client->control_poller_registered = true;
+    return 0;
+}
+
+int tp_client_set_metadata_handlers(tp_client_t *client, const tp_metadata_handlers_t *handlers, int fragment_limit)
+{
+    tp_metadata_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == handlers || fragment_limit <= 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_set_metadata_handlers: invalid input");
+        return -1;
+    }
+
+    if (NULL == client->metadata_poller)
+    {
+        poller = (tp_metadata_poller_t *)calloc(1, sizeof(*poller));
+        if (NULL == poller)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_client_set_metadata_handlers: alloc failed");
+            return -1;
+        }
+        if (tp_metadata_poller_init(poller, client, handlers) < 0)
+        {
+            free(poller);
+            return -1;
+        }
+        client->metadata_poller = poller;
+    }
+    else
+    {
+        poller = (tp_metadata_poller_t *)client->metadata_poller;
+        poller->handlers = *handlers;
+    }
+
+    if (client->metadata_poller_registered)
+    {
+        tp_client_unregister_poller(client, tp_client_poll_metadata, client);
+        client->metadata_poller_registered = false;
+    }
+
+    if (tp_client_register_poller(client, tp_client_poll_metadata, client, fragment_limit) < 0)
+    {
+        return -1;
+    }
+    client->metadata_poller_registered = true;
+    return 0;
+}
+
+int tp_client_set_qos_handlers(tp_client_t *client, const tp_qos_handlers_t *handlers, int fragment_limit)
+{
+    tp_qos_poller_t *poller = NULL;
+
+    if (NULL == client || NULL == handlers || fragment_limit <= 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_set_qos_handlers: invalid input");
+        return -1;
+    }
+
+    if (NULL == client->qos_poller)
+    {
+        poller = (tp_qos_poller_t *)calloc(1, sizeof(*poller));
+        if (NULL == poller)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_client_set_qos_handlers: alloc failed");
+            return -1;
+        }
+        if (tp_qos_poller_init(poller, client, handlers) < 0)
+        {
+            free(poller);
+            return -1;
+        }
+        client->qos_poller = poller;
+    }
+    else
+    {
+        poller = (tp_qos_poller_t *)client->qos_poller;
+        poller->handlers = *handlers;
+    }
+
+    if (client->qos_poller_registered)
+    {
+        tp_client_unregister_poller(client, tp_client_poll_qos, client);
+        client->qos_poller_registered = false;
+    }
+
+    if (tp_client_register_poller(client, tp_client_poll_qos, client, fragment_limit) < 0)
+    {
+        return -1;
+    }
+    client->qos_poller_registered = true;
+    return 0;
 }
 
 int tp_client_register_driver_client(tp_client_t *client, tp_driver_client_t *driver)
@@ -555,11 +833,33 @@ int tp_client_unregister_driver_client(tp_client_t *client, tp_driver_client_t *
     return -1;
 }
 
+int tp_client_register_poller(tp_client_t *client, tp_client_poller_t poller, void *clientd, int fragment_limit)
+{
+    if (NULL == client || NULL == poller)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_register_poller: invalid input");
+        return -1;
+    }
+
+    return tp_client_conductor_register_poller(client->conductor, poller, clientd, fragment_limit);
+}
+
+int tp_client_unregister_poller(tp_client_t *client, tp_client_poller_t poller, void *clientd)
+{
+    if (NULL == client || NULL == poller)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_unregister_poller: invalid input");
+        return -1;
+    }
+
+    return tp_client_conductor_unregister_poller(client->conductor, poller, clientd);
+}
+
 int tp_client_async_add_publication(
     tp_client_t *client,
     const char *channel,
     int32_t stream_id,
-    aeron_async_add_publication_t **out)
+    tp_async_add_publication_t **out)
 {
     if (NULL == client || NULL == channel || NULL == out)
     {
@@ -567,12 +867,12 @@ int tp_client_async_add_publication(
         return -1;
     }
 
-    return tp_client_conductor_async_add_publication(out, &client->conductor, channel, stream_id);
+    return tp_client_conductor_async_add_publication(out, client->conductor, channel, stream_id);
 }
 
 int tp_client_async_add_publication_poll(
-    aeron_publication_t **publication,
-    aeron_async_add_publication_t *async_add)
+    tp_publication_t **publication,
+    tp_async_add_publication_t *async_add)
 {
     return tp_client_conductor_async_add_publication_poll(publication, async_add);
 }
@@ -581,11 +881,7 @@ int tp_client_async_add_subscription(
     tp_client_t *client,
     const char *channel,
     int32_t stream_id,
-    aeron_on_available_image_t on_available,
-    void *available_clientd,
-    aeron_on_unavailable_image_t on_unavailable,
-    void *unavailable_clientd,
-    aeron_async_add_subscription_t **out)
+    tp_async_add_subscription_t **out)
 {
     if (NULL == client || NULL == channel || NULL == out)
     {
@@ -593,20 +889,12 @@ int tp_client_async_add_subscription(
         return -1;
     }
 
-    return tp_client_conductor_async_add_subscription(
-        out,
-        &client->conductor,
-        channel,
-        stream_id,
-        on_available,
-        available_clientd,
-        on_unavailable,
-        unavailable_clientd);
+    return tp_client_conductor_async_add_subscription(out, client->conductor, channel, stream_id);
 }
 
 int tp_client_async_add_subscription_poll(
-    aeron_subscription_t **subscription,
-    aeron_async_add_subscription_t *async_add)
+    tp_subscription_t **subscription,
+    tp_async_add_subscription_t *async_add)
 {
     return tp_client_conductor_async_add_subscription_poll(subscription, async_add);
 }

@@ -67,66 +67,70 @@ if (AERON_TARGET STREQUAL "")
 endif ()
 
 set(TP_PUBLIC_HEADERS
-    include/tensor_pool/tp_aeron.h
     include/tensor_pool/tp.h
-    include/tensor_pool/tp_client.h
-    include/tensor_pool/tp_client_conductor.h
-    include/tensor_pool/tp_consumer.h
-    include/tensor_pool/tp_consumer_manager.h
-    include/tensor_pool/tp_consumer_registry.h
-    include/tensor_pool/tp_context.h
-    include/tensor_pool/tp_control.h
-    include/tensor_pool/tp_control_adapter.h
-    include/tensor_pool/tp_control_poller.h
-    include/tensor_pool/tp_discovery_client.h
-    include/tensor_pool/tp_driver_client.h
-    include/tensor_pool/tp_error.h
-    include/tensor_pool/tp_join_barrier.h
-    include/tensor_pool/tp_log.h
-    include/tensor_pool/tp_merge_map.h
-    include/tensor_pool/tp_metadata_poller.h
-    include/tensor_pool/tp_producer.h
-    include/tensor_pool/tp_progress_poller.h
-    include/tensor_pool/tp_qos.h
-    include/tensor_pool/tp_seqlock.h
-    include/tensor_pool/tp_shm.h
-    include/tensor_pool/tp_slot.h
-    include/tensor_pool/tp_trace.h
-    include/tensor_pool/tp_tracelink.h
-    include/tensor_pool/tp_tensor.h
-    include/tensor_pool/tp_types.h
-    include/tensor_pool/tp_uri.h
-    include/tensor_pool/tp_version.h
+    include/tensor_pool/common/tp_clock.h
+    include/tensor_pool/common/tp_context.h
+    include/tensor_pool/common/tp_error.h
+    include/tensor_pool/common/tp_handles.h
+    include/tensor_pool/common/tp_join_barrier.h
+    include/tensor_pool/common/tp_log.h
+    include/tensor_pool/common/tp_merge_map.h
+    include/tensor_pool/common/tp_seqlock.h
+    include/tensor_pool/common/tp_shm.h
+    include/tensor_pool/common/tp_slot.h
+    include/tensor_pool/common/tp_tensor.h
+    include/tensor_pool/common/tp_trace.h
+    include/tensor_pool/common/tp_tracelink.h
+    include/tensor_pool/common/tp_types.h
+    include/tensor_pool/common/tp_uri.h
+    include/tensor_pool/common/tp_version.h
+    include/tensor_pool/client/tp_aeron.h
+    include/tensor_pool/client/tp_client.h
+    include/tensor_pool/client/tp_client_conductor.h
+    include/tensor_pool/client/tp_consumer.h
+    include/tensor_pool/client/tp_consumer_manager.h
+    include/tensor_pool/client/tp_consumer_registry.h
+    include/tensor_pool/client/tp_control.h
+    include/tensor_pool/client/tp_control_adapter.h
+    include/tensor_pool/client/tp_control_poller.h
+    include/tensor_pool/client/tp_discovery_client.h
+    include/tensor_pool/client/tp_driver_client.h
+    include/tensor_pool/client/tp_metadata_poller.h
+    include/tensor_pool/client/tp_producer.h
+    include/tensor_pool/client/tp_progress_poller.h
+    include/tensor_pool/client/tp_qos.h
 )
 
 set(TP_SOURCES
-    src/tp_aeron.c
-    src/tp_client.c
-    src/tp_client_conductor.c
-    src/tp_clock.c
-    src/tp_consumer.c
-    src/tp_consumer_manager.c
-    src/tp_consumer_registry.c
-    src/tp_context.c
-    src/tp_control.c
-    src/tp_control_adapter.c
-    src/tp_control_poller.c
-    src/tp_discovery_client.c
-    src/tp_driver_client.c
-    src/tp_join_barrier.c
-    src/tp_log.c
-    src/tp_merge_map.c
-    src/tp_metadata_poller.c
-    src/tp_producer.c
-    src/tp_progress_poller.c
-    src/tp_qos.c
-    src/tp_shm.c
-    src/tp_slot.c
-    src/tp_trace.c
-    src/tp_tracelink.c
-    src/tp_tensor.c
-    src/tp_uri.c
-    src/tp_version.c
+    src/common/tp_aeron.c
+    src/common/tp_aeron_wrap.c
+    src/common/tp_clock.c
+    src/common/tp_context.c
+    src/common/tp_join_barrier.c
+    src/common/tp_log.c
+    src/common/tp_merge_map.c
+    src/common/tp_mpsc_queue.c
+    src/common/tp_shm.c
+    src/common/tp_slot.c
+    src/common/tp_tensor.c
+    src/common/tp_trace.c
+    src/common/tp_tracelink.c
+    src/common/tp_uri.c
+    src/common/tp_version.c
+    src/client/tp_client.c
+    src/client/tp_client_conductor.c
+    src/client/tp_consumer.c
+    src/client/tp_consumer_manager.c
+    src/client/tp_consumer_registry.c
+    src/client/tp_control.c
+    src/client/tp_control_adapter.c
+    src/client/tp_control_poller.c
+    src/client/tp_discovery_client.c
+    src/client/tp_driver_client.c
+    src/client/tp_metadata_poller.c
+    src/client/tp_producer.c
+    src/client/tp_progress_poller.c
+    src/client/tp_qos.c
 )
 
 if (TP_ENABLE_SBE_CODEGEN)
@@ -257,6 +261,8 @@ endif ()
 target_include_directories(tensor_pool
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+    PRIVATE
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/src/common>"
 )
 
 target_link_libraries(tensor_pool PUBLIC ${AERON_TARGET})
@@ -306,6 +312,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_shm_security.c
     tests/test_tp_consumer_apply.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
+target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/common")
 target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
 target_compile_definitions(tensor_pool PRIVATE TP_TESTING=1)
 if (TARGET aeron::aeron_driver_static)
@@ -364,14 +371,23 @@ target_link_libraries(tp_example_producer_nodriver PRIVATE tensor_pool)
 target_link_libraries(tp_example_consumer_driver PRIVATE tensor_pool)
 target_link_libraries(tp_example_consumer_nodriver PRIVATE tensor_pool)
 target_link_libraries(tp_example_join_barrier PRIVATE tensor_pool)
+set(TP_INTERNAL_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/src/common")
+target_include_directories(tp_example_producer_driver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+target_include_directories(tp_example_producer_nodriver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+target_include_directories(tp_example_consumer_driver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+target_include_directories(tp_example_consumer_nodriver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+target_include_directories(tp_example_join_barrier PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 add_executable(tp_control_listen tools/tp_control_listen.c)
 target_link_libraries(tp_control_listen PRIVATE tensor_pool)
 add_executable(tp_descriptor_listen tools/tp_descriptor_listen.c)
 target_link_libraries(tp_descriptor_listen PRIVATE tensor_pool)
+target_include_directories(tp_control_listen PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
+target_include_directories(tp_descriptor_listen PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 add_executable(tp_example_bgapi tools/tp_example_bgapi.c)
 target_link_libraries(tp_example_bgapi PRIVATE tensor_pool)
+target_include_directories(tp_example_bgapi PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 
 add_executable(tp_shm_create tools/tp_shm_create.c)
 target_link_libraries(tp_shm_create PRIVATE tensor_pool)

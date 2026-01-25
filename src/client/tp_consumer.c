@@ -27,6 +27,10 @@
 #include "wire/tensor_pool/frameDescriptor.h"
 #include "wire/tensor_pool/tensorHeader.h"
 
+enum { TP_CONSUMER_DEFAULT_FRAGMENT_LIMIT = 10 };
+
+static int tp_consumer_poll_dispatch(void *clientd, int fragment_limit);
+
 static tp_consumer_pool_t *tp_consumer_find_pool(tp_consumer_t *consumer, uint16_t pool_id)
 {
     size_t i;
@@ -436,7 +440,7 @@ static int tp_consumer_add_subscription(
     tp_consumer_t *consumer,
     const char *channel,
     int32_t stream_id,
-    aeron_subscription_t **out_sub);
+    tp_subscription_t **out_sub);
 
 static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
 {
@@ -896,7 +900,18 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx)
     ctx->hello.progress_bytes_delta = TP_NULL_U32;
     ctx->hello.progress_major_delta_units = TP_NULL_U32;
     ctx->driver_request.desired_node_id = TP_NULL_U32;
+    ctx->use_conductor_polling = true;
     return 0;
+}
+
+void tp_consumer_context_set_use_conductor_polling(tp_consumer_context_t *ctx, bool enabled)
+{
+    if (NULL == ctx)
+    {
+        return;
+    }
+
+    ctx->use_conductor_polling = enabled;
 }
 
 int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *context)
@@ -957,6 +972,19 @@ int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_cons
         }
     }
 
+    if (consumer->context.use_conductor_polling && consumer->client)
+    {
+        if (tp_client_register_poller(
+            consumer->client,
+            tp_consumer_poll_dispatch,
+            consumer,
+            TP_CONSUMER_DEFAULT_FRAGMENT_LIMIT) < 0)
+        {
+            return -1;
+        }
+        consumer->conductor_poll_registered = true;
+    }
+
     return 0;
 }
 
@@ -969,6 +997,44 @@ void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descri
 
     consumer->descriptor_handler = handler;
     consumer->descriptor_clientd = clientd;
+}
+
+static int tp_consumer_poll_descriptors_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client);
+static int tp_consumer_poll_control_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client);
+
+static int tp_consumer_poll_dispatch(void *clientd, int fragment_limit)
+{
+    tp_consumer_t *consumer = (tp_consumer_t *)clientd;
+    int total = 0;
+    int work;
+
+    if (NULL == consumer)
+    {
+        return 0;
+    }
+
+    work = tp_consumer_poll_control_internal(consumer, fragment_limit, false);
+    if (work < 0)
+    {
+        return -1;
+    }
+    total += work;
+
+    work = tp_consumer_poll_descriptors_internal(consumer, fragment_limit, false);
+    if (work < 0)
+    {
+        return -1;
+    }
+    total += work;
+
+    work = tp_consumer_poll_progress(consumer, fragment_limit);
+    if (work < 0)
+    {
+        return -1;
+    }
+    total += work;
+
+    return total;
 }
 
 int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_handler_t handler, void *clientd)
@@ -1022,6 +1088,10 @@ int tp_consumer_poll_progress(tp_consumer_t *consumer, int fragment_limit)
     if (consumer->control_subscription)
     {
         consumer->progress_poller.subscription = consumer->control_subscription;
+    }
+    else if (consumer->client)
+    {
+        consumer->progress_poller.subscription = tp_client_control_subscription(consumer->client);
     }
     else
     {
@@ -1591,7 +1661,7 @@ int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_g
     return 0;
 }
 
-int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
+static int tp_consumer_poll_descriptors_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client)
 {
     if (NULL == consumer || NULL == consumer->descriptor_subscription)
     {
@@ -1621,18 +1691,27 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
 
     tp_consumer_check_activity_liveness(consumer, (uint64_t)tp_clock_now_ns());
     tp_consumer_check_pid_liveness(consumer);
-    tp_client_do_work(consumer->client);
+    if (drive_client)
+    {
+        tp_client_do_work(consumer->client);
+    }
     return fragments;
 }
 
-int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
+int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
+{
+    return tp_consumer_poll_descriptors_internal(consumer, fragment_limit, true);
+}
+
+static int tp_consumer_poll_control_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client)
 {
     uint64_t now_ns;
     int fragments = 0;
     int polled;
 
     if (NULL == consumer || NULL == consumer->client ||
-        (NULL == consumer->client->control_subscription && NULL == consumer->client->announce_subscription))
+        (NULL == tp_client_control_subscription(consumer->client) &&
+            NULL == tp_client_announce_subscription(consumer->client)))
     {
         return 0;
     }
@@ -1648,10 +1727,10 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
         }
     }
 
-    if (consumer->client->control_subscription)
+    if (tp_client_control_subscription(consumer->client))
     {
         polled = aeron_subscription_poll(
-            tp_subscription_handle(consumer->client->control_subscription),
+            tp_subscription_handle(tp_client_control_subscription(consumer->client)),
             aeron_fragment_assembler_handler,
             tp_fragment_assembler_handle(consumer->control_assembler),
             fragment_limit);
@@ -1662,10 +1741,10 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
         fragments += polled;
     }
 
-    if (consumer->client->announce_subscription)
+    if (tp_client_announce_subscription(consumer->client))
     {
         polled = aeron_subscription_poll(
-            tp_subscription_handle(consumer->client->announce_subscription),
+            tp_subscription_handle(tp_client_announce_subscription(consumer->client)),
             aeron_fragment_assembler_handler,
             tp_fragment_assembler_handle(consumer->control_assembler),
             fragment_limit);
@@ -1696,8 +1775,16 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     tp_consumer_check_activity_liveness(consumer, now_ns);
     tp_consumer_check_pid_liveness(consumer);
 
-    tp_client_do_work(consumer->client);
+    if (drive_client)
+    {
+        tp_client_do_work(consumer->client);
+    }
     return fragments;
+}
+
+int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
+{
+    return tp_consumer_poll_control_internal(consumer, fragment_limit, true);
 }
 
 const char *tp_consumer_payload_fallback_uri(const tp_consumer_t *consumer)
@@ -1727,46 +1814,22 @@ int tp_consumer_close(tp_consumer_t *consumer)
         return -1;
     }
 
-    if (consumer->descriptor_subscription)
+    if (consumer->conductor_poll_registered && consumer->client)
     {
-        aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
-        consumer->descriptor_subscription = NULL;
+        tp_client_unregister_poller(consumer->client, tp_consumer_poll_dispatch, consumer);
+        consumer->conductor_poll_registered = false;
     }
 
-    if (consumer->control_subscription)
-    {
-        aeron_subscription_close(consumer->control_subscription, NULL, NULL);
-        consumer->control_subscription = NULL;
-    }
+    tp_subscription_close(&consumer->descriptor_subscription);
+    tp_subscription_close(&consumer->control_subscription);
+    tp_publication_close(&consumer->control_publication);
+    tp_publication_close(&consumer->qos_publication);
+    tp_fragment_assembler_close(&consumer->descriptor_assembler);
+    tp_fragment_assembler_close(&consumer->control_assembler);
 
-    if (consumer->control_publication)
+    if (consumer->progress_poller_initialized)
     {
-        aeron_publication_close(consumer->control_publication, NULL, NULL);
-        consumer->control_publication = NULL;
-    }
-
-    if (consumer->qos_publication)
-    {
-        aeron_publication_close(consumer->qos_publication, NULL, NULL);
-        consumer->qos_publication = NULL;
-    }
-
-    if (consumer->descriptor_assembler)
-    {
-        aeron_fragment_assembler_delete(consumer->descriptor_assembler);
-        consumer->descriptor_assembler = NULL;
-    }
-
-    if (consumer->control_assembler)
-    {
-        aeron_fragment_assembler_delete(consumer->control_assembler);
-        consumer->control_assembler = NULL;
-    }
-
-    if (consumer->progress_poller_initialized && consumer->progress_poller.assembler)
-    {
-        aeron_fragment_assembler_delete(consumer->progress_poller.assembler);
-        consumer->progress_poller.assembler = NULL;
+        tp_fragment_assembler_close(&consumer->progress_poller.assembler);
         consumer->progress_poller_initialized = false;
     }
     if (consumer->progress_poller.tracker)

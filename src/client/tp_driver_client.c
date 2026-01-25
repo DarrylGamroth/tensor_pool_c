@@ -11,13 +11,13 @@
 #include <unistd.h>
 #include <string.h>
 #include "aeron_alloc.h"
-#include "aeron_fragment_assembler.h"
 #include "aeron_agent.h"
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_log.h"
 #include "tensor_pool/tp_types.h"
+#include "tp_aeron_wrap.h"
 
 #include "driver/tensor_pool/messageHeader.h"
 #include "driver/tensor_pool/shmAttachRequest.h"
@@ -137,11 +137,11 @@ uint32_t tp_driver_next_client_id(void)
         {
             seed32 = 1;
         }
-        uint32_t expected = 0;
+        uint_fast32_t expected = 0;
         (void)atomic_compare_exchange_weak_explicit(
             &tp_driver_client_id_counter,
             &expected,
-            seed32,
+            (uint_fast32_t)seed32,
             memory_order_release,
             memory_order_relaxed);
     }
@@ -804,7 +804,7 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
 
     memset(client, 0, sizeof(*client));
     client->client = base;
-    client->subscription = base->control_subscription;
+    client->subscription = tp_client_control_subscription(base);
 
     if (base->context.base.control_channel[0] == '\0' || base->context.base.control_stream_id < 0)
     {
@@ -818,7 +818,7 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
         return -1;
     }
 
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (tp_client_async_add_publication(
         base,
@@ -840,8 +840,7 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
 
     if (tp_client_register_driver_client(base, client) < 0)
     {
-        aeron_publication_close(client->publication, NULL, NULL);
-        client->publication = NULL;
+        tp_publication_close(&client->publication);
         return -1;
     }
 
@@ -855,11 +854,7 @@ int tp_driver_client_close(tp_driver_client_t *client)
         return -1;
     }
 
-    if (client->publication)
-    {
-        aeron_publication_close(client->publication, NULL, NULL);
-        client->publication = NULL;
-    }
+    tp_publication_close(&client->publication);
 
     if (client->registered && client->client)
     {
@@ -938,16 +933,16 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 
     if (NULL == async->assembler)
     {
-        if (aeron_fragment_assembler_create(&async->assembler, tp_driver_async_attach_handler, async) < 0)
+        if (tp_fragment_assembler_create(&async->assembler, tp_driver_async_attach_handler, async) < 0)
         {
             return -1;
         }
     }
 
     fragments = aeron_subscription_poll(
-        async->client->subscription,
+        tp_subscription_handle(async->client->subscription),
         aeron_fragment_assembler_handler,
-        async->assembler,
+        tp_fragment_assembler_handle(async->assembler),
         10);
 
     if (fragments < 0)
@@ -970,11 +965,7 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
         async->done = 0;
         async->sent = 0;
         async->last_send_ns = tp_clock_now_ns();
-        if (async->assembler)
-        {
-            aeron_fragment_assembler_delete(async->assembler);
-            async->assembler = NULL;
-        }
+        tp_fragment_assembler_close(&async->assembler);
         return 0;
     }
 
@@ -987,11 +978,7 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
         }
     }
 
-    if (async->assembler)
-    {
-        aeron_fragment_assembler_delete(async->assembler);
-        async->assembler = NULL;
-    }
+    tp_fragment_assembler_close(&async->assembler);
 
     return 1;
 }
@@ -1045,16 +1032,16 @@ int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out
 
     if (NULL == async->assembler)
     {
-        if (aeron_fragment_assembler_create(&async->assembler, tp_driver_async_detach_handler, async) < 0)
+        if (tp_fragment_assembler_create(&async->assembler, tp_driver_async_detach_handler, async) < 0)
         {
             return -1;
         }
     }
 
     fragments = aeron_subscription_poll(
-        async->client->subscription,
+        tp_subscription_handle(async->client->subscription),
         aeron_fragment_assembler_handler,
-        async->assembler,
+        tp_fragment_assembler_handle(async->assembler),
         10);
 
     if (fragments < 0)
@@ -1068,11 +1055,7 @@ int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out
     }
 
     *out = async->response;
-    if (async->assembler)
-    {
-        aeron_fragment_assembler_delete(async->assembler);
-        async->assembler = NULL;
-    }
+    tp_fragment_assembler_close(&async->assembler);
     return 1;
 }
 
@@ -1142,7 +1125,12 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
             request->desired_node_id == TP_NULL_U32 ? 0U : request->desired_node_id);
     }
 
-    result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(client->publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         if (log)
@@ -1168,7 +1156,7 @@ static int tp_driver_client_ready(tp_driver_client_t *client)
         return -1;
     }
 
-    if (!aeron_publication_is_connected(client->publication))
+    if (!aeron_publication_is_connected(tp_publication_handle(client->publication)))
     {
         if (client->client)
         {
@@ -1176,7 +1164,7 @@ static int tp_driver_client_ready(tp_driver_client_t *client)
         }
         return 0;
     }
-    if (!aeron_subscription_is_connected(client->subscription))
+    if (!aeron_subscription_is_connected(tp_subscription_handle(client->subscription)))
     {
         if (client->client)
         {
@@ -1270,7 +1258,7 @@ int tp_driver_attach(
         while (!ctx.done)
         {
             int fragments = aeron_subscription_poll(
-                client->subscription,
+                tp_subscription_handle(client->subscription),
                 aeron_fragment_assembler_handler,
                 assembler,
                 10);
@@ -1372,7 +1360,12 @@ int tp_driver_keepalive(tp_driver_client_t *client, uint64_t timestamp_ns)
     tensor_pool_shmLeaseKeepalive_set_role(&keepalive, client->role);
     tensor_pool_shmLeaseKeepalive_set_clientTimestampNs(&keepalive, timestamp_ns);
 
-    result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(client->publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -1424,7 +1417,12 @@ int tp_driver_detach(tp_driver_client_t *client, int64_t correlation_id, uint64_
     tensor_pool_shmDetachRequest_set_clientId(&detach, client_id);
     tensor_pool_shmDetachRequest_set_role(&detach, role);
 
-    result = aeron_publication_offer(client->publication, buffer, header_len + body_len, NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(client->publication),
+        buffer,
+        header_len + body_len,
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -1514,7 +1512,7 @@ int tp_driver_event_poller_init(
         poller->handlers = *handlers;
     }
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_driver_event_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_driver_event_handler, poller) < 0)
     {
         return -1;
     }
@@ -1529,11 +1527,7 @@ int tp_driver_event_poller_close(tp_driver_event_poller_t *poller)
         return -1;
     }
 
-    if (poller->assembler)
-    {
-        aeron_fragment_assembler_delete(poller->assembler);
-        poller->assembler = NULL;
-    }
+    tp_fragment_assembler_close(&poller->assembler);
 
     poller->subscription = NULL;
     return 0;
@@ -1548,9 +1542,9 @@ int tp_driver_event_poll(tp_driver_event_poller_t *poller, int fragment_limit)
     }
 
     return aeron_subscription_poll(
-        poller->subscription,
+        tp_subscription_handle(poller->subscription),
         aeron_fragment_assembler_handler,
-        poller->assembler,
+        tp_fragment_assembler_handle(poller->assembler),
         fragment_limit);
 }
 

@@ -7,6 +7,7 @@
 #include "tensor_pool/tp_discovery_client.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tp_aeron_wrap.h"
 
 #include "discovery/tensor_pool/messageHeader.h"
 #include "discovery/tensor_pool/discoveryResponse.h"
@@ -47,13 +48,13 @@ static int tp_test_driver_active(const char *aeron_dir)
     return heartbeat > 0 && age_ms <= 1000;
 }
 
-static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+static int tp_test_wait_for_publication(tp_client_t *client, tp_publication_t *publication)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(publication))
+        if (aeron_publication_is_connected(tp_publication_handle(publication)))
         {
             return 0;
         }
@@ -67,13 +68,13 @@ static int tp_test_wait_for_publication(tp_client_t *client, aeron_publication_t
     return -1;
 }
 
-static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription_t *subscription)
+static int tp_test_wait_for_subscription(tp_client_t *client, tp_subscription_t *subscription)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_subscription_is_connected(subscription))
+        if (aeron_subscription_is_connected(tp_subscription_handle(subscription)))
         {
             return 0;
         }
@@ -87,9 +88,9 @@ static int tp_test_wait_for_subscription(tp_client_t *client, aeron_subscription
     return -1;
 }
 
-static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, aeron_publication_t **out)
+static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, tp_publication_t **out)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (tp_client_async_add_publication(client, channel, stream_id, &async_add) < 0)
     {
@@ -109,11 +110,11 @@ static int tp_test_add_publication(tp_client_t *client, const char *channel, int
     return 0;
 }
 
-static int tp_test_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, aeron_subscription_t **out)
+static int tp_test_add_subscription(tp_client_t *client, const char *channel, int32_t stream_id, tp_subscription_t **out)
 {
-    aeron_async_add_subscription_t *async_add = NULL;
+    tp_async_add_subscription_t *async_add = NULL;
 
-    if (tp_client_async_add_subscription(client, channel, stream_id, NULL, NULL, NULL, NULL, &async_add) < 0)
+    if (tp_client_async_add_subscription(client, channel, stream_id, &async_add) < 0)
     {
         return -1;
     }
@@ -131,13 +132,13 @@ static int tp_test_add_subscription(tp_client_t *client, const char *channel, in
     return 0;
 }
 
-static int tp_test_offer(tp_client_t *client, aeron_publication_t *publication, const uint8_t *buffer, size_t length)
+static int tp_test_offer(tp_client_t *client, tp_publication_t *publication, const uint8_t *buffer, size_t length)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        int64_t result = aeron_publication_offer(publication, buffer, length, NULL, NULL);
+        int64_t result = aeron_publication_offer(tp_publication_handle(publication), buffer, length, NULL, NULL);
         if (result >= 0)
         {
             return 0;
@@ -306,8 +307,8 @@ void tp_test_discovery_client_live(void)
     tp_discovery_handlers_t handlers;
     tp_discovery_poller_t poller;
     tp_discovery_test_state_t state;
-    aeron_subscription_t *request_sub = NULL;
-    aeron_publication_t *response_pub = NULL;
+    tp_subscription_t *request_sub = NULL;
+    tp_publication_t *response_pub = NULL;
     uint8_t buffer[2048];
     const char *aeron_dir = getenv("AERON_DIR");
     int64_t deadline;
@@ -473,16 +474,15 @@ cleanup:
     tp_discovery_response_close(&response);
     if (poller.assembler)
     {
-        aeron_fragment_assembler_delete(poller.assembler);
-        poller.assembler = NULL;
+        tp_fragment_assembler_close(&poller.assembler);
     }
     if (response_pub)
     {
-        aeron_publication_close(response_pub, NULL, NULL);
+        tp_publication_close(&response_pub);
     }
     if (request_sub)
     {
-        aeron_subscription_close(request_sub, NULL, NULL);
+        tp_subscription_close(&request_sub);
     }
     tp_discovery_client_close(&discovery);
     tp_client_close(&client);

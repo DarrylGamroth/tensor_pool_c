@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp.h"
 #include "tensor_pool/tp_consumer_manager.h"
+#include "tp_aeron_wrap.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -41,7 +42,7 @@ static void drive_keepalives(tp_client_t *client)
     }
 }
 
-static void log_publication_status(const char *label, aeron_publication_t *publication)
+static void log_publication_status(const char *label, tp_publication_t *publication)
 {
     if (NULL == publication)
     {
@@ -52,10 +53,10 @@ static void log_publication_status(const char *label, aeron_publication_t *publi
     fprintf(stderr,
         "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
         label,
-        aeron_publication_channel(publication),
-        aeron_publication_stream_id(publication),
-        aeron_publication_channel_status(publication),
-        aeron_publication_is_connected(publication) ? 1 : 0);
+        aeron_publication_channel(tp_publication_handle(publication)),
+        aeron_publication_stream_id(tp_publication_handle(publication)),
+        aeron_publication_channel_status(tp_publication_handle(publication)),
+        aeron_publication_is_connected(tp_publication_handle(publication)) ? 1 : 0);
 }
 
 typedef enum tp_example_pattern_stct
@@ -142,7 +143,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
     deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
     while ((uint64_t)tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(producer->descriptor_publication))
+        if (aeron_publication_is_connected(tp_publication_handle(producer->descriptor_publication)))
         {
             fprintf(stderr, "Descriptor publication connected\n");
             return;

@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_aeron_wrap.h"
 
 #include <inttypes.h>
 #include <errno.h>
@@ -116,7 +117,7 @@ static void on_error(void *clientd, int errcode, const char *message)
 
 static void log_subscription_status(
     const char *label,
-    aeron_subscription_t *subscription,
+    tp_subscription_t *subscription,
     int *last_images,
     int64_t *last_status)
 {
@@ -128,8 +129,8 @@ static void log_subscription_status(
         return;
     }
 
-    image_count = aeron_subscription_image_count(subscription);
-    status = aeron_subscription_channel_status(subscription);
+    image_count = aeron_subscription_image_count(tp_subscription_handle(subscription));
+    status = aeron_subscription_channel_status(tp_subscription_handle(subscription));
     if (image_count != *last_images || status != *last_status)
     {
         fprintf(stderr, "%s images=%d channel_status=%" PRId64 "\n", label, image_count, status);
@@ -138,7 +139,7 @@ static void log_subscription_status(
     }
 }
 
-static void log_publication_status(const char *label, aeron_publication_t *publication)
+static void log_publication_status(const char *label, tp_publication_t *publication)
 {
     if (NULL == publication)
     {
@@ -149,10 +150,10 @@ static void log_publication_status(const char *label, aeron_publication_t *publi
     fprintf(stderr,
         "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
         label,
-        aeron_publication_channel(publication),
-        aeron_publication_stream_id(publication),
-        aeron_publication_channel_status(publication),
-        aeron_publication_is_connected(publication) ? 1 : 0);
+        aeron_publication_channel(tp_publication_handle(publication)),
+        aeron_publication_stream_id(tp_publication_handle(publication)),
+        aeron_publication_channel_status(tp_publication_handle(publication)),
+        aeron_publication_is_connected(tp_publication_handle(publication)) ? 1 : 0);
 }
 
 static void tp_example_detach_driver(tp_driver_client_t *driver)
@@ -257,8 +258,8 @@ int main(int argc, char **argv)
     int64_t attach_timeout_ns = 2 * 1000 * 1000 * 1000LL;
     const char *request_desc_channel = NULL;
     const char *request_ctrl_channel = NULL;
-    aeron_subscription_t *last_descriptor_subscription = NULL;
-    aeron_subscription_t *last_control_subscription = NULL;
+    tp_subscription_t *last_descriptor_subscription = NULL;
+    tp_subscription_t *last_control_subscription = NULL;
     int desc_assigned = 0;
     int ctrl_assigned = 0;
     uint64_t max_wait_ns = 0;
@@ -655,13 +656,13 @@ int main(int argc, char **argv)
             ctrl_assigned = 1;
         }
         if (!descriptor_connected && consumer.descriptor_subscription &&
-            aeron_subscription_is_connected(consumer.descriptor_subscription))
+            aeron_subscription_is_connected(tp_subscription_handle(consumer.descriptor_subscription)))
         {
             descriptor_connected = 1;
             fprintf(stderr, "Descriptor subscription connected\n");
         }
-        if (!control_connected && client.control_subscription &&
-            aeron_subscription_is_connected(client.control_subscription))
+        if (!control_connected && tp_client_control_subscription(&client) &&
+            aeron_subscription_is_connected(tp_subscription_handle(tp_client_control_subscription(&client))))
         {
             control_connected = 1;
             fprintf(stderr, "Control subscription connected\n");
@@ -673,7 +674,7 @@ int main(int argc, char **argv)
             &desc_status);
         log_subscription_status(
             "Control subscription",
-            client.control_subscription,
+            tp_client_control_subscription(&client),
             &ctrl_images,
             &ctrl_status);
         if (state.received >= state.limit)

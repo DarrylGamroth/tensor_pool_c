@@ -5,10 +5,10 @@
 #include <string.h>
 
 #include "aeron_agent.h"
-#include "aeron_subscription.h"
 
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/shmPoolAnnounce.h"
 #include "wire/tensor_pool/consumerConfig.h"
@@ -1022,12 +1022,14 @@ static void tp_control_fragment_handler(void *clientd, const uint8_t *buffer, si
 
 int tp_control_subscription_init(
     tp_control_subscription_t *control,
-    aeron_t *aeron,
+    void *aeron,
     const char *channel,
     int32_t stream_id,
     const tp_control_adapter_t *adapter)
 {
     aeron_async_add_subscription_t *async_add = NULL;
+    aeron_subscription_t *raw_sub = NULL;
+    aeron_t *aeron_client = NULL;
 
     if (NULL == control || NULL == aeron || NULL == channel || NULL == adapter)
     {
@@ -1038,9 +1040,10 @@ int tp_control_subscription_init(
     memset(control, 0, sizeof(*control));
     control->adapter = *adapter;
 
+    aeron_client = (aeron_t *)aeron;
     if (aeron_async_add_subscription(
         &async_add,
-        aeron,
+        aeron_client,
         channel,
         stream_id,
         NULL,
@@ -1053,17 +1056,21 @@ int tp_control_subscription_init(
 
     while (NULL == control->subscription)
     {
-        if (aeron_async_add_subscription_poll(&control->subscription, async_add) < 0)
+        if (aeron_async_add_subscription_poll(&raw_sub, async_add) < 0)
         {
+            return -1;
+        }
+        if (raw_sub && tp_subscription_wrap(&control->subscription, raw_sub) < 0)
+        {
+            aeron_subscription_close(raw_sub, NULL, NULL);
             return -1;
         }
         aeron_idle_strategy_sleeping_idle(NULL, 0);
     }
 
-    if (aeron_fragment_assembler_create(&control->assembler, tp_control_fragment_handler, control) < 0)
+    if (tp_fragment_assembler_create(&control->assembler, tp_control_fragment_handler, control) < 0)
     {
-        aeron_subscription_close(control->subscription, NULL, NULL);
-        control->subscription = NULL;
+        tp_subscription_close(&control->subscription);
         return -1;
     }
 
@@ -1077,17 +1084,8 @@ int tp_control_subscription_close(tp_control_subscription_t *control)
         return -1;
     }
 
-    if (control->subscription)
-    {
-        aeron_subscription_close(control->subscription, NULL, NULL);
-        control->subscription = NULL;
-    }
-
-    if (control->assembler)
-    {
-        aeron_fragment_assembler_delete(control->assembler);
-        control->assembler = NULL;
-    }
+    tp_subscription_close(&control->subscription);
+    tp_fragment_assembler_close(&control->assembler);
 
     return 0;
 }
@@ -1101,8 +1099,8 @@ int tp_control_subscription_poll(tp_control_subscription_t *control, int fragmen
     }
 
     return aeron_subscription_poll(
-        control->subscription,
+        tp_subscription_handle(control->subscription),
         aeron_fragment_assembler_handler,
-        control->assembler,
+        tp_fragment_assembler_handle(control->assembler),
         fragment_limit);
 }

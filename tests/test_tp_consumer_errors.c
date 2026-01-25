@@ -3,6 +3,7 @@
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_slot.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/slotHeader.h"
@@ -382,11 +383,17 @@ static void test_consumer_hello_request_validation(void)
 {
     tp_consumer_t consumer;
     tp_consumer_hello_t hello;
+    tp_publication_t *publication = NULL;
+    int result = -1;
 
     memset(&consumer, 0, sizeof(consumer));
     memset(&hello, 0, sizeof(hello));
 
-    consumer.control_publication = (aeron_publication_t *)0x1;
+    if (tp_publication_wrap(&publication, (aeron_publication_t *)0x1) < 0)
+    {
+        goto cleanup;
+    }
+    consumer.control_publication = publication;
 
     hello.stream_id = 1;
     hello.consumer_id = 2;
@@ -408,6 +415,12 @@ static void test_consumer_hello_request_validation(void)
     hello.control_channel = "";
     hello.control_stream_id = 42;
     assert(tp_consumer_send_hello(&consumer, &hello) < 0);
+
+    result = 0;
+
+cleanup:
+    tp_publication_close(&publication);
+    assert(result == 0);
 }
 
 void tp_test_consumer_errors(void)

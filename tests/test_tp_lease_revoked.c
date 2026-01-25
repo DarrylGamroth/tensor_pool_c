@@ -9,6 +9,7 @@
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_shm.h"
+#include "tp_aeron_wrap.h"
 
 #include "aeronc.h"
 
@@ -156,9 +157,9 @@ static int tp_test_start_client_any(tp_client_t *client, tp_client_context_t *ct
     return -1;
 }
 
-static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, aeron_publication_t **out)
+static int tp_test_add_publication(tp_client_t *client, const char *channel, int32_t stream_id, tp_publication_t **out)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (tp_client_async_add_publication(client, channel, stream_id, &async_add) < 0)
     {
@@ -178,14 +179,14 @@ static int tp_test_add_publication(tp_client_t *client, const char *channel, int
     return 0;
 }
 
-static int tp_test_offer(tp_client_t *client, aeron_publication_t *pub, const uint8_t *buffer, size_t length)
+static int tp_test_offer(tp_client_t *client, tp_publication_t *pub, const uint8_t *buffer, size_t length)
 {
     int64_t result;
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        result = aeron_publication_offer(pub, buffer, length, NULL, NULL);
+        result = aeron_publication_offer(tp_publication_handle(pub), buffer, length, NULL, NULL);
         if (result >= 0)
         {
             return 0;
@@ -206,7 +207,7 @@ void tp_test_consumer_lease_revoked(void)
     tp_client_t client;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t consumer;
-    aeron_publication_t *control_pub = NULL;
+    tp_publication_t *control_pub = NULL;
     tp_consumer_config_t config;
     tp_consumer_pool_config_t pool_cfg;
     uint8_t buffer[256];
@@ -336,10 +337,7 @@ void tp_test_consumer_lease_revoked(void)
     }
 
 cleanup:
-    if (control_pub)
-    {
-        aeron_publication_close(control_pub, NULL, NULL);
-    }
+    tp_publication_close(&control_pub);
     if (consumer.client)
     {
         tp_consumer_close(&consumer);
@@ -369,7 +367,7 @@ void tp_test_producer_lease_revoked(void)
     tp_client_t client;
     tp_producer_context_t producer_ctx;
     tp_producer_t producer;
-    aeron_publication_t *control_pub = NULL;
+    tp_publication_t *control_pub = NULL;
     tp_producer_config_t config;
     tp_payload_pool_config_t pool_cfg;
     uint8_t buffer[256];
@@ -500,10 +498,7 @@ void tp_test_producer_lease_revoked(void)
     }
 
 cleanup:
-    if (control_pub)
-    {
-        aeron_publication_close(control_pub, NULL, NULL);
-    }
+    tp_publication_close(&control_pub);
     if (producer.client)
     {
         tp_producer_close(&producer);

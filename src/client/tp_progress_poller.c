@@ -6,9 +6,12 @@
 
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/frameProgress.h"
 #include "wire/tensor_pool/messageHeader.h"
+
+static int tp_progress_poller_resize(tp_progress_poller_t *poller, size_t capacity);
 
 static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_frame_progress_t *view)
 {
@@ -244,7 +247,7 @@ static void tp_progress_poller_handler(void *clientd, const uint8_t *buffer, siz
 
 int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, const tp_progress_handlers_t *handlers)
 {
-    if (NULL == poller || NULL == client || NULL == client->control_subscription)
+    if (NULL == poller || NULL == client || NULL == tp_client_control_subscription(client))
     {
         TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_init: invalid input");
         return -1;
@@ -252,7 +255,7 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
 
     memset(poller, 0, sizeof(*poller));
     poller->client = client;
-    poller->subscription = client->control_subscription;
+    poller->subscription = tp_client_control_subscription(client);
     poller->header_nslots = 0;
 
     if (handlers)
@@ -269,7 +272,7 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
     poller->tracker_capacity = TP_PROGRESS_TRACKER_CAPACITY;
     poller->tracker_cursor = 0;
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
     {
         free(poller->tracker);
         poller->tracker = NULL;
@@ -282,7 +285,7 @@ int tp_progress_poller_init(tp_progress_poller_t *poller, tp_client_t *client, c
 
 int tp_progress_poller_init_with_subscription(
     tp_progress_poller_t *poller,
-    aeron_subscription_t *subscription,
+    tp_subscription_t *subscription,
     const tp_progress_handlers_t *handlers)
 {
     if (NULL == poller || NULL == subscription)
@@ -308,7 +311,7 @@ int tp_progress_poller_init_with_subscription(
     poller->tracker_capacity = TP_PROGRESS_TRACKER_CAPACITY;
     poller->tracker_cursor = 0;
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_progress_poller_handler, poller) < 0)
     {
         free(poller->tracker);
         poller->tracker = NULL;
@@ -383,7 +386,7 @@ void tp_progress_poller_set_consumer(tp_progress_poller_t *poller, tp_consumer_t
 
 int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)
 {
-    aeron_subscription_t *subscription = NULL;
+    tp_subscription_t *subscription = NULL;
 
     if (NULL == poller || NULL == poller->assembler)
     {
@@ -397,7 +400,7 @@ int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)
     }
     else if (poller->client)
     {
-        subscription = poller->client->control_subscription;
+        subscription = tp_client_control_subscription(poller->client);
     }
 
     if (NULL == subscription)
@@ -407,9 +410,9 @@ int tp_progress_poll(tp_progress_poller_t *poller, int fragment_limit)
     }
 
     return aeron_subscription_poll(
-        subscription,
+        tp_subscription_handle(subscription),
         aeron_fragment_assembler_handler,
-        poller->assembler,
+        tp_fragment_assembler_handle(poller->assembler),
         fragment_limit);
 }
 

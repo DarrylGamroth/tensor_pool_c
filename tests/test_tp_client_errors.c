@@ -23,7 +23,7 @@ static void test_client_null_inputs(void)
     assert(tp_client_register_driver_client(NULL, NULL) < 0);
     assert(tp_client_unregister_driver_client(NULL, NULL) < 0);
     assert(tp_client_async_add_publication(NULL, "aeron:ipc", 10, NULL) < 0);
-    assert(tp_client_async_add_subscription(NULL, "aeron:ipc", 10, NULL, NULL, NULL, NULL, NULL) < 0);
+    assert(tp_client_async_add_subscription(NULL, "aeron:ipc", 10, NULL) < 0);
 }
 
 static void test_client_driver_registration(void)
@@ -51,16 +51,16 @@ static void test_client_driver_registration(void)
 static void test_client_async_add_nulls(void)
 {
     tp_client_t client;
-    aeron_async_add_publication_t *pub = NULL;
-    aeron_async_add_subscription_t *sub = NULL;
+    tp_async_add_publication_t *pub = NULL;
+    tp_async_add_subscription_t *sub = NULL;
 
     memset(&client, 0, sizeof(client));
 
     assert(tp_client_async_add_publication(&client, NULL, 10, &pub) < 0);
     assert(tp_client_async_add_publication(&client, "aeron:ipc", 10, NULL) < 0);
 
-    assert(tp_client_async_add_subscription(&client, NULL, 10, NULL, NULL, NULL, NULL, &sub) < 0);
-    assert(tp_client_async_add_subscription(&client, "aeron:ipc", 10, NULL, NULL, NULL, NULL, NULL) < 0);
+    assert(tp_client_async_add_subscription(&client, NULL, 10, &sub) < 0);
+    assert(tp_client_async_add_subscription(&client, "aeron:ipc", 10, NULL) < 0);
 }
 
 void tp_test_client_errors(void)

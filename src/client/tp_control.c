@@ -1,6 +1,5 @@
 #include "tensor_pool/tp_control.h"
 
-#include "aeronc.h"
 #include "tensor_pool/tp_consumer.h"
 #include "tensor_pool/tp_producer.h"
 
@@ -9,6 +8,7 @@
 #include <string.h>
 
 #include "tensor_pool/tp_error.h"
+#include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/consumerConfig.h"
 #include "wire/tensor_pool/consumerHello.h"
@@ -21,9 +21,9 @@
 #include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/shmPoolAnnounce.h"
 
-static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, size_t length)
+static int tp_offer_message(tp_publication_t *pub, const uint8_t *buffer, size_t length)
 {
-    int64_t result = aeron_publication_offer(pub, buffer, length, NULL, NULL);
+    int64_t result = aeron_publication_offer(tp_publication_handle(pub), buffer, length, NULL, NULL);
     if (result < 0)
     {
         return (int)result;

@@ -7,11 +7,11 @@
 #include <errno.h>
 #include <string.h>
 #include "aeron_alloc.h"
-#include "aeron_fragment_assembler.h"
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tp_aeron_wrap.h"
 
 #include "discovery/tensor_pool/messageHeader.h"
 #include "discovery/tensor_pool/discoveryRequest.h"
@@ -447,8 +447,8 @@ int tp_discovery_client_init(
     tp_client_t *base,
     const tp_discovery_context_t *context)
 {
-    aeron_async_add_publication_t *async_pub = NULL;
-    aeron_async_add_subscription_t *async_sub = NULL;
+    tp_async_add_publication_t *async_pub = NULL;
+    tp_async_add_subscription_t *async_sub = NULL;
 
     if (NULL == client || NULL == base || NULL == context)
     {
@@ -490,10 +490,6 @@ int tp_discovery_client_init(
             base,
             context->response_channel,
             context->response_stream_id,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
             &async_sub) < 0)
         {
             return -1;
@@ -521,14 +517,12 @@ int tp_discovery_client_close(tp_discovery_client_t *client)
 
     if (client->publication)
     {
-        aeron_publication_close(client->publication, NULL, NULL);
-        client->publication = NULL;
+        tp_publication_close(&client->publication);
     }
 
     if (client->subscription)
     {
-        aeron_subscription_close(client->subscription, NULL, NULL);
-        client->subscription = NULL;
+        tp_subscription_close(&client->subscription);
     }
 
     return 0;
@@ -680,7 +674,12 @@ int tp_discovery_request(tp_discovery_client_t *client, const tp_discovery_reque
         }
     }
 
-    result = aeron_publication_offer(client->publication, buffer, tensor_pool_discoveryRequest_sbe_position(&req), NULL, NULL);
+    result = aeron_publication_offer(
+        tp_publication_handle(client->publication),
+        buffer,
+        tensor_pool_discoveryRequest_sbe_position(&req),
+        NULL,
+        NULL);
     if (result < 0)
     {
         return (int)result;
@@ -716,7 +715,7 @@ int tp_discovery_poll(tp_discovery_client_t *client, uint64_t request_id, tp_dis
     while (!ctx.done)
     {
         int fragments = aeron_subscription_poll(
-            client->subscription,
+            tp_subscription_handle(client->subscription),
             aeron_fragment_assembler_handler,
             assembler,
             10);
@@ -787,7 +786,7 @@ int tp_discovery_poller_init(
         poller->handlers = *handlers;
     }
 
-    if (aeron_fragment_assembler_create(&poller->assembler, tp_discovery_poller_handler, poller) < 0)
+    if (tp_fragment_assembler_create(&poller->assembler, tp_discovery_poller_handler, poller) < 0)
     {
         return -1;
     }
@@ -804,9 +803,9 @@ int tp_discovery_poller_poll(tp_discovery_poller_t *poller, int fragment_limit)
     }
 
     return aeron_subscription_poll(
-        poller->client->subscription,
+        tp_subscription_handle(poller->client->subscription),
         aeron_fragment_assembler_handler,
-        poller->assembler,
+        tp_fragment_assembler_handle(poller->assembler),
         fragment_limit);
 }
 

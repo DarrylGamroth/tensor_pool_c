@@ -3,9 +3,9 @@
 #include <errno.h>
 #include <string.h>
 
-#include "aeronc.h"
 #include "aeron_alloc.h"
 
+#include "tp_aeron_wrap.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_producer.h"
 
@@ -313,9 +313,9 @@ int tp_tracelink_set_decode(
     return 0;
 }
 
-static int tp_offer_message(aeron_publication_t *pub, const uint8_t *buffer, size_t length)
+static int tp_offer_message(tp_publication_t *pub, const uint8_t *buffer, size_t length)
 {
-    int64_t result = aeron_publication_offer(pub, buffer, length, NULL, NULL);
+    int64_t result = aeron_publication_offer(tp_publication_handle(pub), buffer, length, NULL, NULL);
     if (result < 0)
     {
         return (int)result;

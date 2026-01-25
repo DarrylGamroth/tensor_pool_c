@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_aeron_wrap.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -19,13 +20,13 @@ static void usage(const char *name)
         name);
 }
 
-static int wait_for_publication(tp_client_t *client, aeron_publication_t *publication)
+static int wait_for_publication(tp_client_t *client, tp_publication_t *publication)
 {
     int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
 
     while (tp_clock_now_ns() < deadline)
     {
-        if (aeron_publication_is_connected(publication))
+        if (aeron_publication_is_connected(tp_publication_handle(publication)))
         {
             return 0;
         }
