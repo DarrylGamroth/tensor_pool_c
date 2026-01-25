@@ -10,6 +10,7 @@
 
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "tomlc17.h"
 
@@ -82,7 +83,11 @@ int tp_discovery_service_config_init(tp_discovery_service_config_t *config)
     }
 
     memset(config, 0, sizeof(*config));
-    tp_context_init(&config->base);
+    if (tp_context_init(&config->base) < 0)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_discovery_service_config_init: context alloc failed");
+        return -1;
+    }
     config->request_stream_id = -1;
     config->announce_stream_id = -1;
     config->metadata_stream_id = -1;
@@ -99,7 +104,11 @@ void tp_discovery_service_config_close(tp_discovery_service_config_t *config)
         return;
     }
 
-    tp_context_clear_allowed_paths(&config->base);
+    if (NULL != config->base)
+    {
+        tp_context_close(config->base);
+        config->base = NULL;
+    }
 }
 
 int tp_discovery_service_config_load(tp_discovery_service_config_t *config, const char *path)
@@ -205,7 +214,7 @@ int tp_discovery_service_config_load(tp_discovery_service_config_t *config, cons
         }
         if (aeron_dir[0] != '\0')
         {
-            tp_context_set_aeron_dir(&config->base, aeron_dir);
+            tp_context_set_aeron_dir(config->base, aeron_dir);
         }
     }
 

@@ -292,7 +292,7 @@ static void test_shm_superblock(void)
     tp_shm_expected_t expected;
     char uri[512];
     const char *allowed_paths[1];
-    tp_context_t ctx;
+    tp_context_t *ctx = NULL;
     size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
     int result = -1;
 
@@ -315,13 +315,13 @@ static void test_shm_superblock(void)
     {
         goto cleanup;
     }
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_shm_map(&region, uri, 1, &ctx.allowed_paths, NULL) != 0)
+    if (tp_shm_map(&region, uri, 1, tp_context_allowed_paths(ctx), NULL) != 0)
     {
         goto cleanup;
     }
@@ -344,7 +344,10 @@ static void test_shm_superblock(void)
     result = 0;
 
 cleanup:
-    tp_context_clear_allowed_paths(&ctx);
+    if (NULL != ctx)
+    {
+        tp_context_close(ctx);
+    }
     if (fd >= 0)
     {
         tp_shm_unmap(&region, NULL);
@@ -364,7 +367,7 @@ static void test_shm_superblock_fail_closed(void)
     struct tensor_pool_shmRegionSuperblock block;
     char uri[512];
     const char *allowed_paths[1];
-    tp_context_t ctx;
+    tp_context_t *ctx = NULL;
     size_t file_size = TP_SUPERBLOCK_SIZE_BYTES + (TP_HEADER_SLOT_BYTES * 4);
     int result = -1;
 
@@ -387,13 +390,13 @@ static void test_shm_superblock_fail_closed(void)
     {
         goto cleanup;
     }
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
 
-    if (tp_shm_map(&region, uri, 1, &ctx.allowed_paths, NULL) != 0)
+    if (tp_shm_map(&region, uri, 1, tp_context_allowed_paths(ctx), NULL) != 0)
     {
         goto cleanup;
     }
@@ -453,7 +456,10 @@ static void test_shm_superblock_fail_closed(void)
     result = 0;
 
 cleanup:
-    tp_context_clear_allowed_paths(&ctx);
+    if (NULL != ctx)
+    {
+        tp_context_close(ctx);
+    }
     if (fd >= 0)
     {
         tp_shm_unmap(&region, NULL);

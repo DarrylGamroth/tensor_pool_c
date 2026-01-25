@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/internal/tp_control_poller.h"
 
 static void tp_fuzz_on_shm_pool_announce(const tp_shm_pool_announce_view_t *announce, void *clientd)
 {

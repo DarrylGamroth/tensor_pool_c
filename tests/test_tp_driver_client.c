@@ -995,17 +995,18 @@ static void test_driver_client_init_errors(void)
     assert(tp_driver_client_init(&client, NULL) < 0);
     assert(tp_driver_client_init(NULL, &base) < 0);
 
-    base.context.base.control_stream_id = -1;
-    base.context.base.control_channel[0] = '\0';
+    assert(tp_client_context_init(&base.context) == 0);
+    tp_context_set_control_channel(base.context.base, "", -1);
     assert(tp_driver_client_init(&client, &base) < 0);
 
-    base.context.base.control_stream_id = 1000;
-    snprintf(base.context.base.control_channel, sizeof(base.context.base.control_channel), "aeron:ipc");
+    tp_context_set_control_channel(base.context.base, "", 1000);
     assert(tp_driver_client_init(&client, &base) < 0);
 
     result = 0;
 
     assert(result == 0);
+
+    tp_client_context_close(&base.context);
 }
 
 static void test_driver_client_async_errors(void)

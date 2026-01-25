@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_progress_poller.h"
+#include "tensor_pool/internal/tp_progress_poller.h"
 
 #include <errno.h>
 #include <stdlib.h>

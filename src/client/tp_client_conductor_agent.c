@@ -1,4 +1,4 @@
-#include "tensor_pool/client/tp_client_conductor_agent.h"
+#include "tensor_pool/internal/tp_client_conductor_agent.h"
 
 #include <errno.h>
 #include <string.h>

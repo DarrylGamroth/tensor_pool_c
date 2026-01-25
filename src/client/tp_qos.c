@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_qos.h"
+#include "tensor_pool/internal/tp_qos.h"
 
 #include <errno.h>
 

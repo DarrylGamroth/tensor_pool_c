@@ -9,9 +9,10 @@
 #include <string.h>
 
 #include "tensor_pool/tp_clock.h"
-#include "tensor_pool/tp_consumer_registry.h"
+#include "tensor_pool/internal/tp_consumer_registry.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "tp_aeron_wrap.h"
 
@@ -268,7 +269,7 @@ static void tp_supervisor_on_control_fragment(void *clientd, const uint8_t *buff
     {
         if (tp_supervisor_handle_hello(supervisor, &hello, NULL) < 0)
         {
-            tp_log_emit(&supervisor->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&supervisor->config.base->log, TP_LOG_WARN,
                 "supervisor: consumer hello handling failed: %s", tp_errmsg());
         }
     }
@@ -414,7 +415,7 @@ int tp_supervisor_start(tp_supervisor_t *supervisor)
         return -1;
     }
 
-    if (tp_aeron_client_init(&supervisor->aeron, &supervisor->config.base) < 0)
+    if (tp_aeron_client_init(&supervisor->aeron, supervisor->config.base) < 0)
     {
         return -1;
     }

@@ -74,7 +74,7 @@ void tp_test_client_context_setters(void)
     assert(tp_client_context_init(&ctx) == 0);
 
     tp_client_context_set_aeron_dir(&ctx, "/tmp/aeron");
-    assert(strcmp(ctx.base.aeron_dir, "/tmp/aeron") == 0);
+    assert(strcmp(tp_context_get_aeron_dir(ctx.base), "/tmp/aeron") == 0);
 
     tp_client_context_set_aeron(&ctx, dummy_aeron);
     assert(ctx.aeron == dummy_aeron);
@@ -101,7 +101,7 @@ void tp_test_client_context_setters(void)
     assert(ctx.delegating_invoker_clientd == &invoker_calls);
 
     tp_client_context_set_log_handler(&ctx, tp_test_log_handler, &log_calls);
-    tp_log_emit(&ctx.base.log, TP_LOG_INFO, "log");
+    tp_log_emit(tp_context_log(ctx.base), TP_LOG_INFO, "log");
     assert(log_calls == 1);
 
     tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
@@ -110,11 +110,11 @@ void tp_test_client_context_setters(void)
     tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
     tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
 
-    assert(ctx.base.control_stream_id == 1000);
-    assert(ctx.base.announce_stream_id == 1001);
-    assert(ctx.base.descriptor_stream_id == 1100);
-    assert(ctx.base.qos_stream_id == 1200);
-    assert(ctx.base.metadata_stream_id == 1300);
+    assert(tp_context_get_control_stream_id(ctx.base) == 1000);
+    assert(tp_context_get_announce_stream_id(ctx.base) == 1001);
+    assert(tp_context_get_descriptor_stream_id(ctx.base) == 1100);
+    assert(tp_context_get_qos_stream_id(ctx.base) == 1200);
+    assert(tp_context_get_metadata_stream_id(ctx.base) == 1300);
 
     tp_client_context_set_driver_timeout_ns(&ctx, 1000);
     tp_client_context_set_keepalive_interval_ns(&ctx, 2000);
@@ -127,6 +127,8 @@ void tp_test_client_context_setters(void)
     assert(ctx.keepalive_interval_ns == 2000);
     assert(ctx.lease_expiry_grace_intervals == 4);
     assert(ctx.idle_sleep_duration_ns == 3000);
-    assert(ctx.base.announce_period_ns == 5000);
+    assert(tp_context_get_announce_period_ns(ctx.base) == 5000);
     assert(ctx.use_agent_invoker);
+
+    assert(tp_client_context_close(&ctx) == 0);
 }

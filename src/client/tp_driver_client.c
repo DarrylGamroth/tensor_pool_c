@@ -18,6 +18,7 @@
 #include "tensor_pool/tp_log.h"
 #include "tensor_pool/tp_types.h"
 #include "tp_aeron_wrap.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "driver/tensor_pool/messageHeader.h"
 #include "driver/tensor_pool/shmAttachRequest.h"
@@ -712,7 +713,7 @@ static void tp_driver_response_handler(
 
     if (ctx->client && ctx->client->client)
     {
-        log = &ctx->client->client->context.base.log;
+        log = tp_context_log(ctx->client->client->context.base);
     }
 
     if (log && log->min_level <= TP_LOG_DEBUG && length >= tensor_pool_messageHeader_encoded_length())
@@ -806,7 +807,9 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
     client->client = base;
     client->subscription = tp_client_control_subscription(base);
 
-    if (base->context.base.control_channel[0] == '\0' || base->context.base.control_stream_id < 0)
+    if (NULL == base->context.base ||
+        base->context.base->control_channel[0] == '\0' ||
+        base->context.base->control_stream_id < 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control channel not configured");
         return -1;
@@ -822,8 +825,8 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
 
     if (tp_client_async_add_publication(
         base,
-        base->context.base.control_channel,
-        base->context.base.control_stream_id,
+        base->context.base->control_channel,
+        base->context.base->control_stream_id,
         &async_add) < 0)
     {
         return -1;
@@ -1071,7 +1074,7 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
 
     if (client && client->client)
     {
-        log = &client->client->context.base.log;
+        log = tp_context_log(client->client->context.base);
     }
 
     tensor_pool_messageHeader_wrap(
@@ -1221,7 +1224,7 @@ int tp_driver_attach(
 
     if (client->client)
     {
-        log = &client->client->context.base.log;
+        log = tp_context_log(client->client->context.base);
     }
 
     memset(out, 0, sizeof(*out));

@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/internal/tp_control_poller.h"
 
 #include <assert.h>
 #include <string.h>

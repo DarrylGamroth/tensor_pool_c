@@ -28,6 +28,7 @@
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 #include "tp_aeron_wrap.h"
 
 #include "driver/tensor_pool/messageHeader.h"
@@ -838,7 +839,7 @@ static int tp_driver_create_region_file(
                 close(fd);
                 return -1;
             }
-            tp_log_emit(&driver->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&driver->config.base->log, TP_LOG_WARN,
                 "tp_driver_create_region_file: prefault failed for %s", path);
         }
     }
@@ -954,7 +955,7 @@ static int tp_driver_remove_epoch_dir(tp_driver_t *driver, tp_driver_stream_stat
 
     if (rmdir(dir_path) != 0)
     {
-        tp_log_emit(&driver->config.base.log, TP_LOG_WARN,
+        tp_log_emit(&driver->config.base->log, TP_LOG_WARN,
             "tp_driver_gc: failed to remove %s", dir_path);
         return -1;
     }
@@ -1988,7 +1989,7 @@ static void tp_driver_on_control_fragment(
         struct tensor_pool_shmAttachRequest request;
         if (block_length != tensor_pool_shmAttachRequest_sbe_block_length())
         {
-            tp_log_emit(&driver->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&driver->config.base->log, TP_LOG_WARN,
                 "tp_driver: attach block length mismatch");
             return;
         }
@@ -2010,7 +2011,7 @@ static void tp_driver_on_control_fragment(
         struct tensor_pool_shmDetachRequest request;
         if (block_length != tensor_pool_shmDetachRequest_sbe_block_length())
         {
-            tp_log_emit(&driver->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&driver->config.base->log, TP_LOG_WARN,
                 "tp_driver: detach block length mismatch");
             return;
         }
@@ -2032,7 +2033,7 @@ static void tp_driver_on_control_fragment(
         struct tensor_pool_shmLeaseKeepalive request;
         if (block_length != tensor_pool_shmLeaseKeepalive_sbe_block_length())
         {
-            tp_log_emit(&driver->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&driver->config.base->log, TP_LOG_WARN,
                 "tp_driver: keepalive block length mismatch");
             return;
         }
@@ -2115,25 +2116,25 @@ int tp_driver_start(tp_driver_t *driver)
         return -1;
     }
 
-    if (tp_aeron_client_init(&driver->aeron, &driver->config.base) < 0)
+    if (tp_aeron_client_init(&driver->aeron, driver->config.base) < 0)
     {
         return -1;
     }
 
     if (tp_aeron_add_subscription(&driver->control_subscription, &driver->aeron,
-            driver->config.base.control_channel, driver->config.base.control_stream_id) < 0)
+            driver->config.base->control_channel, driver->config.base->control_stream_id) < 0)
     {
         return -1;
     }
 
     if (tp_aeron_add_publication(&driver->control_publication, &driver->aeron,
-            driver->config.base.control_channel, driver->config.base.control_stream_id) < 0)
+            driver->config.base->control_channel, driver->config.base->control_stream_id) < 0)
     {
         return -1;
     }
 
     if (tp_aeron_add_publication(&driver->announce_publication, &driver->aeron,
-            driver->config.base.announce_channel, driver->config.base.announce_stream_id) < 0)
+            driver->config.base->announce_channel, driver->config.base->announce_stream_id) < 0)
     {
         return -1;
     }

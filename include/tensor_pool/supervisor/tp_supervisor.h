@@ -5,10 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/tp_aeron.h"
+#include "tensor_pool/internal/tp_aeron.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_control.h"
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_handles.h"
 
 #ifdef __cplusplus
@@ -17,7 +17,7 @@ extern "C" {
 
 typedef struct tp_supervisor_config_stct
 {
-    tp_context_t base;
+    tp_context_t *base;
     char control_channel[1024];
     int32_t control_stream_id;
     char announce_channel[1024];

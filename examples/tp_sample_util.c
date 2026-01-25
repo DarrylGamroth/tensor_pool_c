@@ -31,7 +31,7 @@ int tp_example_init_client_context(
     tp_client_context_set_metadata_channel(ctx, channel, 1300);
     if (allowed_paths && allowed_path_count > 0)
     {
-        tp_context_set_allowed_paths(&ctx->base, allowed_paths, allowed_path_count);
+        tp_context_set_allowed_paths(ctx->base, allowed_paths, allowed_path_count);
     }
 
     return 0;
@@ -61,7 +61,7 @@ int tp_example_init_client_context_nodriver(
     tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
     if (allowed_paths && allowed_path_count > 0)
     {
-        tp_context_set_allowed_paths(&ctx->base, allowed_paths, allowed_path_count);
+        tp_context_set_allowed_paths(ctx->base, allowed_paths, allowed_path_count);
     }
 
     return 0;

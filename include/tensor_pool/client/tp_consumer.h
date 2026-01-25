@@ -10,7 +10,7 @@
 #include "tensor_pool/tp_shm.h"
 #include "tensor_pool/tp_tensor.h"
 #include "tensor_pool/tp_types.h"
-#include "tensor_pool/tp_progress_poller.h"
+#include "tensor_pool/internal/tp_progress_poller.h"
 #include "tensor_pool/tp_handles.h"
 
 #ifdef __cplusplus

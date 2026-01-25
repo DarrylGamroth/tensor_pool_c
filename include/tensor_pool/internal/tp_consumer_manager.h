@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "tensor_pool/tp_consumer_registry.h"
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_consumer_registry.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_producer.h"
 
 #ifdef __cplusplus

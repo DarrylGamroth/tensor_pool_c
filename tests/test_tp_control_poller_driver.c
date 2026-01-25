@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/internal/tp_control_poller.h"
 
 #include "driver/tensor_pool/messageHeader.h"
 #include "driver/tensor_pool/shmDetachResponse.h"

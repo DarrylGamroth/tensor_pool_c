@@ -1,7 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 
 static void tp_fuzz_on_meta_attr(const tp_data_source_meta_attr_view_t *attr, void *clientd)
 {

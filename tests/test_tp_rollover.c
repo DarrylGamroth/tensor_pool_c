@@ -245,7 +245,7 @@ void tp_test_rollover(void)
         }
         tp_client_context_set_aeron_dir(&ctx, aeron_dir);
         tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
-        tp_context_set_allowed_paths(&ctx.base, allowed_paths, 1);
+        tp_context_set_allowed_paths(ctx.base, allowed_paths, 1);
         if (tp_client_init(&client, &ctx) == 0 && tp_client_start(&client) == 0)
         {
             started = 1;
@@ -387,9 +387,12 @@ cleanup:
     {
         tp_producer_close(&producer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
     {
-        tp_client_close(&client);
+        const char *aeron_dir = tp_context_get_aeron_dir(client.context.base);
+        if (NULL != aeron_dir && aeron_dir[0] != '\0')
+        {
+            tp_client_close(&client);
+        }
     }
     if (header_fd >= 0)
     {

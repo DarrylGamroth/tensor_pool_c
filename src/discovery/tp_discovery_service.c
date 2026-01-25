@@ -12,6 +12,7 @@
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 #include "tp_aeron_wrap.h"
 
 #include "wire/tensor_pool/shmPoolAnnounce.h"
@@ -194,14 +195,14 @@ int tp_discovery_service_apply_announce(
 
     if (announce->header_slot_bytes != TP_HEADER_SLOT_BYTES)
     {
-        tp_log_emit(&service->config.base.log, TP_LOG_WARN,
+        tp_log_emit(&service->config.base->log, TP_LOG_WARN,
             "tp_discovery: ignoring announce with invalid header_slot_bytes");
         return -1;
     }
 
     if (announce->pool_count == 0 || announce->header_nslots == 0)
     {
-        tp_log_emit(&service->config.base.log, TP_LOG_WARN,
+        tp_log_emit(&service->config.base->log, TP_LOG_WARN,
             "tp_discovery: ignoring announce with empty pools");
         return -1;
     }
@@ -248,7 +249,7 @@ int tp_discovery_service_apply_announce(
 
         if (pool->pool_nslots != announce->header_nslots)
         {
-            tp_log_emit(&service->config.base.log, TP_LOG_WARN,
+            tp_log_emit(&service->config.base->log, TP_LOG_WARN,
                 "tp_discovery: ignoring announce with pool_nslots mismatch");
             tp_discovery_entry_clear(entry);
             return -1;
@@ -1304,7 +1305,7 @@ int tp_discovery_service_start(tp_discovery_service_t *service)
         return -1;
     }
 
-    if (tp_aeron_client_init(&service->aeron, &service->config.base) < 0)
+    if (tp_aeron_client_init(&service->aeron, service->config.base) < 0)
     {
         return -1;
     }

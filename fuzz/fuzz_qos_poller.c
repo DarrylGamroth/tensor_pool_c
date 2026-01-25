@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "tensor_pool/tp_qos.h"
+#include "tensor_pool/internal/tp_qos.h"
 
 static void tp_fuzz_on_qos_event(void *clientd, const tp_qos_event_t *event)
 {

@@ -14,6 +14,7 @@
 
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "tomlc17.h"
 
@@ -216,7 +217,7 @@ static int tp_driver_load_supervisor(tp_driver_config_t *config, toml_datum_t su
     }
 
     config->supervisor_config.base = config->base;
-    tp_driver_clear_allowed_paths(&config->supervisor_config.base);
+    tp_driver_clear_allowed_paths(config->supervisor_config.base);
 
     if (tp_driver_copy_string(
             config->supervisor_config.control_channel,
@@ -331,27 +332,27 @@ static int tp_driver_load_supervisor(tp_driver_config_t *config, toml_datum_t su
 
     if (config->supervisor_config.control_channel[0] == '\0')
     {
-        strncpy(config->supervisor_config.control_channel, config->base.control_channel,
+        strncpy(config->supervisor_config.control_channel, config->base->control_channel,
             sizeof(config->supervisor_config.control_channel) - 1);
-        config->supervisor_config.control_stream_id = config->base.control_stream_id;
+        config->supervisor_config.control_stream_id = config->base->control_stream_id;
     }
     if (config->supervisor_config.announce_channel[0] == '\0')
     {
-        strncpy(config->supervisor_config.announce_channel, config->base.announce_channel,
+        strncpy(config->supervisor_config.announce_channel, config->base->announce_channel,
             sizeof(config->supervisor_config.announce_channel) - 1);
-        config->supervisor_config.announce_stream_id = config->base.announce_stream_id;
+        config->supervisor_config.announce_stream_id = config->base->announce_stream_id;
     }
     if (config->supervisor_config.metadata_channel[0] == '\0')
     {
-        strncpy(config->supervisor_config.metadata_channel, config->base.metadata_channel,
+        strncpy(config->supervisor_config.metadata_channel, config->base->metadata_channel,
             sizeof(config->supervisor_config.metadata_channel) - 1);
-        config->supervisor_config.metadata_stream_id = config->base.metadata_stream_id;
+        config->supervisor_config.metadata_stream_id = config->base->metadata_stream_id;
     }
     if (config->supervisor_config.qos_channel[0] == '\0')
     {
-        strncpy(config->supervisor_config.qos_channel, config->base.qos_channel,
+        strncpy(config->supervisor_config.qos_channel, config->base->qos_channel,
             sizeof(config->supervisor_config.qos_channel) - 1);
-        config->supervisor_config.qos_stream_id = config->base.qos_stream_id;
+        config->supervisor_config.qos_stream_id = config->base->qos_stream_id;
     }
 
     if (config->supervisor_config.per_consumer_descriptor_base != 0 &&
@@ -854,7 +855,11 @@ int tp_driver_config_init(tp_driver_config_t *config)
     }
 
     memset(config, 0, sizeof(*config));
-    tp_context_init(&config->base);
+    if (tp_context_init(&config->base) < 0)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_driver_config_init: context alloc failed");
+        return -1;
+    }
 
     strncpy(config->shm_base_dir, "/dev/shm", sizeof(config->shm_base_dir) - 1);
     strncpy(config->shm_namespace, "default", sizeof(config->shm_namespace) - 1);
@@ -917,8 +922,13 @@ void tp_driver_config_close(tp_driver_config_t *config)
     config->control_stream_id_ranges.ranges = NULL;
     config->control_stream_id_ranges.count = 0;
 
+    if (NULL != config->base)
+    {
+        tp_context_close(config->base);
+        config->base = NULL;
+    }
+
     tp_supervisor_config_close(&config->supervisor_config);
-    tp_context_clear_allowed_paths(&config->base);
 }
 
 int tp_driver_config_load(tp_driver_config_t *config, const char *path)
@@ -983,7 +993,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
         }
         if (aeron_dir[0] != '\0')
         {
-            tp_context_set_aeron_dir(&config->base, aeron_dir);
+            tp_context_set_aeron_dir(config->base, aeron_dir);
         }
     }
 
@@ -1003,7 +1013,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
             toml_free(parsed);
             return -1;
         }
-        tp_context_set_control_channel(&config->base, channel, (int32_t)stream_id);
+        tp_context_set_control_channel(config->base, channel, (int32_t)stream_id);
     }
 
     {
@@ -1022,7 +1032,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
             toml_free(parsed);
             return -1;
         }
-        tp_context_set_announce_channel(&config->base, channel, (int32_t)stream_id);
+        tp_context_set_announce_channel(config->base, channel, (int32_t)stream_id);
     }
 
     {
@@ -1041,7 +1051,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
             toml_free(parsed);
             return -1;
         }
-        tp_context_set_qos_channel(&config->base, channel, (int32_t)stream_id);
+        tp_context_set_qos_channel(config->base, channel, (int32_t)stream_id);
     }
 
     if (tp_driver_parse_ranges(&config->stream_id_ranges,
@@ -1251,7 +1261,7 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
 
     if (announce_period_ms > 0)
     {
-        tp_context_set_announce_period_ns(&config->base, (uint64_t)announce_period_ms * 1000000ULL);
+        tp_context_set_announce_period_ns(config->base, (uint64_t)announce_period_ms * 1000000ULL);
         if (config->epoch_gc_min_age_ns == 0)
         {
             config->epoch_gc_min_age_ns = 3ULL * (uint64_t)announce_period_ms * 1000000ULL;
@@ -1277,9 +1287,9 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
         config->allowed_base_dirs_len = 1;
     }
 
-    tp_context_set_allowed_paths(&config->base, (const char **)config->allowed_base_dirs,
+    tp_context_set_allowed_paths(config->base, (const char **)config->allowed_base_dirs,
         config->allowed_base_dirs_len);
-    if (tp_context_finalize_allowed_paths(&config->base) < 0)
+    if (tp_context_finalize_allowed_paths(config->base) < 0)
     {
         toml_free(parsed);
         return -1;

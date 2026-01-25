@@ -107,22 +107,12 @@ set(TP_PUBLIC_HEADERS
     include/tensor_pool/tp_discovery_service.h
     include/tensor_pool/supervisor/tp_supervisor.h
     include/tensor_pool/tp_supervisor.h
-    include/tensor_pool/client/tp_aeron.h
     include/tensor_pool/client/tp_client.h
-    include/tensor_pool/client/tp_client_conductor_agent.h
-    include/tensor_pool/client/tp_client_conductor.h
     include/tensor_pool/client/tp_consumer.h
-    include/tensor_pool/client/tp_consumer_manager.h
-    include/tensor_pool/client/tp_consumer_registry.h
     include/tensor_pool/client/tp_control.h
-    include/tensor_pool/client/tp_control_adapter.h
-    include/tensor_pool/client/tp_control_poller.h
     include/tensor_pool/client/tp_discovery_client.h
     include/tensor_pool/client/tp_driver_client.h
-    include/tensor_pool/client/tp_metadata_poller.h
     include/tensor_pool/client/tp_producer.h
-    include/tensor_pool/client/tp_progress_poller.h
-    include/tensor_pool/client/tp_qos.h
 )
 
 set(TP_SOURCES

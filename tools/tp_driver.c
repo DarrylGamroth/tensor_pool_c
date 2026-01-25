@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    tp_driver_apply_log_level(&config.base.log);
+    tp_driver_apply_log_level(tp_context_log(config.base));
 
     if (tp_driver_init(&driver, &config) < 0)
     {

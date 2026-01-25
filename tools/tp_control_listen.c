@@ -3,7 +3,7 @@
 #endif
 
 #include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_merge_map.h"
 #include "tensor_pool/tp_tracelink.h"

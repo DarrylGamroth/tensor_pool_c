@@ -43,7 +43,7 @@ clear lifecycle semantics and consistent naming.
 - Align to Aeron core lifecycle:
   - `tp_context_init(tp_context_t **out)` and `tp_context_close(tp_context_t *ctx)`.
   - `tp_client_init(tp_client_t **out, tp_context_t *ctx)` and `tp_client_close(tp_client_t *client)`.
-- Decide and document if `tp_context_t` stays opaque (Aeron client) or public struct (Aeron archive).
+- Decision: `tp_context_t` is opaque (Aeron core model).
 - Add `*_get_*` accessors for all context settings (mirror Aeron `get`/`set` pairs).
 - Provide `tp_client_context_set_use_conductor_agent_invoker` naming to match Aeron.
 - Provide `tp_client_context_set_idle_strategy`/`tp_client_idle` to align with Aeron idle handling.

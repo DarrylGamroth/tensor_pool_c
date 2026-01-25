@@ -1,4 +1,5 @@
 #include "tensor_pool/tp_context.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -32,26 +33,47 @@ static char *tp_strdup(const char *value)
     return copy;
 }
 
-int tp_context_init(tp_context_t *context)
+int tp_context_init(tp_context_t **context)
+{
+    tp_context_t *ctx = NULL;
+
+    if (NULL == context)
+    {
+        return -1;
+    }
+
+    ctx = calloc(1, sizeof(*ctx));
+    if (NULL == ctx)
+    {
+        return -1;
+    }
+
+    tp_log_init(&ctx->log);
+    ctx->descriptor_stream_id = -1;
+    ctx->control_stream_id = -1;
+    ctx->announce_stream_id = -1;
+    ctx->qos_stream_id = -1;
+    ctx->metadata_stream_id = -1;
+    ctx->announce_period_ns = TP_ANNOUNCE_PERIOD_DEFAULT_NS;
+    ctx->allowed_paths.enforce_permissions = 1;
+    ctx->allowed_paths.expected_uid = TP_NULL_U32;
+    ctx->allowed_paths.expected_gid = TP_NULL_U32;
+    ctx->allowed_paths.forbidden_mode = 0007;
+
+    *context = ctx;
+
+    return 0;
+}
+
+int tp_context_close(tp_context_t *context)
 {
     if (NULL == context)
     {
         return -1;
     }
 
-    memset(context, 0, sizeof(*context));
-    tp_log_init(&context->log);
-    context->descriptor_stream_id = -1;
-    context->control_stream_id = -1;
-    context->announce_stream_id = -1;
-    context->qos_stream_id = -1;
-    context->metadata_stream_id = -1;
-    context->announce_period_ns = TP_ANNOUNCE_PERIOD_DEFAULT_NS;
-    context->allowed_paths.enforce_permissions = 1;
-    context->allowed_paths.expected_uid = TP_NULL_U32;
-    context->allowed_paths.expected_gid = TP_NULL_U32;
-    context->allowed_paths.forbidden_mode = 0007;
-
+    tp_context_clear_allowed_paths(context);
+    free(context);
     return 0;
 }
 
@@ -63,6 +85,16 @@ void tp_context_set_aeron_dir(tp_context_t *context, const char *dir)
     }
 
     strncpy(context->aeron_dir, dir, sizeof(context->aeron_dir) - 1);
+}
+
+const char *tp_context_get_aeron_dir(const tp_context_t *context)
+{
+    if (NULL == context)
+    {
+        return NULL;
+    }
+
+    return context->aeron_dir;
 }
 
 static void tp_context_set_channel(char *dst, size_t dst_len, const char *channel, int32_t *stream_id, int32_t value)
@@ -106,6 +138,56 @@ void tp_context_set_metadata_channel(tp_context_t *context, const char *channel,
         &context->metadata_stream_id, stream_id);
 }
 
+const char *tp_context_get_descriptor_channel(const tp_context_t *context)
+{
+    return NULL == context ? NULL : context->descriptor_channel;
+}
+
+const char *tp_context_get_control_channel(const tp_context_t *context)
+{
+    return NULL == context ? NULL : context->control_channel;
+}
+
+const char *tp_context_get_announce_channel(const tp_context_t *context)
+{
+    return NULL == context ? NULL : context->announce_channel;
+}
+
+const char *tp_context_get_qos_channel(const tp_context_t *context)
+{
+    return NULL == context ? NULL : context->qos_channel;
+}
+
+const char *tp_context_get_metadata_channel(const tp_context_t *context)
+{
+    return NULL == context ? NULL : context->metadata_channel;
+}
+
+int32_t tp_context_get_descriptor_stream_id(const tp_context_t *context)
+{
+    return NULL == context ? -1 : context->descriptor_stream_id;
+}
+
+int32_t tp_context_get_control_stream_id(const tp_context_t *context)
+{
+    return NULL == context ? -1 : context->control_stream_id;
+}
+
+int32_t tp_context_get_announce_stream_id(const tp_context_t *context)
+{
+    return NULL == context ? -1 : context->announce_stream_id;
+}
+
+int32_t tp_context_get_qos_stream_id(const tp_context_t *context)
+{
+    return NULL == context ? -1 : context->qos_stream_id;
+}
+
+int32_t tp_context_get_metadata_stream_id(const tp_context_t *context)
+{
+    return NULL == context ? -1 : context->metadata_stream_id;
+}
+
 void tp_context_set_allowed_paths(tp_context_t *context, const char **paths, size_t length)
 {
     if (NULL == context)
@@ -126,6 +208,11 @@ void tp_context_set_announce_period_ns(tp_context_t *context, uint64_t period_ns
     }
 
     context->announce_period_ns = period_ns;
+}
+
+uint64_t tp_context_get_announce_period_ns(const tp_context_t *context)
+{
+    return NULL == context ? 0 : context->announce_period_ns;
 }
 
 void tp_context_set_shm_permissions(
@@ -215,4 +302,14 @@ void tp_context_clear_allowed_paths(tp_context_t *context)
 
     context->allowed_paths.canonical_paths = NULL;
     context->allowed_paths.canonical_length = 0;
+}
+
+tp_log_t *tp_context_log(tp_context_t *context)
+{
+    return NULL == context ? NULL : &context->log;
+}
+
+const tp_allowed_paths_t *tp_context_allowed_paths(const tp_context_t *context)
+{
+    return NULL == context ? NULL : &context->allowed_paths;
 }

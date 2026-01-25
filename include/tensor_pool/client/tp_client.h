@@ -24,7 +24,7 @@ typedef int (*tp_client_poller_t)(void *clientd, int fragment_limit);
 
 typedef struct tp_client_context_stct
 {
-    tp_context_t base;
+    tp_context_t *base;
     uint64_t driver_timeout_ns;
     uint64_t keepalive_interval_ns;
     uint64_t idle_sleep_duration_ns;
@@ -57,6 +57,7 @@ typedef struct tp_client_stct
 tp_client_t;
 
 int tp_client_context_init(tp_client_context_t *ctx);
+int tp_client_context_close(tp_client_context_t *ctx);
 void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir);
 void tp_client_context_set_aeron(tp_client_context_t *ctx, void *aeron);
 void tp_client_context_set_owns_aeron_client(tp_client_context_t *ctx, bool owns);

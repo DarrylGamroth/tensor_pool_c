@@ -2,7 +2,7 @@
 #define TENSOR_POOL_TP_CONTROL_POLLER_H
 
 #include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_join_barrier.h"
 #include "tensor_pool/tp_tracelink.h"

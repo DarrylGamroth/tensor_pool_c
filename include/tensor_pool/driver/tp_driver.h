@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/tp_aeron.h"
+#include "tensor_pool/internal/tp_aeron.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
 #include "tensor_pool/tp_log.h"
@@ -56,7 +56,7 @@ tp_driver_id_ranges_t;
 
 typedef struct tp_driver_config_stct
 {
-    tp_context_t base;
+    tp_context_t *base;
     char instance_id[256];
     char shm_base_dir[4096];
     char shm_namespace[256];

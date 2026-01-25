@@ -3,7 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
-#include "tensor_pool/tp_consumer_manager.h"
+#include "tensor_pool/internal/tp_consumer_manager.h"
 #include "tp_sample_util.h"
 
 #include <getopt.h>
@@ -361,11 +361,11 @@ int main(int argc, char **argv)
 
     if (trace)
     {
-        tp_log_set_level(&client_context.base.log, TP_LOG_TRACE);
+        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_TRACE);
     }
     else if (verbose)
     {
-        tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
+        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_DEBUG);
     }
 
     if (keepalive_interval_env && keepalive_interval_env[0] != '\0')

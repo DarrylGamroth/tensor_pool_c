@@ -9,6 +9,7 @@
 
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "tomlc17.h"
 
@@ -160,7 +161,11 @@ int tp_supervisor_config_init(tp_supervisor_config_t *config)
     }
 
     memset(config, 0, sizeof(*config));
-    tp_context_init(&config->base);
+    if (tp_context_init(&config->base) < 0)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_supervisor_config_init: context alloc failed");
+        return -1;
+    }
     strncpy(config->control_channel, "aeron:ipc", sizeof(config->control_channel) - 1);
     strncpy(config->announce_channel, "aeron:ipc", sizeof(config->announce_channel) - 1);
     strncpy(config->metadata_channel, "aeron:ipc", sizeof(config->metadata_channel) - 1);
@@ -355,6 +360,10 @@ void tp_supervisor_config_close(tp_supervisor_config_t *config)
         return;
     }
 
-    tp_context_clear_allowed_paths(&config->base);
+    if (NULL != config->base)
+    {
+        tp_context_close(config->base);
+        config->base = NULL;
+    }
     memset(config, 0, sizeof(*config));
 }

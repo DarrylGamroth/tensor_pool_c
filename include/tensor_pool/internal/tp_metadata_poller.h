@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_handles.h"
 
 #ifdef __cplusplus

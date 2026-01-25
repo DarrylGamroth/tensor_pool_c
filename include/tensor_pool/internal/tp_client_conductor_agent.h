@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "tensor_pool/client/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_conductor.h"
 #include "tensor_pool/common/tp_agent.h"
 
 #ifdef __cplusplus

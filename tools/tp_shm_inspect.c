@@ -25,7 +25,7 @@ static void usage(const char *name)
 int main(int argc, char **argv)
 {
     tp_shm_region_t region;
-    tp_context_t ctx;
+    tp_context_t *ctx = NULL;
     struct tensor_pool_shmRegionSuperblock block;
     const char *allowed_paths[16];
     size_t allowed_count = 0;
@@ -85,18 +85,18 @@ int main(int argc, char **argv)
         fprintf(stderr, "Failed to init context: %s\n", aeron_errmsg());
         return 1;
     }
-    tp_context_set_allowed_paths(&ctx, allowed_paths, allowed_count);
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    tp_context_set_allowed_paths(ctx, allowed_paths, allowed_count);
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         fprintf(stderr, "Failed to finalize allowlist: %s\n", aeron_errmsg());
-        tp_context_clear_allowed_paths(&ctx);
+        tp_context_close(ctx);
         return 1;
     }
 
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) < 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) < 0)
     {
         fprintf(stderr, "Failed to map: %s\n", aeron_errmsg());
-        tp_context_clear_allowed_paths(&ctx);
+        tp_context_close(ctx);
         return 1;
     }
 
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     }
 
     tp_shm_unmap(&region, NULL);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_close(ctx);
 
     return 0;
 }

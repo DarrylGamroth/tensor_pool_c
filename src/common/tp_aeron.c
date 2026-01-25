@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_aeron.h"
+#include "tensor_pool/internal/tp_aeron.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include <errno.h>
 #include <string.h>

@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_control_adapter.h"
+#include "tensor_pool/internal/tp_control_adapter.h"
 
 #include <errno.h>
 #include <stdlib.h>

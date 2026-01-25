@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/tp_aeron.h"
+#include "tensor_pool/internal/tp_aeron.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
 #include "tensor_pool/tp_log.h"
@@ -18,7 +18,7 @@ extern "C" {
 
 typedef struct tp_discovery_service_config_stct
 {
-    tp_context_t base;
+    tp_context_t *base;
     char request_channel[1024];
     int32_t request_stream_id;
     char announce_channel[1024];

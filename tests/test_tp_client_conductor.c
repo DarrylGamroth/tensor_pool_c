@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_conductor.h"
 #include "tensor_pool/tp_context.h"
 
 #include "aeronc.h"
@@ -47,7 +47,7 @@ static int tp_test_poller(void *clientd, int fragment_limit)
 
 static void test_client_conductor_lifecycle(void)
 {
-    tp_context_t context;
+    tp_context_t *context = NULL;
     tp_client_conductor_t conductor;
     char default_dir[AERON_MAX_PATH];
     const char *aeron_dir = getenv("AERON_DIR");
@@ -77,10 +77,10 @@ static void test_client_conductor_lifecycle(void)
     }
 
     {
-        tp_context_set_aeron_dir(&context, aeron_dir);
+        tp_context_set_aeron_dir(context, aeron_dir);
     }
 
-    if (tp_client_conductor_init(&conductor, &context, true) != 0)
+    if (tp_client_conductor_init(&conductor, context, true) != 0)
     {
         goto cleanup;
     }
@@ -123,6 +123,7 @@ static void test_client_conductor_lifecycle(void)
 
 cleanup:
     tp_client_conductor_close(&conductor);
+    tp_context_close(context);
     assert(result == 0);
 }
 

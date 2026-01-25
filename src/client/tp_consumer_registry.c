@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_consumer_registry.h"
+#include "tensor_pool/internal/tp_consumer_registry.h"
 
 #include <errno.h>
 #include <string.h>

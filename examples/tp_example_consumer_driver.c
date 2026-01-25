@@ -414,17 +414,17 @@ int main(int argc, char **argv)
 
     if (trace)
     {
-        tp_log_set_level(&client_context.base.log, TP_LOG_TRACE);
+        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_TRACE);
     }
     else if (verbose)
     {
-        tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
+        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_DEBUG);
     }
 
     fprintf(stderr,
         "Descriptor subscription config channel=%s stream_id=%d\n",
-        client_context.base.descriptor_channel,
-        client_context.base.descriptor_stream_id);
+        tp_context_get_descriptor_channel(client_context.base),
+        tp_context_get_descriptor_stream_id(client_context.base));
     if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
     {
         uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;

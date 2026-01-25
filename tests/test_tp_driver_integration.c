@@ -212,7 +212,10 @@ static int tp_test_driver_attach_with_config(
         goto cleanup;
     }
     tp_client_context_set_use_agent_invoker(&ctx, true);
-    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+    tp_client_context_set_control_channel(
+        &ctx,
+        tp_context_get_control_channel(driver.config.base),
+        tp_context_get_control_stream_id(driver.config.base));
 
     if (tp_client_init(&client, &ctx) < 0)
     {
@@ -645,7 +648,10 @@ void tp_test_driver_publish_mode_hugepages(void)
         goto cleanup;
     }
     tp_client_context_set_use_agent_invoker(&ctx, true);
-    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+    tp_client_context_set_control_channel(
+        &ctx,
+        tp_context_get_control_channel(driver.config.base),
+        tp_context_get_control_stream_id(driver.config.base));
 
     if (tp_client_init(&client, &ctx) < 0)
     {
@@ -765,7 +771,10 @@ void tp_test_driver_node_id_cooldown(void)
         goto cleanup;
     }
     tp_client_context_set_use_agent_invoker(&ctx, true);
-    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+    tp_client_context_set_control_channel(
+        &ctx,
+        tp_context_get_control_channel(driver.config.base),
+        tp_context_get_control_stream_id(driver.config.base));
 
     if (tp_client_init(&client, &ctx) < 0)
     {

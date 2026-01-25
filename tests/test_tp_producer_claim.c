@@ -31,6 +31,12 @@
 #include <time.h>
 #include <unistd.h>
 
+static bool tp_test_has_aeron_dir(const tp_client_t *client)
+{
+    const char *dir = tp_context_get_aeron_dir(client->context.base);
+    return NULL != dir && dir[0] != '\0';
+}
+
 static size_t tp_payload_flush_last_len = 0;
 
 typedef struct tp_descriptor_capture_state_stct
@@ -290,7 +296,7 @@ static int tp_test_start_client(tp_client_t *client, tp_client_context_t *ctx, c
     }
     tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
     tp_client_context_set_use_agent_invoker(ctx, true);
-    tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx->base, allowed_paths, 1);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -570,7 +576,7 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -687,7 +693,7 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -841,7 +847,7 @@ static void tp_test_producer_offer_pool_selection(void)
 
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+        TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
     {
         goto cleanup;
     }
@@ -855,7 +861,7 @@ static void tp_test_producer_offer_pool_selection(void)
     }
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+        TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
     {
         goto cleanup;
     }
@@ -880,7 +886,7 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1007,7 +1013,7 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
 
     header_index = (uint32_t)(seq & (producer.header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer.header_region.addr, header_index),
-            TP_HEADER_SLOT_BYTES, &client.context.base.log) < 0)
+            TP_HEADER_SLOT_BYTES, tp_context_log(client.context.base)) < 0)
     {
         goto cleanup;
     }
@@ -1049,7 +1055,7 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1198,7 +1204,7 @@ cleanup:
     {
         tp_subscription_close(&descriptor_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }

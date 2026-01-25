@@ -5,15 +5,15 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_consumer_manager.h"
-#include "tensor_pool/tp_control_poller.h"
+#include "tensor_pool/internal/tp_consumer_manager.h"
+#include "tensor_pool/internal/tp_control_poller.h"
 #include "tensor_pool/tp_seqlock.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_metadata_poller.h"
-#include "tensor_pool/tp_progress_poller.h"
+#include "tensor_pool/internal/tp_metadata_poller.h"
+#include "tensor_pool/internal/tp_progress_poller.h"
 #include "tensor_pool/tp_producer.h"
-#include "tensor_pool/tp_qos.h"
+#include "tensor_pool/internal/tp_qos.h"
 #include "tensor_pool/tp_slot.h"
 
 #include "aeronc.h"
@@ -45,6 +45,12 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+static bool tp_test_has_aeron_dir(const tp_client_t *client)
+{
+    const char *dir = tp_context_get_aeron_dir(client->context.base);
+    return NULL != dir && dir[0] != '\0';
+}
 
 typedef struct tp_poll_state_stct
 {
@@ -154,7 +160,7 @@ static int tp_test_start_client(
     {
         tp_client_context_set_announce_period_ns(ctx, announce_period_ns);
     }
-    tp_context_set_allowed_paths(&ctx->base, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx->base, allowed_paths, 1);
 
     if (tp_client_init(client, ctx) < 0)
     {
@@ -768,7 +774,7 @@ cleanup:
     }
     tp_fragment_assembler_close(&qos_poller.assembler);
     tp_fragment_assembler_close(&meta_poller.assembler);
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -846,7 +852,7 @@ void tp_test_shm_announce_freshness(void)
     {
         goto cleanup;
     }
-    freshness_ns = client.context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    freshness_ns = tp_context_get_announce_period_ns(client.context.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -947,7 +953,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -999,8 +1005,7 @@ void tp_test_rate_limit(void)
         return;
     }
 
-    client.context.base.descriptor_channel[0] = '\0';
-    client.context.base.descriptor_stream_id = -1;
+    tp_context_set_descriptor_channel(client.context.base, "", -1);
 
     if (tp_test_add_subscription(&client, "aeron:ipc", 2100, &descriptor_sub) < 0)
     {
@@ -1183,7 +1188,7 @@ cleanup:
     {
         tp_producer_close(&producer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1379,7 +1384,7 @@ cleanup:
     {
         tp_producer_close(&producer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1570,7 +1575,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1748,7 +1753,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -1960,7 +1965,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -2191,7 +2196,7 @@ cleanup:
     {
         tp_publication_close(&meta_pub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -2287,7 +2292,7 @@ void tp_test_activity_liveness(void)
         goto cleanup;
     }
 
-    stale_ns = client.context.base.announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    stale_ns = tp_context_get_announce_period_ns(client.context.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
     consumer.attach_time_ns = now_ns - stale_ns - 1;
     if (now_ns > stale_ns * 2)
     {
@@ -2319,7 +2324,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -2447,7 +2452,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -2564,7 +2569,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -2803,7 +2808,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -3104,7 +3109,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -3273,7 +3278,7 @@ cleanup:
     {
         tp_consumer_close(&consumer);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }
@@ -3413,7 +3418,7 @@ cleanup:
     {
         tp_subscription_close(&progress_sub);
     }
-    if (client.context.base.aeron_dir[0] != '\0')
+    if (tp_test_has_aeron_dir(&client))
     {
         tp_client_close(&client);
     }

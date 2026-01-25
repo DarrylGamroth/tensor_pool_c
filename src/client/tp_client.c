@@ -1,5 +1,5 @@
 #include "tensor_pool/tp_client.h"
-#include "tensor_pool/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_conductor.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -8,9 +8,10 @@
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_control_poller.h"
-#include "tensor_pool/tp_metadata_poller.h"
-#include "tensor_pool/tp_qos.h"
+#include "tensor_pool/internal/tp_context.h"
+#include "tensor_pool/internal/tp_control_poller.h"
+#include "tensor_pool/internal/tp_metadata_poller.h"
+#include "tensor_pool/internal/tp_qos.h"
 #include "tp_aeron_wrap.h"
 
 enum { TP_CLIENT_DEFAULT_FRAGMENT_LIMIT = 10 };
@@ -40,13 +41,34 @@ int tp_client_context_init(tp_client_context_t *ctx)
     }
 
     memset(ctx, 0, sizeof(*ctx));
-    tp_context_init(&ctx->base);
+    if (tp_context_init(&ctx->base) < 0)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_client_context_init: context alloc failed");
+        return -1;
+    }
     ctx->owns_aeron_client = true;
     ctx->message_timeout_ns = 0;
     ctx->message_retry_attempts = 0;
     ctx->driver_timeout_ns = 5 * 1000 * 1000 * 1000ULL;
     ctx->keepalive_interval_ns = 1000 * 1000 * 1000ULL;
     ctx->lease_expiry_grace_intervals = 3;
+    return 0;
+}
+
+int tp_client_context_close(tp_client_context_t *ctx)
+{
+    if (NULL == ctx)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_client_context_close: null input");
+        return -1;
+    }
+
+    if (NULL != ctx->base)
+    {
+        tp_context_close(ctx->base);
+        ctx->base = NULL;
+    }
+
     return 0;
 }
 
@@ -57,7 +79,7 @@ void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir)
         return;
     }
 
-    tp_context_set_aeron_dir(&ctx->base, dir);
+    tp_context_set_aeron_dir(ctx->base, dir);
 }
 
 void tp_client_context_set_aeron(tp_client_context_t *ctx, void *aeron)
@@ -139,7 +161,7 @@ void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_func_t h
         return;
     }
 
-    tp_log_set_handler(&ctx->base.log, handler, clientd);
+    tp_log_set_handler(tp_context_log(ctx->base), handler, clientd);
 }
 
 void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
@@ -149,7 +171,7 @@ void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char 
         return;
     }
 
-    tp_context_set_control_channel(&ctx->base, channel, stream_id);
+    tp_context_set_control_channel(ctx->base, channel, stream_id);
 }
 
 void tp_client_context_set_announce_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
@@ -159,7 +181,7 @@ void tp_client_context_set_announce_channel(tp_client_context_t *ctx, const char
         return;
     }
 
-    tp_context_set_announce_channel(&ctx->base, channel, stream_id);
+    tp_context_set_announce_channel(ctx->base, channel, stream_id);
 }
 
 void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
@@ -169,7 +191,7 @@ void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const ch
         return;
     }
 
-    tp_context_set_descriptor_channel(&ctx->base, channel, stream_id);
+    tp_context_set_descriptor_channel(ctx->base, channel, stream_id);
 }
 
 void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
@@ -179,7 +201,7 @@ void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *cha
         return;
     }
 
-    tp_context_set_qos_channel(&ctx->base, channel, stream_id);
+    tp_context_set_qos_channel(ctx->base, channel, stream_id);
 }
 
 void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id)
@@ -189,7 +211,7 @@ void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char
         return;
     }
 
-    tp_context_set_metadata_channel(&ctx->base, channel, stream_id);
+    tp_context_set_metadata_channel(ctx->base, channel, stream_id);
 }
 
 void tp_client_context_set_driver_timeout_ns(tp_client_context_t *ctx, uint64_t value)
@@ -239,7 +261,7 @@ void tp_client_context_set_announce_period_ns(tp_client_context_t *ctx, uint64_t
         return;
     }
 
-    tp_context_set_announce_period_ns(&ctx->base, value);
+    tp_context_set_announce_period_ns(ctx->base, value);
 }
 
 void tp_client_context_set_use_agent_invoker(tp_client_context_t *ctx, bool value)
@@ -309,10 +331,10 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
         return -1;
     }
 
-    client->context.base.allowed_paths.canonical_paths = NULL;
-    client->context.base.allowed_paths.canonical_length = 0;
+    client->context.base->allowed_paths.canonical_paths = NULL;
+    client->context.base->allowed_paths.canonical_length = 0;
 
-    if (tp_context_finalize_allowed_paths(&client->context.base) < 0)
+    if (tp_context_finalize_allowed_paths(client->context.base) < 0)
     {
         return -1;
     }
@@ -348,7 +370,7 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
 cleanup:
     if (result < 0)
     {
-        tp_context_clear_allowed_paths(&client->context.base);
+        tp_context_clear_allowed_paths(client->context.base);
         if (client->conductor)
         {
             tp_client_conductor_close(client->conductor);
@@ -374,22 +396,22 @@ int tp_client_start(tp_client_t *client)
 
     if (tp_client_add_subscription(
         client,
-        client->context.base.control_channel,
-        client->context.base.control_stream_id,
+        client->context.base->control_channel,
+        client->context.base->control_stream_id,
         TP_CLIENT_SUB_CONTROL) < 0)
     {
         return -1;
     }
 
-    if (client->context.base.announce_channel[0] != '\0' &&
-        client->context.base.announce_stream_id >= 0 &&
-        (client->context.base.announce_stream_id != client->context.base.control_stream_id ||
-            strcmp(client->context.base.announce_channel, client->context.base.control_channel) != 0))
+    if (client->context.base->announce_channel[0] != '\0' &&
+        client->context.base->announce_stream_id >= 0 &&
+        (client->context.base->announce_stream_id != client->context.base->control_stream_id ||
+            strcmp(client->context.base->announce_channel, client->context.base->control_channel) != 0))
     {
         if (tp_client_add_subscription(
             client,
-            client->context.base.announce_channel,
-            client->context.base.announce_stream_id,
+            client->context.base->announce_channel,
+            client->context.base->announce_stream_id,
             TP_CLIENT_SUB_ANNOUNCE) < 0)
         {
             return -1;
@@ -398,8 +420,8 @@ int tp_client_start(tp_client_t *client)
 
     if (tp_client_add_subscription(
         client,
-        client->context.base.qos_channel,
-        client->context.base.qos_stream_id,
+        client->context.base->qos_channel,
+        client->context.base->qos_stream_id,
         TP_CLIENT_SUB_QOS) < 0)
     {
         return -1;
@@ -407,8 +429,8 @@ int tp_client_start(tp_client_t *client)
 
     if (tp_client_add_subscription(
         client,
-        client->context.base.metadata_channel,
-        client->context.base.metadata_stream_id,
+        client->context.base->metadata_channel,
+        client->context.base->metadata_stream_id,
         TP_CLIENT_SUB_METADATA) < 0)
     {
         return -1;
@@ -416,8 +438,8 @@ int tp_client_start(tp_client_t *client)
 
     if (tp_client_add_subscription(
         client,
-        client->context.base.descriptor_channel,
-        client->context.base.descriptor_stream_id,
+        client->context.base->descriptor_channel,
+        client->context.base->descriptor_stream_id,
         TP_CLIENT_SUB_DESCRIPTOR) < 0)
     {
         return -1;
@@ -462,7 +484,7 @@ int tp_client_do_work(tp_client_t *client)
                 "tp_client_do_work: driver lease expired stream=%u client=%u",
                 driver->active_stream_id,
                 driver->client_id);
-            tp_log_emit(&client->context.base.log, TP_LOG_ERROR, "%s", tp_errmsg());
+            tp_log_emit(&client->context.base->log, TP_LOG_ERROR, "%s", tp_errmsg());
             if (client->context.error_handler)
             {
                 client->context.error_handler(client->context.error_handler_clientd, tp_errcode(), tp_errmsg());
@@ -475,7 +497,7 @@ int tp_client_do_work(tp_client_t *client)
         {
             if (tp_driver_keepalive(driver, now_ns) < 0)
             {
-                tp_log_emit(&client->context.base.log, TP_LOG_ERROR, "%s", tp_errmsg());
+                tp_log_emit(&client->context.base->log, TP_LOG_ERROR, "%s", tp_errmsg());
                 if (client->context.error_handler)
                 {
                     client->context.error_handler(client->context.error_handler_clientd, tp_errcode(), tp_errmsg());
@@ -536,7 +558,7 @@ int tp_client_close(tp_client_t *client)
 
     client->driver_clients = NULL;
 
-    tp_context_clear_allowed_paths(&client->context.base);
+    tp_context_clear_allowed_paths(client->context.base);
     if (client->conductor)
     {
         tp_client_conductor_close(client->conductor);

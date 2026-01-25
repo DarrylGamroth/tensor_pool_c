@@ -1,4 +1,5 @@
-#include "tensor_pool/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_context.h"
 
 #include "tensor_pool/tp_client.h"
 
@@ -80,9 +81,9 @@ static int tp_client_conductor_apply_context(
         return -1;
     }
 
-    if (context->base.aeron_dir[0] != '\0')
+    if (context->base && context->base->aeron_dir[0] != '\0')
     {
-        if (aeron_context_set_dir(aeron_ctx, context->base.aeron_dir) < 0)
+        if (aeron_context_set_dir(aeron_ctx, context->base->aeron_dir) < 0)
         {
             return -1;
         }

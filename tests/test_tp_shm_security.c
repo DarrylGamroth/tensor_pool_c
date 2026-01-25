@@ -32,7 +32,7 @@ static int create_temp_file(char *path_template, size_t size)
 
 void tp_test_shm_security(void)
 {
-    tp_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_shm_region_t region = { 0 };
     const char *allowed_paths[1];
     const char *file_template = "/tmp/tp_shm_secXXXXXX";
@@ -52,7 +52,6 @@ void tp_test_shm_security(void)
     int result = -1;
     int step = 0;
 
-    memset(&ctx, 0, sizeof(ctx));
     step = 1;
     if (tp_context_init(&ctx) < 0)
     {
@@ -70,21 +69,21 @@ void tp_test_shm_security(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", file_path);
     step = 3;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
 
     allowed_paths[0] = "/tmp";
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 4;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
 
     step = 5;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) != 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) != 0)
     {
         goto cleanup;
     }
@@ -92,7 +91,7 @@ void tp_test_shm_security(void)
     close(fd);
     fd = -1;
     unlink(file_path);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_clear_allowed_paths(ctx);
 
     step = 6;
     strncpy(base_dir, base_template, sizeof(base_dir) - 1);
@@ -103,9 +102,9 @@ void tp_test_shm_security(void)
     }
 
     allowed_paths[0] = base_dir;
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 7;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
@@ -121,20 +120,20 @@ void tp_test_shm_security(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", file_path);
     step = 9;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
     close(fd);
     fd = -1;
     unlink(file_path);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_clear_allowed_paths(ctx);
     rmdir(base_dir);
 
     allowed_paths[0] = "/tmp";
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 10;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
@@ -155,40 +154,40 @@ void tp_test_shm_security(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", file_path);
     step = 12;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
 
-    tp_context_set_shm_permissions(&ctx, false, TP_NULL_U32, TP_NULL_U32, 0);
+    tp_context_set_shm_permissions(ctx, false, TP_NULL_U32, TP_NULL_U32, 0);
     step = 13;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) != 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) != 0)
     {
         goto cleanup;
     }
-    tp_context_set_shm_permissions(&ctx, true, (uint32_t)getuid() + 1, TP_NULL_U32, 0);
+    tp_context_set_shm_permissions(ctx, true, (uint32_t)getuid() + 1, TP_NULL_U32, 0);
     step = 14;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
-    tp_context_set_shm_permissions(&ctx, true, TP_NULL_U32, (uint32_t)getgid() + 1, 0);
+    tp_context_set_shm_permissions(ctx, true, TP_NULL_U32, (uint32_t)getgid() + 1, 0);
     step = 15;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
-    tp_context_set_shm_permissions(&ctx, true, TP_NULL_U32, TP_NULL_U32, 0007);
+    tp_context_set_shm_permissions(ctx, true, TP_NULL_U32, TP_NULL_U32, 0007);
     tp_shm_unmap(&region, NULL);
     close(fd);
     fd = -1;
     unlink(file_path);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_clear_allowed_paths(ctx);
 
     allowed_paths[0] = "/tmp";
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 16;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
@@ -207,17 +206,17 @@ void tp_test_shm_security(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", fifo_path);
     step = 18;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
     unlink(fifo_path);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_clear_allowed_paths(ctx);
 
     allowed_paths[0] = "/tmp";
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 19;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
@@ -245,20 +244,20 @@ void tp_test_shm_security(void)
 
     snprintf(uri, sizeof(uri), "shm:file?path=%s", link_path);
     step = 22;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
 
     step = 23;
-    if (tp_shm_map(&region, "shm:file?path=relative/path", 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, "shm:file?path=relative/path", 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
 
     step = 24;
     snprintf(uri, sizeof(uri), "shm:file?path=%s|require_hugepages=true", file_path);
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
@@ -267,7 +266,7 @@ void tp_test_shm_security(void)
     fd = -1;
     unlink(file_path);
     unlink(link_path);
-    tp_context_clear_allowed_paths(&ctx);
+    tp_context_clear_allowed_paths(ctx);
 
     strncpy(base_dir, base_template, sizeof(base_dir) - 1);
     base_dir[sizeof(base_dir) - 1] = '\0';
@@ -297,9 +296,9 @@ void tp_test_shm_security(void)
     }
 
     allowed_paths[0] = base_dir;
-    tp_context_set_allowed_paths(&ctx, allowed_paths, 1);
+    tp_context_set_allowed_paths(ctx, allowed_paths, 1);
     step = 26;
-    if (tp_context_finalize_allowed_paths(&ctx) < 0)
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
     {
         goto cleanup;
     }
@@ -314,7 +313,7 @@ void tp_test_shm_security(void)
     }
     snprintf(uri, sizeof(uri), "shm:file?path=%s", link_file);
     step = 27;
-    if (tp_shm_map(&region, uri, 0, &ctx.allowed_paths, NULL) == 0)
+    if (tp_shm_map(&region, uri, 0, tp_context_allowed_paths(ctx), NULL) == 0)
     {
         goto cleanup;
     }
@@ -325,12 +324,14 @@ void tp_test_shm_security(void)
     unlink(link_dir);
     rmdir(real_dir);
     rmdir(base_dir);
-    tp_context_clear_allowed_paths(&ctx);
-
     result = 0;
 
 cleanup:
-    tp_context_clear_allowed_paths(&ctx);
+    if (NULL != ctx)
+    {
+        tp_context_close(ctx);
+        ctx = NULL;
+    }
     if (fd >= 0)
     {
         close(fd);

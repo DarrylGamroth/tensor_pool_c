@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "tensor_pool/tp_metadata_poller.h"
+#include "tensor_pool/internal/tp_metadata_poller.h"
 
 static void tp_fuzz_on_data_source_announce(const tp_data_source_announce_view_t *announce, void *clientd)
 {

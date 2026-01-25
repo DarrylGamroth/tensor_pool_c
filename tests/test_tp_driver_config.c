@@ -10,9 +10,9 @@ void tp_test_driver_config(void)
     assert(tp_driver_config_init(&config) == 0);
     assert(tp_driver_config_load(&config, "../config/driver_integration_example.toml") == 0);
 
-    assert(config.base.control_stream_id == 1000);
-    assert(config.base.announce_stream_id == 1001);
-    assert(config.base.qos_stream_id == 1200);
+    assert(tp_context_get_control_stream_id(config.base) == 1000);
+    assert(tp_context_get_announce_stream_id(config.base) == 1001);
+    assert(tp_context_get_qos_stream_id(config.base) == 1200);
     assert(strcmp(config.shm_base_dir, "/dev/shm") == 0);
     assert(strcmp(config.shm_namespace, "default") == 0);
     assert(config.allow_dynamic_streams == false);

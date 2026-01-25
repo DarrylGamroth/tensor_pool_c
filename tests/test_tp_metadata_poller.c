@@ -1,4 +1,4 @@
-#include "tensor_pool/tp_metadata_poller.h"
+#include "tensor_pool/internal/tp_metadata_poller.h"
 
 #include "wire/tensor_pool/messageHeader.h"
 #include "wire/tensor_pool/dataSourceAnnounce.h"

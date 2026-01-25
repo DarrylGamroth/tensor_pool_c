@@ -104,7 +104,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    tp_discovery_apply_log_level(&config.base.log);
+    tp_discovery_apply_log_level(tp_context_log(config.base));
 
     if (tp_discovery_service_init(&service, &config) < 0)
     {
