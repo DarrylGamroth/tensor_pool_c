@@ -28,6 +28,7 @@ default_profile = "camera"
 announce_period_ms = 1000
 lease_keepalive_interval_ms = 1000
 lease_expiry_grace_intervals = 3
+node_id_reuse_cooldown_ms = 1000
 
 # Profiles define SHM sizing and pool layout
 [profiles.camera]

@@ -76,6 +76,7 @@ typedef struct tp_driver_config_stct
     uint32_t epoch_gc_keep;
     uint64_t epoch_gc_min_age_ns;
     bool epoch_gc_on_startup;
+    uint32_t node_id_reuse_cooldown_ms;
     tp_driver_id_ranges_t stream_id_ranges;
     tp_driver_id_ranges_t descriptor_stream_id_ranges;
     tp_driver_id_ranges_t control_stream_id_ranges;
@@ -103,6 +104,9 @@ typedef struct tp_driver_stct
     size_t lease_capacity;
     uint64_t lease_counter;
     uint64_t next_announce_ns;
+    void *node_id_cooldowns;
+    size_t node_id_cooldown_count;
+    size_t node_id_cooldown_capacity;
     bool supervisor_enabled;
     tp_supervisor_t supervisor;
 }

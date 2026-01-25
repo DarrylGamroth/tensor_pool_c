@@ -871,6 +871,7 @@ int tp_driver_config_init(tp_driver_config_t *config)
     config->epoch_gc_keep = 2;
     config->epoch_gc_on_startup = false;
     config->epoch_gc_min_age_ns = 3ULL * 1000ULL * 1000ULL * 1000ULL;
+    config->node_id_reuse_cooldown_ms = 1000;
 
     return 0;
 }
@@ -1149,6 +1150,14 @@ int tp_driver_config_load(tp_driver_config_t *config, const char *path)
     if (tp_driver_copy_uint32(&config->lease_expiry_grace_intervals,
             toml_get(policies, "lease_expiry_grace_intervals"),
             "policies.lease_expiry_grace_intervals", false) < 0)
+    {
+        toml_free(parsed);
+        return -1;
+    }
+
+    if (tp_driver_copy_uint32(&config->node_id_reuse_cooldown_ms,
+            toml_get(policies, "node_id_reuse_cooldown_ms"),
+            "policies.node_id_reuse_cooldown_ms", false) < 0)
     {
         toml_free(parsed);
         return -1;

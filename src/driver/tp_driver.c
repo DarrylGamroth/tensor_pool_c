@@ -66,6 +66,13 @@ typedef struct tp_driver_lease_stct
 }
 tp_driver_lease_t;
 
+typedef struct tp_driver_node_id_cooldown_stct
+{
+    uint32_t node_id;
+    uint64_t expires_ns;
+}
+tp_driver_node_id_cooldown_t;
+
 typedef struct tp_driver_stream_state_stct
 {
     uint32_t stream_id;
@@ -82,16 +89,22 @@ tp_driver_stream_state_t;
 static uint64_t tp_driver_seed_u64(void);
 static bool tp_driver_node_id_in_use(tp_driver_t *driver, uint32_t node_id);
 static int tp_driver_gc_stream(tp_driver_t *driver, tp_driver_stream_state_t *stream);
+static void tp_driver_prune_node_id_cooldowns(tp_driver_t *driver, uint64_t now_ns);
+static int tp_driver_node_id_in_cooldown(tp_driver_t *driver, uint32_t node_id, uint64_t now_ns);
+static int tp_driver_record_node_id_cooldown(tp_driver_t *driver, uint32_t node_id, uint64_t now_ns);
 
 static uint32_t tp_driver_next_node_id(tp_driver_t *driver)
 {
     uint32_t candidate = 0;
     size_t attempts = 0;
+    uint64_t now_ns = tp_clock_now_ns();
 
     if (driver->lease_counter == 0)
     {
         driver->lease_counter = tp_driver_seed_u64();
     }
+
+    tp_driver_prune_node_id_cooldowns(driver, now_ns);
 
     while (attempts < 1024)
     {
@@ -99,7 +112,8 @@ static uint32_t tp_driver_next_node_id(tp_driver_t *driver)
         candidate = (uint32_t)(seed ^ (seed >> 32));
         if (candidate != 0 &&
             candidate != tensor_pool_shmAttachResponse_nodeId_null_value() &&
-            !tp_driver_node_id_in_use(driver, candidate))
+            !tp_driver_node_id_in_use(driver, candidate) &&
+            !tp_driver_node_id_in_cooldown(driver, candidate, now_ns))
         {
             return candidate;
         }
@@ -212,6 +226,11 @@ static tp_driver_lease_t *tp_driver_leases(tp_driver_t *driver)
     return (tp_driver_lease_t *)driver->leases;
 }
 
+static tp_driver_node_id_cooldown_t *tp_driver_node_id_cooldowns(tp_driver_t *driver)
+{
+    return (tp_driver_node_id_cooldown_t *)driver->node_id_cooldowns;
+}
+
 static uint64_t tp_driver_seed_u64(void)
 {
     uint64_t seed = 0;
@@ -317,6 +336,98 @@ static bool tp_driver_node_id_in_use(tp_driver_t *driver, uint32_t node_id)
     }
 
     return false;
+}
+
+static void tp_driver_prune_node_id_cooldowns(tp_driver_t *driver, uint64_t now_ns)
+{
+    size_t i = 0;
+
+    if (NULL == driver || driver->node_id_cooldown_count == 0)
+    {
+        return;
+    }
+
+    while (i < driver->node_id_cooldown_count)
+    {
+        if (tp_driver_node_id_cooldowns(driver)[i].expires_ns <= now_ns)
+        {
+            if (i + 1 < driver->node_id_cooldown_count)
+            {
+                memmove(&tp_driver_node_id_cooldowns(driver)[i],
+                    &tp_driver_node_id_cooldowns(driver)[i + 1],
+                    (driver->node_id_cooldown_count - i - 1) * sizeof(tp_driver_node_id_cooldown_t));
+            }
+            driver->node_id_cooldown_count--;
+            continue;
+        }
+        i++;
+    }
+}
+
+static int tp_driver_node_id_in_cooldown(tp_driver_t *driver, uint32_t node_id, uint64_t now_ns)
+{
+    size_t i;
+
+    if (NULL == driver || node_id == 0 || driver->node_id_cooldown_count == 0)
+    {
+        return 0;
+    }
+
+    tp_driver_prune_node_id_cooldowns(driver, now_ns);
+    for (i = 0; i < driver->node_id_cooldown_count; i++)
+    {
+        if (tp_driver_node_id_cooldowns(driver)[i].node_id == node_id)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int tp_driver_record_node_id_cooldown(tp_driver_t *driver, uint32_t node_id, uint64_t now_ns)
+{
+    size_t i;
+    uint64_t expires_ns;
+    tp_driver_node_id_cooldown_t *cooldowns;
+
+    if (NULL == driver || node_id == 0 ||
+        node_id == tensor_pool_shmAttachResponse_nodeId_null_value() ||
+        driver->config.node_id_reuse_cooldown_ms == 0)
+    {
+        return 0;
+    }
+
+    tp_driver_prune_node_id_cooldowns(driver, now_ns);
+    expires_ns = now_ns + (uint64_t)driver->config.node_id_reuse_cooldown_ms * 1000000ULL;
+
+    for (i = 0; i < driver->node_id_cooldown_count; i++)
+    {
+        if (tp_driver_node_id_cooldowns(driver)[i].node_id == node_id)
+        {
+            tp_driver_node_id_cooldowns(driver)[i].expires_ns = expires_ns;
+            return 0;
+        }
+    }
+
+    if (driver->node_id_cooldown_count + 1 > driver->node_id_cooldown_capacity)
+    {
+        size_t new_capacity = driver->node_id_cooldown_capacity == 0 ? 8 : driver->node_id_cooldown_capacity * 2;
+        cooldowns = (tp_driver_node_id_cooldown_t *)realloc(driver->node_id_cooldowns,
+            new_capacity * sizeof(*cooldowns));
+        if (NULL == cooldowns)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_driver_record_node_id_cooldown: allocation failed");
+            return -1;
+        }
+        driver->node_id_cooldowns = cooldowns;
+        driver->node_id_cooldown_capacity = new_capacity;
+    }
+
+    tp_driver_node_id_cooldowns(driver)[driver->node_id_cooldown_count].node_id = node_id;
+    tp_driver_node_id_cooldowns(driver)[driver->node_id_cooldown_count].expires_ns = expires_ns;
+    driver->node_id_cooldown_count++;
+    return 0;
 }
 
 static int tp_driver_allocate_stream_id(tp_driver_t *driver, uint32_t *out_stream_id)
@@ -1434,6 +1545,7 @@ static void tp_driver_handle_expired_leases(tp_driver_t *driver)
             }
 
             tp_driver_send_lease_revoked(driver, lease, tensor_pool_leaseRevokeReason_EXPIRED, "lease expired");
+            (void)tp_driver_record_node_id_cooldown(driver, lease->node_id, now);
             tp_driver_release_producer(stream, lease);
             tp_driver_remove_lease(driver, i);
 
@@ -1504,6 +1616,7 @@ static int tp_driver_handle_detach(
     }
 
     tp_driver_send_lease_revoked(driver, lease, tensor_pool_leaseRevokeReason_DETACHED, "lease detached");
+    (void)tp_driver_record_node_id_cooldown(driver, lease->node_id, tp_clock_now_ns());
     tp_driver_release_producer(stream, lease);
     tp_driver_remove_lease(driver, index);
 
@@ -1751,7 +1864,9 @@ static int tp_driver_handle_attach(
 
     if (desired_node_id != tensor_pool_shmAttachRequest_desiredNodeId_null_value())
     {
-        if (tp_driver_node_id_in_use(driver, desired_node_id))
+        uint64_t now_ns = tp_clock_now_ns();
+        if (tp_driver_node_id_in_use(driver, desired_node_id) ||
+            tp_driver_node_id_in_cooldown(driver, desired_node_id, now_ns))
         {
             return tp_driver_send_attach_response(driver, correlation_id,
                 tensor_pool_responseCode_REJECTED, NULL, NULL,
@@ -2129,6 +2244,11 @@ int tp_driver_close(tp_driver_t *driver)
     driver->leases = NULL;
     driver->lease_count = 0;
     driver->lease_capacity = 0;
+
+    free(driver->node_id_cooldowns);
+    driver->node_id_cooldowns = NULL;
+    driver->node_id_cooldown_count = 0;
+    driver->node_id_cooldown_capacity = 0;
 
     tp_driver_config_close(&driver->config);
     memset(driver, 0, sizeof(*driver));
