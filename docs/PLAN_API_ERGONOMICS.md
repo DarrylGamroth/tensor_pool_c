@@ -29,9 +29,10 @@ clear lifecycle semantics and consistent naming.
 - Align error messages and return codes with Aeron conventions.
 
 ## Phase 3: Migration & Examples
+- Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
 - Update examples to use the new public API names and async + poll patterns.
 - Update `docs/C_CLIENT_API_USAGE.md` to highlight the async model first.
-- Update `docs/AERON_LIKE_API_PROPOSAL.md` and `docs/HELPER_API_DRAFT.md` (rename to `API_DRAFT.md`).
+- Update `docs/AERON_LIKE_API_PROPOSAL.md` to reflect the new public API.
 
 ## Phase 4: Tests
 - Add tests for new async + poll functions (success, timeout, error paths).
