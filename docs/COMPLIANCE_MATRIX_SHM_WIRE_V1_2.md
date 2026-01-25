@@ -78,7 +78,7 @@ Legend:
 | 15.12 Consumer State Machine | Compliant | Mapped/unmapped tracking with fallback entry/exit in `src/tp_consumer.c`. |
 | 15.13 Test and Validation Checklist | Compliant | Fail-closed superblock validation, QoS drop counts, and epoch remap coverage added in tests. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
-| 15.15 Aeron Terminology Mapping | N/A | Informative. |
+| 15.15 Aeron Terminology Mapping | Missing | Client conductor does not yet centralize control/QoS/metadata/descriptor polling or handler dispatch. |
 | 15.16 Reuse Aeron Primitives | Compliant | Control/descriptor/QoS/metadata all use Aeron; no custom SHM counters added; optional bridge/supervisor remain external. |
 | 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/tp_control.c` and `src/tp_control_adapter.c`. |

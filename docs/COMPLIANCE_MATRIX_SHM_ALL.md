@@ -25,6 +25,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
 | QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
+| Client conductor (Aeron-style) | Missing | Conductor does not yet centralize control/QoS/metadata/descriptor polling or handler dispatch. |
 | Supervisor/unified management | External | Not implemented in this repo. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
 | SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
