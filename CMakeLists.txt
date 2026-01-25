@@ -292,6 +292,18 @@ target_include_directories(tensor_pool
 target_link_libraries(tensor_pool PUBLIC ${AERON_TARGET})
 target_link_libraries(tensor_pool PUBLIC tomlc17)
 
+install(TARGETS tensor_pool
+    EXPORT tensor_poolTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin)
+
+foreach (header IN LISTS TP_PUBLIC_HEADERS)
+    get_filename_component(header_dir "${header}" DIRECTORY)
+    file(RELATIVE_PATH header_rel_dir "${CMAKE_CURRENT_LIST_DIR}/include" "${header_dir}")
+    install(FILES "${header}" DESTINATION "include/${header_rel_dir}")
+endforeach ()
+
 if (TP_ENABLE_COVERAGE)
     if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-O0 -g --coverage)

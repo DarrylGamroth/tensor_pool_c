@@ -13,15 +13,21 @@ clear lifecycle semantics and consistent naming.
 - Public headers expose handles + config only; implementation state is private.
 
 ## Phase 0: Inventory + Boundary Definition
-- [ ] Audit current public headers (`include/tensor_pool/...`) and classify:
+- [x] Audit current public headers (`include/tensor_pool/...`) and classify:
   - Public: user-facing API (client/producer/consumer/driver entrypoints).
   - Internal: conductor, pollers, registries, adapters, Aeron wrappers.
-- [ ] Compare with Aeron C client + archive patterns (`../aeron/aeron-client`, `../aeron/aeron-archive`)
+- [x] Compare with Aeron C client + archive patterns (`../aeron/aeron-client`, `../aeron/aeron-archive`)
   and record required alignment changes.
-- [ ] Define a single public include surface:
+- [x] Define a single public include surface:
   - Keep `include/tensor_pool/tp.h` as the single umbrella, but only include public headers.
   - Move internal headers to `include/tensor_pool/internal/` (not installed).
-- [ ] Add a strict list of public headers to CMake install rules to prevent accidental exposure.
+- [x] Add a strict list of public headers to CMake install rules to prevent accidental exposure.
+
+### Phase 0 Notes
+- Public headers are enumerated in `TP_PUBLIC_HEADERS` (`CMakeLists.txt`) and installed explicitly.
+- Internal headers live under `include/tensor_pool/internal/` and are not part of the install list.
+- `include/tensor_pool/tp.h` remains the only umbrella header.
+- Aeron alignment: opaque handles + context/agent lifecycle mirror Aeron C client patterns.
 
 ## Phase 1: API Surface Redesign
 - [ ] Replace "helper" names with public API names:
