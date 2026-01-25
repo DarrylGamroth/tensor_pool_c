@@ -71,3 +71,10 @@ Related design docs:
 - Phase 5: Not started
 - Phase 6: Not started
 - Phase 7: Not started
+
+## Checklist (Specs → Tests)
+- [ ] Add integration coverage for driver server-side requirements (D-2.1, D-4.3-1, D-4.8-1, D-4.2-4/TL-6.2-1).
+- [ ] Add node ID reuse cooldown policy (TraceLink §6.2) or document explicit verification.
+- [ ] Implement discovery provider/registry service.
+- [ ] Implement supervisor/unified management layer.
+- [ ] Expand config-matrix integration tests beyond external driver availability.
