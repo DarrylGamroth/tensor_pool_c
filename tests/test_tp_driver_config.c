@@ -16,6 +16,7 @@ void tp_test_driver_config(void)
     assert(strcmp(config.shm_base_dir, "/dev/shm") == 0);
     assert(strcmp(config.shm_namespace, "default") == 0);
     assert(config.allow_dynamic_streams == false);
+    assert(config.node_id_reuse_cooldown_ms == 1000);
     assert(config.profile_count == 1);
     assert(config.stream_count == 1);
     assert(config.profiles[0].header_nslots == 64);
@@ -29,6 +30,7 @@ void tp_test_driver_config(void)
     assert(tp_driver_config_load(&config, "../config/driver_integration_dynamic.toml") == 0);
 
     assert(config.allow_dynamic_streams == true);
+    assert(config.node_id_reuse_cooldown_ms == 1000);
     assert(config.stream_id_ranges.count > 0);
     assert(strlen(config.default_profile) > 0);
 

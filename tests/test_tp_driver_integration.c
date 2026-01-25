@@ -18,14 +18,20 @@
 #include "driver/tensor_pool/role.h"
 #include "driver/tensor_pool/publishMode.h"
 #include "driver/tensor_pool/leaseRevokeReason.h"
+#include "driver/tensor_pool/hugepagesPolicy.h"
 #include "driver/tensor_pool/shmAttachResponse.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/statfs.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifndef HUGETLBFS_MAGIC
+#define HUGETLBFS_MAGIC 0x958458f6
+#endif
 
 typedef struct tp_driver_revoke_state_stct
 {
@@ -54,6 +60,23 @@ static void tp_test_sleep_ms(long millis)
     req.tv_sec = millis / 1000;
     req.tv_nsec = (millis % 1000) * 1000000L;
     nanosleep(&req, NULL);
+}
+
+static int tp_test_is_hugepages_dir(const char *path)
+{
+    struct statfs st;
+
+    if (NULL == path || path[0] == '\0')
+    {
+        return 0;
+    }
+
+    if (statfs(path, &st) < 0)
+    {
+        return 0;
+    }
+
+    return (st.f_type == HUGETLBFS_MAGIC) ? 1 : 0;
 }
 
 static int tp_test_driver_attach_with_work(
@@ -97,6 +120,144 @@ static int tp_test_driver_attach_with_work(
     tp_fragment_assembler_close(&async->assembler);
     aeron_free(async);
     return -1;
+}
+
+static int tp_test_driver_detach_with_work(
+    tp_driver_t *driver,
+    tp_driver_client_t *client,
+    int64_t timeout_ns)
+{
+    tp_async_detach_t *async = NULL;
+    tp_driver_detach_info_t info;
+    int64_t deadline_ns;
+    int poll_result;
+
+    if (tp_driver_detach_async(client, &async) < 0 || NULL == async)
+    {
+        return -1;
+    }
+
+    deadline_ns = tp_clock_now_ns() + timeout_ns;
+    for (;;)
+    {
+        tp_driver_do_work(driver);
+        poll_result = tp_driver_detach_poll(async, &info);
+        if (poll_result < 0)
+        {
+            break;
+        }
+        if (poll_result > 0)
+        {
+            aeron_free(async);
+            return 0;
+        }
+        if (timeout_ns > 0 && tp_clock_now_ns() > deadline_ns)
+        {
+            TP_SET_ERR(ETIMEDOUT, "%s", "tp_test_driver_detach_with_work: timeout");
+            break;
+        }
+        tp_test_sleep_ms(1);
+    }
+
+    tp_fragment_assembler_close(&async->assembler);
+    aeron_free(async);
+    return -1;
+}
+
+static int tp_test_driver_attach_with_config(
+    const char *config_path,
+    const char *shm_namespace,
+    uint32_t stream_id,
+    uint8_t publish_mode,
+    int32_t expected_code)
+{
+    tp_driver_config_t driver_config;
+    tp_driver_t driver;
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_driver_client_t driver_client;
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    int result = -1;
+
+    memset(&driver, 0, sizeof(driver));
+    memset(&client, 0, sizeof(client));
+    memset(&driver_client, 0, sizeof(driver_client));
+    memset(&info, 0, sizeof(info));
+
+    if (tp_driver_config_init(&driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_config_load(&driver_config, config_path) < 0)
+    {
+        goto cleanup;
+    }
+    if (NULL != shm_namespace)
+    {
+        strncpy(driver_config.shm_namespace, shm_namespace, sizeof(driver_config.shm_namespace) - 1);
+    }
+
+    if (tp_driver_init(&driver, &driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_start(&driver) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_client_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_client_context_set_use_agent_invoker(&ctx, true);
+    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+
+    if (tp_client_init(&client, &ctx) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_client_start(&client) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_driver_client_init(&driver_client, &client) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.correlation_id = 1;
+    request.stream_id = stream_id;
+    request.client_id = 0;
+    request.role = tensor_pool_role_PRODUCER;
+    request.expected_layout_version = TP_LAYOUT_VERSION;
+    request.publish_mode = publish_mode;
+    request.require_hugepages = 0;
+    request.desired_node_id = 0;
+
+    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (info.code != expected_code)
+    {
+        TP_SET_ERR(EINVAL, "tp_test_driver_attach_with_config: expected code %d got %d",
+            expected_code, info.code);
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    tp_driver_attach_info_close(&info);
+    tp_driver_client_close(&driver_client);
+    tp_client_close(&client);
+    tp_driver_close(&driver);
+    return result;
 }
 
 void tp_test_driver_discovery_integration(void)
@@ -437,6 +598,256 @@ cleanup:
     if (result != 0)
     {
         fprintf(stderr, "tp_test_driver_exclusive_producer failed at step %d: %s\n", step, tp_errmsg());
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_driver_publish_mode_hugepages(void)
+{
+    tp_driver_config_t driver_config;
+    tp_driver_t driver;
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_driver_client_t driver_client;
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    int result = -1;
+    int step = 0;
+    int expect_hugepages_ok;
+
+    memset(&driver, 0, sizeof(driver));
+    memset(&client, 0, sizeof(client));
+    memset(&driver_client, 0, sizeof(driver_client));
+    memset(&info, 0, sizeof(info));
+
+    if (tp_driver_config_init(&driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    {
+        goto cleanup;
+    }
+    strncpy(driver_config.shm_namespace, "test-publish", sizeof(driver_config.shm_namespace) - 1);
+
+    if (tp_driver_init(&driver, &driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_start(&driver) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_client_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_client_context_set_use_agent_invoker(&ctx, true);
+    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+
+    if (tp_client_init(&client, &ctx) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_client_start(&client) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_driver_client_init(&driver_client, &client) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.correlation_id = 1;
+    request.stream_id = 20001;
+    request.client_id = 0;
+    request.role = tensor_pool_role_PRODUCER;
+    request.expected_layout_version = TP_LAYOUT_VERSION;
+    request.publish_mode = tensor_pool_publishMode_REQUIRE_EXISTING;
+    request.require_hugepages = 0;
+    request.desired_node_id = 0;
+
+    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+    step = 1;
+    assert(info.code == tensor_pool_responseCode_REJECTED);
+    tp_driver_attach_info_close(&info);
+
+    expect_hugepages_ok = tp_test_is_hugepages_dir(driver_config.shm_base_dir);
+
+    memset(&info, 0, sizeof(info));
+    request.correlation_id++;
+    request.stream_id = 10000;
+    request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
+    request.require_hugepages = tensor_pool_hugepagesPolicy_HUGEPAGES;
+
+    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+    step = 2;
+    if (expect_hugepages_ok)
+    {
+        assert(info.code == tensor_pool_responseCode_OK);
+        if (tp_test_driver_detach_with_work(&driver, &driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+        {
+            goto cleanup;
+        }
+    }
+    else
+    {
+        assert(info.code == tensor_pool_responseCode_REJECTED);
+    }
+
+    result = 0;
+
+cleanup:
+    tp_driver_attach_info_close(&info);
+    tp_driver_client_close(&driver_client);
+    tp_client_close(&client);
+    tp_driver_close(&driver);
+
+    if (result != 0)
+    {
+        fprintf(stderr, "tp_test_driver_publish_mode_hugepages failed at step %d: %s\n", step, tp_errmsg());
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_driver_node_id_cooldown(void)
+{
+    tp_driver_config_t driver_config;
+    tp_driver_t driver;
+    tp_client_context_t ctx;
+    tp_client_t client;
+    tp_driver_client_t driver_client;
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    tp_driver_attach_info_t info2;
+    int result = -1;
+    int step = 0;
+
+    memset(&driver, 0, sizeof(driver));
+    memset(&client, 0, sizeof(client));
+    memset(&driver_client, 0, sizeof(driver_client));
+    memset(&info, 0, sizeof(info));
+    memset(&info2, 0, sizeof(info2));
+
+    if (tp_driver_config_init(&driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    {
+        goto cleanup;
+    }
+    strncpy(driver_config.shm_namespace, "test-nodeid", sizeof(driver_config.shm_namespace) - 1);
+    driver_config.node_id_reuse_cooldown_ms = 10000;
+
+    if (tp_driver_init(&driver, &driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_start(&driver) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_client_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_client_context_set_use_agent_invoker(&ctx, true);
+    tp_client_context_set_control_channel(&ctx, driver.config.base.control_channel, driver.config.base.control_stream_id);
+
+    if (tp_client_init(&client, &ctx) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_client_start(&client) < 0)
+    {
+        goto cleanup;
+    }
+
+    if (tp_driver_client_init(&driver_client, &client) < 0)
+    {
+        goto cleanup;
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.correlation_id = 1;
+    request.stream_id = 10000;
+    request.client_id = 0;
+    request.role = tensor_pool_role_PRODUCER;
+    request.expected_layout_version = TP_LAYOUT_VERSION;
+    request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
+    request.require_hugepages = 0;
+    request.desired_node_id = 4242;
+
+    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+    step = 1;
+    assert(info.code == tensor_pool_responseCode_OK);
+
+    if (tp_test_driver_detach_with_work(&driver, &driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+
+    request.correlation_id++;
+    if (tp_test_driver_attach_with_work(&driver, &driver_client, &request, &info2, 2 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+    step = 2;
+    assert(info2.code == tensor_pool_responseCode_REJECTED);
+
+    result = 0;
+
+cleanup:
+    tp_driver_attach_info_close(&info);
+    tp_driver_attach_info_close(&info2);
+    tp_driver_client_close(&driver_client);
+    tp_client_close(&client);
+    tp_driver_close(&driver);
+
+    if (result != 0)
+    {
+        fprintf(stderr, "tp_test_driver_node_id_cooldown failed at step %d: %s\n", step, tp_errmsg());
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_driver_config_matrix(void)
+{
+    int result = 0;
+
+    result |= tp_test_driver_attach_with_config(
+        "../config/driver_integration_announce_separate.toml",
+        "test-matrix-announce",
+        10001,
+        tensor_pool_publishMode_EXISTING_OR_CREATE,
+        tensor_pool_responseCode_OK);
+    result |= tp_test_driver_attach_with_config(
+        "../config/driver_integration_dynamic.toml",
+        "test-matrix-dynamic",
+        20001,
+        tensor_pool_publishMode_EXISTING_OR_CREATE,
+        tensor_pool_responseCode_OK);
+
+    if (result != 0)
+    {
+        fprintf(stderr, "tp_test_driver_config_matrix failed: %s\n", tp_errmsg());
     }
 
     assert(result == 0);
