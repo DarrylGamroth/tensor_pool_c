@@ -4,6 +4,10 @@ This document defines the Aeron-style client conductor for TensorPool C. It is
 the single-writer owner of client state and centralizes control/QoS/metadata/
 descriptor handling so applications do not call Aeron APIs directly.
 
+## Status
+
+Active design reference for conductor behavior. Update when conductor implementation or specs change.
+
 Authoritative references:
 - `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md` (15.15, 10.x control plane)
 - `docs/SHM_Driver_Model_Spec_v1.0.md`

@@ -2,6 +2,10 @@
 
 This document proposes an Aeron-style API for TensorPool C clients. The goal is to remove direct Aeron calls from application code, provide ergonomic async add/poll patterns, and centralize control/QoS/metadata/discovery logic behind adapters and pollers.
 
+## Status
+
+Active reference for API shape. Keep aligned with `docs/SHM_Tensor_Pool_Wire_Spec_v1.2.md` and update when spec or implementation changes.
+
 ## 1. Motivation (Current Pain Points)
 
 Observed in `examples/tp_example_consumer_driver.c` / `examples/tp_example_producer_driver.c` / `tools/tp_control_listen.c`:
