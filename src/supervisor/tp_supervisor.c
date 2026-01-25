@@ -477,7 +477,7 @@ int tp_supervisor_do_work(tp_supervisor_t *supervisor)
         work += aeron_subscription_poll(
             tp_subscription_handle(supervisor->control_subscription),
             aeron_fragment_assembler_handler,
-            supervisor,
+            tp_fragment_assembler_handle(supervisor->control_assembler),
             10);
     }
 
@@ -486,7 +486,7 @@ int tp_supervisor_do_work(tp_supervisor_t *supervisor)
         work += aeron_subscription_poll(
             tp_subscription_handle(supervisor->announce_subscription),
             aeron_fragment_assembler_handler,
-            supervisor,
+            tp_fragment_assembler_handle(supervisor->announce_assembler),
             10);
     }
 
@@ -495,7 +495,7 @@ int tp_supervisor_do_work(tp_supervisor_t *supervisor)
         work += aeron_subscription_poll(
             tp_subscription_handle(supervisor->metadata_subscription),
             aeron_fragment_assembler_handler,
-            supervisor,
+            tp_fragment_assembler_handle(supervisor->metadata_assembler),
             10);
     }
 
@@ -504,7 +504,7 @@ int tp_supervisor_do_work(tp_supervisor_t *supervisor)
         work += aeron_subscription_poll(
             tp_subscription_handle(supervisor->qos_subscription),
             aeron_fragment_assembler_handler,
-            supervisor,
+            tp_fragment_assembler_handle(supervisor->qos_assembler),
             10);
     }
 
