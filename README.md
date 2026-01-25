@@ -86,3 +86,4 @@ tools/run_fuzz_smoke.sh
 - `docs/AERON_LIKE_API_PROPOSAL.md`
 - `docs/STREAM_ID_CONVENTIONS.md`
 - `docs/C_CLIENT_API_USAGE.md`
+- `docs/DRIVER_USAGE.md`
