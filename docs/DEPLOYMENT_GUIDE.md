@@ -10,7 +10,7 @@ only; adjust per workload and hardware.
 | --- | --- | --- |
 | Pool size classes / `stride_bytes` | `1 MiB`, `4 MiB`, `16 MiB` | Power-of-two multiples of 64 bytes; pick the smallest pool that fits the payload. |
 | `header_nslots` / pool `nslots` | `1024` | Power-of-two; choose `ceil(rate_hz * worst_case_latency_s * safety_factor)` with safety factor 2-4. |
-| `layout_version` | `1` | Must match `TP_LAYOUT_VERSION` in `include/tensor_pool/tp_types.h`. |
+| `layout_version` | `1` | Must match `TP_LAYOUT_VERSION` in `include/tensor_pool/common/tp_types.h`. |
 | Aeron channel + stream IDs | Use `docs/STREAM_ID_CONVENTIONS.md` | Default IPC: control `1000`, descriptor `1100`, QoS `1200`, metadata `1300`, pool stream `10000`. |
 
 ## Example Defaults (Single-Host IPC)

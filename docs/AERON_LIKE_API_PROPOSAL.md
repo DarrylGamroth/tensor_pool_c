@@ -691,13 +691,13 @@ tp_client_context_set_log_handler(&ctx, on_log, NULL);
 
 ## 14. Suggested Files / Modules
 
-- `include/tensor_pool/tp_client.h` / `src/tp_client.c` (context, lifecycle, async add wrappers)
-- `include/tensor_pool/tp_control_poller.h` / `src/tp_control_poller.c`
-- `include/tensor_pool/tp_qos_poller.h` / `src/tp_qos_poller.c`
-- `include/tensor_pool/tp_metadata_poller.h` / `src/tp_metadata_poller.c`
-- `include/tensor_pool/tp_progress_poller.h` / `src/tp_progress_poller.c`
-- `include/tensor_pool/tp_driver_client.h` updates for async attach/detach
-- `include/tensor_pool/tp_discovery_client.h` remains, but init uses `tp_client_t`
+- `include/tensor_pool/client/tp_client.h` / `src/client/tp_client.c` (context, lifecycle, async add wrappers)
+- `include/tensor_pool/client/tp_control_poller.h` / `src/client/tp_control_poller.c`
+- `include/tensor_pool/client/tp_qos.h` / `src/client/tp_qos.c`
+- `include/tensor_pool/client/tp_metadata_poller.h` / `src/client/tp_metadata_poller.c`
+- `include/tensor_pool/client/tp_progress_poller.h` / `src/client/tp_progress_poller.c`
+- `include/tensor_pool/client/tp_driver_client.h` updates for async attach/detach
+- `include/tensor_pool/client/tp_discovery_client.h` remains, but init uses `tp_client_t`
 
 ## 15. Decisions and Refinements
 

@@ -24,15 +24,15 @@ Current (gcovr, excluding tests/tools/fuzz/Aeron/build artifacts):
 
 Bottom 10 files by line coverage (baseline):
 - `include/tensor_pool/tp_error.h` (0.0%) -> unit (exercise error setters via API failures)
-- `src/tp_aeron.c` (0.0%) -> unit (wrap Aeron errors + directory resolution)
-- `src/tp_control_poller.c` (0.0%) -> unit/fuzz (direct handler tests)
-- `src/tp_driver_client.c` (28.1%) -> unit (driver attach/reject paths)
-- `src/tp_discovery_client.c` (38.6%) -> unit (error paths + invalid responses)
-- `src/tp_merge_map.c` (42.3%) -> unit (merge rules + map apply)
-- `src/tp_client.c` (42.9%) -> unit (context defaults, subscription errors)
-- `src/tp_tracelink.c` (51.8%) -> unit (trace link edge cases)
-- `src/tp_log.c` (54.2%) -> unit (log routing, levels)
-- `src/tp_client_conductor.c` (56.0%) -> unit (init/start/stop error handling)
+- `src/common/tp_aeron.c` (0.0%) -> unit (wrap Aeron errors + directory resolution)
+- `src/client/tp_control_poller.c` (0.0%) -> unit/fuzz (direct handler tests)
+- `src/client/tp_driver_client.c` (28.1%) -> unit (driver attach/reject paths)
+- `src/client/tp_discovery_client.c` (38.6%) -> unit (error paths + invalid responses)
+- `src/common/tp_merge_map.c` (42.3%) -> unit (merge rules + map apply)
+- `src/client/tp_client.c` (42.9%) -> unit (context defaults, subscription errors)
+- `src/common/tp_tracelink.c` (51.8%) -> unit (trace link edge cases)
+- `src/common/tp_log.c` (54.2%) -> unit (log routing, levels)
+- `src/client/tp_client_conductor.c` (56.0%) -> unit (init/start/stop error handling)
 
 ## Phase 1: Core Unit Tests (No Driver)
 - [x] `tp_control_adapter.c`: cover all decode/validate branches, including length, schema/version, and invalid var-data cases.

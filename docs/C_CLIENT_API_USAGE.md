@@ -43,7 +43,7 @@ tp_context_set_shm_permissions(&ctx.base, false, TP_NULL_U32, TP_NULL_U32, 0);
 
 Noncanonical SHM paths from `tools/tp_shm_create --noncanonical` are test-only and require `--allow-noncompliant`; production deployments should use the canonical directory layout.
 
-Call `tp_client_do_work(&client)` in your poll loop to drive keepalives and conductor work.
+Call `tp_client_do_work(&client)` in your poll loop to drive keepalives, conductor command processing, and any registered pollers.
 
 ### 1.1 Conductor Execution Model (Agent Invoker)
 
@@ -52,11 +52,14 @@ TensorPool mirrors Aeron’s invoker pattern. Choose one of two modes:
 - Default (threaded conductor): do nothing special; Aeron runs its own conductor thread after `tp_client_start`.
 - Agent invoker (single-threaded): set `tp_client_context_set_use_agent_invoker(&ctx, true)` and call `tp_client_do_work` frequently to drive the Aeron conductor in your loop.
 
-Example (agent invoker):
+Example (agent invoker + shared pollers):
 
 ```c
 tp_client_context_t ctx;
 tp_client_t client;
+tp_control_handlers_t control_handlers = {0};
+tp_qos_handlers_t qos_handlers = {0};
+tp_metadata_handlers_t metadata_handlers = {0};
 
 tp_client_context_init(&ctx);
 tp_client_context_set_use_agent_invoker(&ctx, true);
@@ -64,12 +67,13 @@ tp_client_context_set_use_agent_invoker(&ctx, true);
 tp_client_init(&client, &ctx);
 tp_client_start(&client);
 
+tp_client_set_control_handlers(&client, &control_handlers, 10);
+tp_client_set_qos_handlers(&client, &qos_handlers, 10);
+tp_client_set_metadata_handlers(&client, &metadata_handlers, 10);
+
 while (running)
 {
     tp_client_do_work(&client);
-    tp_control_poll(&control, 10);
-    tp_qos_poll(&qos, 10);
-    tp_metadata_poll(&meta, 10);
 }
 ```
 
@@ -130,7 +134,7 @@ tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &consumer);
 
 while (running)
 {
-    tp_consumer_poll_control(&consumer, 10);
+    tp_client_do_work(&client);
     tp_consumer_poll_descriptors(&consumer, 10);
 }
 ```
@@ -141,6 +145,7 @@ Notes:
 - On `ShmLeaseRevoked`, `tp_consumer_reattach_due` can be used to retry attach with backoff.
 - Invalid `ShmPoolAnnounce` or SHM mapping failures transition to fallback when `payload_fallback_uri` is configured.
 - In driver model, clients must not create/truncate/unlink SHM files; the driver owns SHM lifecycles.
+- Consumers MUST remain subscribed to the shared control stream for non-FrameProgress control-plane messages; per-consumer control streams carry FrameProgress only.
 
 ```c
 if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
@@ -168,7 +173,7 @@ tp_producer_enable_consumer_manager(&producer, 128);
 
 while (running)
 {
-    tp_producer_poll_control(&producer, 10);
+    tp_client_do_work(&client);
     (void)tp_producer_offer_frame(&producer, &frame, &meta);
 }
 ```
@@ -321,9 +326,8 @@ static void on_tracelink(const tp_tracelink_set_t *set, void *clientd)
 }
 
 tp_control_handlers_t handlers = { .on_tracelink_set = on_tracelink, .clientd = NULL };
-tp_control_poller_t control_poller;
-tp_control_poller_init(&control_poller, &client, &handlers);
-tp_control_poll(&control_poller, 10);
+tp_client_set_control_handlers(&client, &handlers, 10);
+tp_client_do_work(&client);
 ```
 
 Note: trace ID continuity across epoch changes is a deployment choice. The client API does not reset IDs automatically; mint new trace IDs when desired.
@@ -337,9 +341,8 @@ tp_qos_handlers_t qos_handlers = {
     .on_qos_event = on_qos_event,
     .clientd = NULL
 };
-tp_qos_poller_t qos_poller;
-tp_qos_poller_init(&qos_poller, &client, &qos_handlers);
-tp_qos_poll(&qos_poller, 10);
+tp_client_set_qos_handlers(&client, &qos_handlers, 10);
+tp_client_do_work(&client);
 ```
 
 ## 9. Metadata
@@ -368,9 +371,8 @@ tp_metadata_handlers_t meta_handlers = {
     .on_data_source_meta_end = on_meta_end,
     .clientd = NULL
 };
-tp_metadata_poller_t meta_poller;
-tp_metadata_poller_init(&meta_poller, &client, &meta_handlers);
-tp_metadata_poll(&meta_poller, 10);
+tp_client_set_metadata_handlers(&client, &meta_handlers, 10);
+tp_client_do_work(&client);
 
 // Example metadata publish + cache.
 uint32_t fmt = 1;

@@ -20,15 +20,15 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| SHM region validation, headers, payload pools | Compliant | Superblock validation, padding zeroing, and payload flush hook implemented in `src/tp_shm.c`/`src/tp_producer.c`. |
+| SHM region validation, headers, payload pools | Compliant | Superblock validation, padding zeroing, and payload flush hook implemented in `src/common/tp_shm.c`/`src/client/tp_producer.c`. |
 | Slot header / TensorHeader validation | Compliant | Producer validates tensor headers before publish; consumer validates on read. |
 | FrameDescriptor/FrameProgress | Compliant | Publish/consume paths implemented with epoch/seq_commit validation and trace_id support. |
-| Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/tp_control.c` and `src/tp_control_adapter.c`. |
-| QoS messages | Compliant | Encode/decode and cadence in `src/tp_producer.c` and `src/tp_consumer.c`. |
+| Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/client/tp_control.c` and `src/client/tp_control_adapter.c`. |
+| QoS messages | Compliant | Encode/decode and cadence in `src/client/tp_producer.c` and `src/client/tp_consumer.c`. |
 | Client conductor (Aeron-style) | Missing | Conductor does not yet centralize control/QoS/metadata/descriptor polling or handler dispatch. |
 | Supervisor/unified management | Missing | Not implemented in this repo. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
-| SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/tp_shm.c`. |
+| SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/common/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |
 
 ## SHM_Driver_Model_Spec_v1.0
@@ -36,7 +36,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
 | Driver lifecycle, ownership, epoch management | Missing | Driver responsibilities not yet implemented in this repo. |
-| Attach request encode | Compliant | `tp_driver_send_attach` in `src/tp_driver_client.c`. |
+| Attach request encode | Compliant | `tp_driver_send_attach` in `src/client/tp_driver_client.c`. |
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
 | Node ID negotiation | Compliant | `desiredNodeId` sent; `nodeId` accepted from driver; allocation remains driver-owned. |
 | Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
@@ -59,9 +59,9 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| Trace ID generator | Compliant | Agrona-style generator in `src/tp_trace.c`. |
+| Trace ID generator | Compliant | Agrona-style generator in `src/common/tp_trace.c`. |
 | FrameDescriptor trace_id | Compliant | `trace_id` in `tp_frame_descriptor_t` and publish paths. |
-| TraceLinkSet encode/decode | Compliant | `src/tp_tracelink.c` enforces schema, uniqueness, non-zero parents. |
+| TraceLinkSet encode/decode | Compliant | `src/common/tp_tracelink.c` enforces schema, uniqueness, non-zero parents. |
 | TraceLink propagation helpers | Compliant | `tp_tracelink_resolve_trace_id` enforces root/1→1/N→1 rules. |
 | Node ID allocation | External | Driver/discovery-owned; client uses `nodeId` when provided. |
 | Best-effort semantics | Compliant | TraceLink emission is non-blocking. |
@@ -70,7 +70,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 
 | Area | Status | Evidence / Notes |
 | --- | --- | --- |
-| Sequence/Timestamp/LatestValue JoinBarrier | Compliant | `src/tp_join_barrier.c` with MergeMap decode in `src/tp_merge_map.c`. |
+| Sequence/Timestamp/LatestValue JoinBarrier | Compliant | `src/common/tp_join_barrier.c` with MergeMap decode in `src/common/tp_merge_map.c`. |
 | Control-plane MergeMap decode | Compliant | MergeMap registry + control poller integration. |
 
 

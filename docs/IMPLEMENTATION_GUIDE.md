@@ -34,9 +34,9 @@ Target style references:
 ## 3. Client Conductor (Required)
 The conductor is the single-writer owner of client state and shared Aeron
 resources. It MUST:
-- Own control/QoS/metadata/descriptor subscriptions and publications.
+- Own shared control/announce/QoS/metadata/descriptor subscriptions.
 - Own driver attach/keepalive/revoke state and discovery polling.
-- Dispatch all callbacks from `tp_client_do_work` only.
+- Dispatch all registered callbacks from `tp_client_do_work` only.
 - Drain a lock-free MPSC command queue for async add operations.
 
 Command queue MUST follow Aeron’s model:
@@ -109,6 +109,9 @@ The codebase SHOULD be organized by role:
 
 Public headers SHOULD follow the same split under `include/tensor_pool/` as the
 code is moved.
+The current layout follows this split under:
+- `include/tensor_pool/client/` for client-facing APIs.
+- `include/tensor_pool/common/` for shared utilities.
 
 ## 14. Testing and Compliance
 - Every MUST/SHOULD requirement MUST map to a test or explicit verification.
@@ -126,10 +129,10 @@ code is moved.
 Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Client Conductor (Aeron-style)
-- MISSING: Single-writer conductor owns control/QoS/metadata/descriptor streams.
-- MISSING: MPSC command queue for async add operations.
-- MISSING: Client-level handler registration and dispatch from `tp_client_do_work`.
-- MISSING: Remove public Aeron types from user-facing headers.
+- DONE: Single-writer conductor owns shared control/announce/QoS/metadata/descriptor streams.
+- DONE: MPSC command queue for async add operations.
+- DONE: Client-level handler registration and dispatch from `tp_client_do_work`.
+- DONE: Remove public Aeron types from user-facing headers.
 
 ### Driver Model (Client-side)
 - DONE: Attach/keepalive/detach encode/decode and lease handling.
@@ -175,4 +178,4 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 - PARTIAL: Conductor-level integration tests (blocked on conductor implementation).
 
 ### Code Organization
-- MISSING: Split implementation into `src/client`, `src/driver`, `src/common`.
+- DONE: Split implementation into `src/client`, `src/driver`, `src/common`.
