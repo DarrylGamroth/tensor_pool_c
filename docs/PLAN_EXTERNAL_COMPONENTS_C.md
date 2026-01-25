@@ -38,7 +38,7 @@ Out of scope:
 - [x] Enforce publishMode, expectedLayoutVersion, hugepages requirements.
 - [x] Implement GC/retention policy for epochs (keep N, prune old).
 - [x] Provide driver control + announce publications (stream IDs per conventions).
-- [ ] Implement node-id allocation (authoritative per spec).
+- [x] Implement node-id allocation (authoritative per spec).
 - [x] Provide `tp_driver` executable with lifecycle control and logging.
 
 ## Phase 4: Discovery Service / Registry (Advisory)
@@ -68,7 +68,7 @@ Out of scope:
 - Phase 0: Completed
 - Phase 1: Completed
 - Phase 2: Completed
-- Phase 3: In progress (node-id allocation missing)
+- Phase 3: Completed (node-id reuse cooldown missing)
 - Phase 4: Not started
 - Phase 5: Not started
 - Phase 6: Not started

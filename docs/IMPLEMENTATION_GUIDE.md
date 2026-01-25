@@ -165,7 +165,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 - DONE: SHM creation, epoch management, and ShmPoolAnnounce emission.
 - DONE: Lease revocation and GC/retention policy.
 - DONE: `tp_driver` executable with TOML config + logging.
-- PARTIAL: Node ID allocation (optional; driver does not auto-assign).
+- PARTIAL: Node ID allocation (auto-assigns per lease; no reuse cooldown).
 
 ### Supervisor / Unified Management
 - MISSING: Supervisor/console policy layer (recommended by spec).
@@ -173,7 +173,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### TraceLink
 - DONE: Snowflake trace IDs and TraceLinkSet encode/decode.
-- MISSING: Node ID allocation (driver/discovery owned).
+- PARTIAL: Node ID allocation (driver assigns per lease; no reuse cooldown).
 
 ### JoinBarrier
 - DONE: MergeMap decode + join barrier modes (sequence/timestamp/latest).

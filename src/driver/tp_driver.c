@@ -79,7 +79,35 @@ typedef struct tp_driver_stream_state_stct
 }
 tp_driver_stream_state_t;
 
+static uint64_t tp_driver_seed_u64(void);
+static bool tp_driver_node_id_in_use(tp_driver_t *driver, uint32_t node_id);
 static int tp_driver_gc_stream(tp_driver_t *driver, tp_driver_stream_state_t *stream);
+
+static uint32_t tp_driver_next_node_id(tp_driver_t *driver)
+{
+    uint32_t candidate = 0;
+    size_t attempts = 0;
+
+    if (driver->lease_counter == 0)
+    {
+        driver->lease_counter = tp_driver_seed_u64();
+    }
+
+    while (attempts < 1024)
+    {
+        uint64_t seed = tp_driver_seed_u64() ^ driver->lease_counter ^ attempts;
+        candidate = (uint32_t)(seed ^ (seed >> 32));
+        if (candidate != 0 &&
+            candidate != tensor_pool_shmAttachResponse_nodeId_null_value() &&
+            !tp_driver_node_id_in_use(driver, candidate))
+        {
+            return candidate;
+        }
+        attempts++;
+    }
+
+    return tensor_pool_shmAttachResponse_nodeId_null_value();
+}
 
 static void tp_driver_sanitize_component(const char *input, char *output, size_t output_len)
 {
@@ -1769,9 +1797,20 @@ static int tp_driver_handle_attach(
     lease.role = role;
     lease.issued_ns = now;
     lease.expiry_ns = now + interval_ns * driver->config.lease_expiry_grace_intervals;
-    lease.node_id = (desired_node_id != tensor_pool_shmAttachRequest_desiredNodeId_null_value())
-        ? desired_node_id
-        : tensor_pool_shmAttachResponse_nodeId_null_value();
+    if (desired_node_id != tensor_pool_shmAttachRequest_desiredNodeId_null_value())
+    {
+        lease.node_id = desired_node_id;
+    }
+    else
+    {
+        lease.node_id = tp_driver_next_node_id(driver);
+        if (lease.node_id == tensor_pool_shmAttachResponse_nodeId_null_value())
+        {
+            return tp_driver_send_attach_response(driver, correlation_id,
+                tensor_pool_responseCode_INTERNAL_ERROR, NULL, NULL,
+                require_hugepages, "node_id allocation failed");
+        }
+    }
 
     if (tp_driver_add_lease(driver, &lease) < 0)
     {

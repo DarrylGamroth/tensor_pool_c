@@ -38,7 +38,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Driver lifecycle, ownership, epoch management | Compliant | `tp_driver` manages epochs, SHM creation, and announce emission in `src/driver/tp_driver.c`. |
 | Attach request encode | Compliant | `tp_driver_send_attach` in `src/client/tp_driver_client.c`. |
 | Attach response validation | Compliant | Required fields validated; optional `leaseExpiryTimestampNs` accepted; schema version and block length gated. |
-| Node ID negotiation | Partial | Driver enforces `desiredNodeId`; no auto-assignment when absent. |
+| Node ID negotiation | Compliant | Driver enforces `desiredNodeId` and auto-assigns `nodeId` when absent. |
 | Keepalive send / tracking | Compliant | `tp_driver_keepalive` plus scheduling in `tp_client_do_work`. |
 | Detach request/response | Compliant | Encode/decode implemented; schema version/block length gated; invalid response codes rejected. |
 | Lease revoked / shutdown handling | Compliant | Decode validates enums; revoke clears mappings and schedules reattach. |
@@ -63,7 +63,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | FrameDescriptor trace_id | Compliant | `trace_id` in `tp_frame_descriptor_t` and publish paths. |
 | TraceLinkSet encode/decode | Compliant | `src/common/tp_tracelink.c` enforces schema, uniqueness, non-zero parents. |
 | TraceLink propagation helpers | Compliant | `tp_tracelink_resolve_trace_id` enforces root/1→1/N→1 rules. |
-| Node ID allocation | Missing | Driver/discovery-owned; auto-assignment not yet implemented. |
+| Node ID allocation | Partial | Driver assigns per lease but does not enforce reuse cooldown. |
 | Best-effort semantics | Compliant | TraceLink emission is non-blocking. |
 
 ## SHM_Join_Barrier_Spec_v1.0

@@ -89,6 +89,7 @@ shm:file?path=/dev/shm/tensorpool-USER/default/10000/123456/header.ring|require_
 - The driver MUST create SHM regions on demand when `publishMode=EXISTING_OR_CREATE`.
 - On producer attach, detach, revoke, or expiry the driver MUST increment `epoch`.
 - Lease revocations are reported with `ShmLeaseRevoked` before any epoch bump announce.
+- The driver assigns `nodeId` per lease when `desiredNodeId` is not provided. Node IDs are unique among active leases; reuse cooldown is not yet enforced.
 
 ## Example: Driver Mode Exchange
 
