@@ -47,10 +47,10 @@ Related design docs:
 - [x] Allow optional embedded mode (agent can run inside driver).
 
 ## Phase 5: Supervisor / Unified Management
-- [ ] Implement supervisor/console agent.
-- [ ] Subscribe to announce/QoS/metadata/health streams.
-- [ ] Emit ConsumerConfig for per-consumer streams and rate limits.
-- [ ] Provide `tp_supervisord` executable; allow optional embedded mode.
+- [x] Implement supervisor/console agent.
+- [x] Subscribe to announce/QoS/metadata/health streams.
+- [x] Emit ConsumerConfig for per-consumer streams and rate limits.
+- [x] Provide `tp_supervisord` executable; allow optional embedded mode.
 
 ## Phase 6: Integration + Interop
 - [ ] Add integration tests for driver + discovery + client conductor.
@@ -68,12 +68,11 @@ Related design docs:
 - Phase 2: Completed
 - Phase 3: Completed
 - Phase 4: Completed
-- Phase 5: Not started
+- Phase 5: Completed
 - Phase 6: Not started
 - Phase 7: Not started
 
 ## Checklist (Specs → Tests)
 - [ ] Add integration coverage for driver server-side requirements (D-2.1, D-4.3-1, D-4.8-1, D-4.2-4/TL-6.2-1).
 - [ ] Add node ID reuse cooldown policy (TraceLink §6.2) or document explicit verification.
-- [ ] Implement supervisor/unified management layer.
 - [ ] Expand config-matrix integration tests beyond external driver availability.

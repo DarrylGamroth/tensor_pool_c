@@ -26,7 +26,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | Metadata (DataSourceAnnounce/Meta/Blob) | Compliant | Encode/decode in `src/client/tp_control.c` and `src/client/tp_control_adapter.c`. |
 | QoS messages | Compliant | Encode/decode and cadence in `src/client/tp_producer.c` and `src/client/tp_consumer.c`. |
 | Client conductor (Aeron-style) | Compliant | Conductor centralizes shared pollers and dispatch in `src/client/tp_client_conductor.c`. |
-| Supervisor/unified management | Missing | Not implemented in this repo. |
+| Supervisor/unified management | Compliant | `tp_supervisor` + `tp_supervisord` implement ConsumerHello/ConsumerConfig policy handling. |
 | Consumer modes and fallback | Compliant | Per-consumer descriptor/control mode supported; fallback entered on `use_shm=0` or invalid SHM announces when `payload_fallback_uri` is set. |
 | SHM backend validation | Compliant | URI validation, hugepages/stride checks, and permissions policy enforced in `src/common/tp_shm.c`. |
 | Stream mapping guidance | N/A | Informative only. |

@@ -49,7 +49,7 @@ Columns:
 | W-10.2.2-1 | 10.2.2 | FrameProgress publish/poll; monotonic checks | `src/client/tp_progress_poller.c` | `tests/test_tp_pollers.c`, `tests/test_tp_progress_poller_extra.c` | Compliant | Tracker sized to header ring when consumer is set |
 | W-10.3-1 | 10.3 | DataSourceAnnounce/DataSourceMeta/MetaBlob encode/decode | `src/client/tp_control.c`, `src/client/tp_control_adapter.c` | `tests/test_tp_control.c`, `tests/test_tp_pollers.c` | Compliant | |
 | W-10.4-1 | 10.4 | QoS message encode/decode + cadence | `src/client/tp_qos.c`, `src/client/tp_producer.c`, `src/client/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | Cadence uses `announce_period_ns` |
-| W-10.5-1 | 10.5 | Supervisor/unified management layer | n/a | n/a | Missing | Supervisor not implemented |
+| W-10.5-1 | 10.5 | Supervisor/unified management layer | `src/supervisor/tp_supervisor.c` | `tests/test_tp_supervisor.c` | Compliant | Subscribes to control/QoS/metadata/announce and emits ConsumerConfig policy decisions |
 | W-11-1 | 11 | Consumer modes: shared/per-consumer descriptors and fallback | `src/client/tp_consumer_registry.c`, `src/client/tp_consumer.c` | `tests/test_tp_consumer_registry.c`, `tests/test_tp_pollers.c` | Compliant | Fallback entered on invalid announce or mapping failure when configured. |
 | W-15.1-1 | 15.1 | Validation and compatibility matrix enforcement | `src/common/tp_shm.c`, `src/client/tp_consumer.c`, `src/client/tp_producer.c` | `tests/test_tp_smoke.c`, `tests/test_tp_consumer_apply.c` | Compliant | Layout version gated at attach and superblock validation matches announce |
 | W-15.2-1 | 15.2 | Epoch lifecycle: drop on mismatch, remap on announce | `src/client/tp_consumer.c` | `tests/test_tp_pollers.c` | Compliant | |

@@ -48,7 +48,7 @@ Legend:
 | 10.4 QoS and Health | Compliant | QoS publish/poll implemented with cadence via `announce_period_ns`, watermark uses nullValue when absent. |
 | 10.4.1 QosConsumer | Compliant | Encode/decode plus cadence in consumer poll loop. |
 | 10.4.2 QosProducer | Compliant | Encode/decode plus cadence implemented; `watermark` uses nullValue when absent. |
-| 10.5 Supervisor / Unified Management | Missing | Supervisor role not yet implemented. |
+| 10.5 Supervisor / Unified Management | Compliant | `tp_supervisor` subscribes to control/QoS/metadata/announce and emits ConsumerConfig per policy. |
 | 11. Consumer Modes | Compliant | Rate-limited mode honored for per-consumer descriptors; shared stream fallback allowed when declined. |
 
 ## Sections 12–14 (Informative)
@@ -79,7 +79,7 @@ Legend:
 | 15.13 Test and Validation Checklist | Compliant | Fail-closed superblock validation, QoS drop counts, and epoch remap coverage added in tests. |
 | 15.14 Deployment & Liveness | Compliant | ShmPoolAnnounce freshness/join-time enforced; activity/pid liveness checks unmap stale regions. |
 | 15.15 Aeron Terminology Mapping | Compliant | Client conductor centralizes shared polling/dispatch in `src/client/tp_client_conductor.c`. |
-| 15.16 Reuse Aeron Primitives | Compliant | Control/descriptor/QoS/metadata all use Aeron; no custom SHM counters added; optional bridge/supervisor remain external. |
+| 15.16 Reuse Aeron Primitives | Compliant | Control/descriptor/QoS/metadata all use Aeron; no custom SHM counters added; optional bridge remains external. |
 | 15.16a File-Backed SHM Regions | N/A | Informative guidance. |
 | 15.17 ControlResponse Error Codes | Compliant | ControlResponse encode/decode implemented in `src/client/tp_control.c` and `src/client/tp_control_adapter.c`. |
 | 15.18 Normative Algorithms | Compliant | Producer commit protocol and consumer validation follow spec; payload flush hook covers non-coherent DMA. |

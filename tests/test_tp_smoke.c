@@ -50,6 +50,7 @@ void tp_test_driver_client_decoders(void);
 void tp_test_driver_client_attach_detach_live(void);
 void tp_test_driver_config(void);
 void tp_test_discovery_service(void);
+void tp_test_supervisor(void);
 void tp_test_discovery_client_decoders(void);
 void tp_test_discovery_client_live(void);
 void tp_test_merge_map(void);
@@ -601,6 +602,7 @@ int main(void)
     tp_test_driver_client_attach_detach_live();
     tp_test_driver_config();
     tp_test_discovery_service();
+    tp_test_supervisor();
     tp_test_discovery_client_decoders();
     tp_test_discovery_client_live();
     tp_test_merge_map();

@@ -49,10 +49,10 @@ Out of scope:
 - [x] Add client-facing utilities to query discovery and print JSON.
 
 ## Phase 5: Supervisor / Unified Management (Policy Layer)
-- [ ] Implement supervisor policy engine (admission control, quotas, priorities).
-- [ ] Integrate with driver (or provide hooks) for authoritative decisions.
-- [ ] Add monitoring/metrics exports for operator visibility.
-- [ ] Provide `tp_supervisord` executable or integrate into driver binary.
+- [x] Implement supervisor policy engine (admission control, quotas, priorities).
+- [x] Integrate with driver (or provide hooks) for authoritative decisions.
+- [x] Add monitoring/metrics exports for operator visibility.
+- [x] Provide `tp_supervisord` executable or integrate into driver binary.
 
 ## Phase 6: Integration Tests & Interop
 - [ ] Add integration tests that bring up C driver + discovery + clients.
@@ -70,6 +70,6 @@ Out of scope:
 - Phase 2: Completed
 - Phase 3: Completed (node-id reuse cooldown missing)
 - Phase 4: Completed
-- Phase 5: Not started
+- Phase 5: Completed
 - Phase 6: Not started
 - Phase 7: Not started

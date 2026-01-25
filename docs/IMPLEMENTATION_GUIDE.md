@@ -158,6 +158,9 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 ### Discovery
 - DONE: DiscoveryRequest encode + response decode + poller API.
 - DONE: Discovery provider/registry service (`tp_discoveryd`, `tp_discovery_service`).
+
+### Supervisor
+- DONE: Supervisor service and policy handler (`tp_supervisord`, `tp_supervisor`).
   - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
 ### Driver (Server-side)
