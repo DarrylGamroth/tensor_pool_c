@@ -20,6 +20,10 @@ clear lifecycle semantics and consistent naming.
   - `tp_producer_attach_driver_async`, `tp_producer_attach_driver_poll`.
   - `tp_consumer_attach_driver_async`, `tp_consumer_attach_driver_poll`.
 - Keep blocking `tp_producer_attach_driver` and `tp_consumer_attach_driver` as optional wrappers.
+- Make internal structs opaque (Aeron model):
+  - `tp_driver_client_t` becomes opaque; expose accessors for lease_id, client_id, role, stream_id.
+  - `tp_aeron_client_t` becomes internal; public API should not expose Aeron context pointers.
+  - `tp_publication_t`, `tp_subscription_t`, `tp_fragment_assembler_t` remain opaque handles only.
 
 ## Phase 2: Naming & Consistency Pass
 - Standardize naming across public API:
@@ -31,6 +35,19 @@ clear lifecycle semantics and consistent naming.
 - Add `*_constants` accessors (publication/subscription) to expose channel/stream metadata
   without leaking Aeron types.
 - Expose idle strategy configuration for `tp_agent_runner` (sleep/yield/busy).
+
+## Public vs Private Inventory (Aeron-style)
+
+### Public (opaque handles + accessors)
+- `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`
+- `tp_publication_t`, `tp_subscription_t`, `tp_fragment_assembler_t`
+- `tp_client_context_t`, `tp_producer_context_t`, `tp_consumer_context_t`
+- `tp_producer_config_t`, `tp_consumer_config_t`
+
+### Private (internal-only)
+- `tp_aeron_client_t` (wrap Aeron context/client)
+- Any struct exposing raw Aeron pointers or internal queues
+- Direct use of `aeron_*` types in public headers
 
 ## Phase 3: Migration & Examples
 - Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
