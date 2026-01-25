@@ -112,15 +112,24 @@ clear lifecycle semantics and consistent naming.
 - Decide whether `tp_context_t` stays opaque (Aeron core) or public struct (Aeron archive).
 
 ## Checklist (Tracking)
-- [x] Opaque handles for `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`
-  with accessors to avoid Aeron/SBE leakage.
+- [x] Opaque handles for `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`.
+- [x] Internal struct definitions moved to `include/tensor_pool/internal/` headers.
+- [x] Public accessors for producer/consumer/driver handles.
 - [x] `tp_client_start` starts a conductor agent when `use_agent_invoker` is false.
+- [x] Update examples/tools/tests to use pointer-based opaque APIs.
+- [x] Update fuzz targets to use internal headers for opaque handle structs.
 - [x] Add unit coverage for new accessor APIs.
-- [ ] Move internal-only headers out of public include tree (Phase 4).
-- [ ] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user-facing docs (Phase 5).
-- [ ] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md` for the new API.
-- [ ] Expand integration coverage for agent-invoker vs background agent and async wrappers.
 - [x] Run coverage + fuzzing for the new API work and record results.
+- [ ] Add async + poll attach APIs for producer/consumer and align naming.
+- [ ] Decide and implement `tp_context_t` opaque lifecycle and context getters.
+- [ ] Standardize poll return semantics (`0/1/-1`) across all pollers/helpers.
+- [ ] Add registration-id accessors for all async operations.
+- [ ] Add minimal client defaults API (Aeron sample-style).
+- [ ] Move internal-only headers out of public install surface and update `tp.h`.
+- [ ] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user docs.
+- [ ] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md`.
+- [ ] Expand integration coverage for agent-invoker vs background agent and async wrappers.
+- [ ] Remove/rename old APIs (breaking changes) and add migration guide.
 
 ## Latest Runs
 - Coverage (build-coverage): lines 58.5%, functions 81.0%, branches 47.4% (gcovr warned on negative hits).
