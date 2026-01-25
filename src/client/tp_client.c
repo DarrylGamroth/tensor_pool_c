@@ -1,10 +1,12 @@
-#include "tensor_pool/tp_client.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_conductor_agent.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "aeron_alloc.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
@@ -12,6 +14,7 @@
 #include "tensor_pool/internal/tp_control_poller.h"
 #include "tensor_pool/internal/tp_metadata_poller.h"
 #include "tensor_pool/internal/tp_qos.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
 #include "tp_aeron_wrap.h"
 
 enum { TP_CLIENT_DEFAULT_FRAGMENT_LIMIT = 10 };
@@ -314,8 +317,9 @@ static int tp_client_add_subscription(
     return tp_client_conductor_set_subscription(client->conductor, kind, subscription);
 }
 
-int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
+int tp_client_init(tp_client_t **client, const tp_client_context_t *ctx)
 {
+    tp_client_t *instance = NULL;
     int result = -1;
 
     if (NULL == client || NULL == ctx)
@@ -324,23 +328,31 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
         return -1;
     }
 
-    memset(client, 0, sizeof(*client));
-
-    if (tp_client_copy_context(&client->context, ctx) < 0)
+    if (aeron_alloc((void **)&instance, sizeof(*instance)) < 0 || NULL == instance)
     {
+        TP_SET_ERR(ENOMEM, "%s", "tp_client_init: allocation failed");
         return -1;
     }
 
-    client->context.base->allowed_paths.canonical_paths = NULL;
-    client->context.base->allowed_paths.canonical_length = 0;
+    memset(instance, 0, sizeof(*instance));
 
-    if (tp_context_finalize_allowed_paths(client->context.base) < 0)
+    if (tp_client_copy_context(&instance->context, ctx) < 0)
     {
+        aeron_free(instance);
         return -1;
     }
 
-    client->conductor = (tp_client_conductor_t *)calloc(1, sizeof(*client->conductor));
-    if (NULL == client->conductor)
+    instance->context.base->allowed_paths.canonical_paths = NULL;
+    instance->context.base->allowed_paths.canonical_length = 0;
+
+    if (tp_context_finalize_allowed_paths(instance->context.base) < 0)
+    {
+        aeron_free(instance);
+        return -1;
+    }
+
+    instance->conductor = (tp_client_conductor_t *)calloc(1, sizeof(*instance->conductor));
+    if (NULL == instance->conductor)
     {
         TP_SET_ERR(ENOMEM, "%s", "tp_client_init: conductor alloc failed");
         goto cleanup;
@@ -349,7 +361,7 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
     if (NULL != ctx->aeron)
     {
         if (tp_client_conductor_init_with_aeron(
-            client->conductor,
+            instance->conductor,
             ctx->aeron,
             ctx->use_agent_invoker,
             ctx->owns_aeron_client) < 0)
@@ -359,24 +371,26 @@ int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx)
     }
     else
     {
-        if (tp_client_conductor_init_with_client_context(client->conductor, ctx) < 0)
+        if (tp_client_conductor_init_with_client_context(instance->conductor, ctx) < 0)
         {
             goto cleanup;
         }
     }
 
     result = 0;
+    *client = instance;
 
 cleanup:
     if (result < 0)
     {
-        tp_context_clear_allowed_paths(client->context.base);
-        if (client->conductor)
+        tp_context_clear_allowed_paths(instance->context.base);
+        if (instance->conductor)
         {
-            tp_client_conductor_close(client->conductor);
-            free(client->conductor);
-            client->conductor = NULL;
+            tp_client_conductor_close(instance->conductor);
+            free(instance->conductor);
+            instance->conductor = NULL;
         }
+        aeron_free(instance);
     }
     return result;
 }
@@ -394,13 +408,41 @@ int tp_client_start(tp_client_t *client)
         return -1;
     }
 
+    if (!client->context.use_agent_invoker)
+    {
+        client->agent = (tp_client_conductor_agent_t *)calloc(1, sizeof(*client->agent));
+        if (NULL == client->agent)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_client_start: agent alloc failed");
+            return -1;
+        }
+
+        if (tp_client_conductor_agent_init(
+            client->agent,
+            client->conductor,
+            client->context.idle_sleep_duration_ns) < 0)
+        {
+            free(client->agent);
+            client->agent = NULL;
+            return -1;
+        }
+
+        if (tp_client_conductor_agent_start(client->agent) < 0)
+        {
+            tp_client_conductor_agent_close(client->agent);
+            free(client->agent);
+            client->agent = NULL;
+            return -1;
+        }
+    }
+
     if (tp_client_add_subscription(
         client,
         client->context.base->control_channel,
         client->context.base->control_stream_id,
         TP_CLIENT_SUB_CONTROL) < 0)
     {
-        return -1;
+        goto cleanup;
     }
 
     if (client->context.base->announce_channel[0] != '\0' &&
@@ -408,14 +450,14 @@ int tp_client_start(tp_client_t *client)
         (client->context.base->announce_stream_id != client->context.base->control_stream_id ||
             strcmp(client->context.base->announce_channel, client->context.base->control_channel) != 0))
     {
-        if (tp_client_add_subscription(
-            client,
-            client->context.base->announce_channel,
-            client->context.base->announce_stream_id,
-            TP_CLIENT_SUB_ANNOUNCE) < 0)
-        {
-            return -1;
-        }
+    if (tp_client_add_subscription(
+        client,
+        client->context.base->announce_channel,
+        client->context.base->announce_stream_id,
+        TP_CLIENT_SUB_ANNOUNCE) < 0)
+    {
+        goto cleanup;
+    }
     }
 
     if (tp_client_add_subscription(
@@ -424,7 +466,7 @@ int tp_client_start(tp_client_t *client)
         client->context.base->qos_stream_id,
         TP_CLIENT_SUB_QOS) < 0)
     {
-        return -1;
+        goto cleanup;
     }
 
     if (tp_client_add_subscription(
@@ -433,7 +475,7 @@ int tp_client_start(tp_client_t *client)
         client->context.base->metadata_stream_id,
         TP_CLIENT_SUB_METADATA) < 0)
     {
-        return -1;
+        goto cleanup;
     }
 
     if (tp_client_add_subscription(
@@ -442,10 +484,23 @@ int tp_client_start(tp_client_t *client)
         client->context.base->descriptor_stream_id,
         TP_CLIENT_SUB_DESCRIPTOR) < 0)
     {
-        return -1;
+        goto cleanup;
     }
 
     return 0;
+
+cleanup:
+    if (client->agent)
+    {
+        if (client->agent->runner)
+        {
+            tp_client_conductor_agent_stop(client->agent);
+        }
+        tp_client_conductor_agent_close(client->agent);
+        free(client->agent);
+        client->agent = NULL;
+    }
+    return -1;
 }
 
 int tp_client_do_work(tp_client_t *client)
@@ -558,6 +613,17 @@ int tp_client_close(tp_client_t *client)
 
     client->driver_clients = NULL;
 
+    if (client->agent)
+    {
+        if (client->agent->runner)
+        {
+            tp_client_conductor_agent_stop(client->agent);
+        }
+        tp_client_conductor_agent_close(client->agent);
+        free(client->agent);
+        client->agent = NULL;
+    }
+
     tp_context_clear_allowed_paths(client->context.base);
     if (client->conductor)
     {
@@ -566,6 +632,7 @@ int tp_client_close(tp_client_t *client)
         client->conductor = NULL;
     }
 
+    aeron_free(client);
     return 0;
 }
 

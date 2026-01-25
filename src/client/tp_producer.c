@@ -1,4 +1,6 @@
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
 
 #include <inttypes.h>
 #include <errno.h>
@@ -811,7 +813,10 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
             {
                 tp_driver_attach_info_close(&producer->driver_attach);
             }
-            producer->driver.active_lease_id = 0;
+            if (producer->driver)
+            {
+                producer->driver->active_lease_id = 0;
+            }
             producer->driver_attached = false;
             tp_producer_schedule_reattach(producer, now);
         }
@@ -979,90 +984,107 @@ static int tp_producer_poll_qos(tp_producer_t *producer, int fragment_limit)
     return tp_qos_poll(producer->qos_poller, fragment_limit);
 }
 
-int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *context)
+int tp_producer_init(tp_producer_t **producer, tp_client_t *client, const tp_producer_context_t *context)
 {
+    tp_producer_t *instance = NULL;
+    int result = -1;
+
     if (NULL == producer || NULL == client || NULL == context)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_producer_init: null input");
         return -1;
     }
 
-    memset(producer, 0, sizeof(*producer));
-    producer->client = client;
-    producer->context = *context;
-    producer->tracelink_validator = tp_producer_default_tracelink_validator;
-    producer->tracelink_validator_clientd = producer;
+    if (aeron_alloc((void **)&instance, sizeof(*instance)) < 0 || NULL == instance)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_producer_init: allocation failed");
+        return -1;
+    }
+
+    memset(instance, 0, sizeof(*instance));
+    instance->client = client;
+    instance->context = *context;
+    instance->tracelink_validator = tp_producer_default_tracelink_validator;
+    instance->tracelink_validator_clientd = instance;
 
     if (client->context.base->descriptor_channel[0] != '\0' && client->context.base->descriptor_stream_id >= 0)
     {
         if (tp_producer_add_publication(
-            producer,
+            instance,
             client->context.base->descriptor_channel,
             client->context.base->descriptor_stream_id,
-            &producer->descriptor_publication) < 0)
+            &instance->descriptor_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
     if (client->context.base->control_channel[0] != '\0' && client->context.base->control_stream_id >= 0)
     {
         if (tp_producer_add_publication(
-            producer,
+            instance,
             client->context.base->control_channel,
             client->context.base->control_stream_id,
-            &producer->control_publication) < 0)
+            &instance->control_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
     if (client->context.base->qos_channel[0] != '\0' && client->context.base->qos_stream_id >= 0)
     {
         if (tp_producer_add_publication(
-            producer,
+            instance,
             client->context.base->qos_channel,
             client->context.base->qos_stream_id,
-            &producer->qos_publication) < 0)
+            &instance->qos_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
     if (client->context.base->metadata_channel[0] != '\0' && client->context.base->metadata_stream_id >= 0)
     {
         if (tp_producer_add_publication(
-            producer,
+            instance,
             client->context.base->metadata_channel,
             client->context.base->metadata_stream_id,
-            &producer->metadata_publication) < 0)
+            &instance->metadata_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
-    if (producer->context.use_driver)
+    if (instance->context.use_driver)
     {
-        if (tp_producer_attach(producer, NULL) < 0)
+        if (tp_producer_attach(instance, NULL) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
-    if (producer->context.use_conductor_polling && producer->client)
+    if (instance->context.use_conductor_polling && instance->client)
     {
         if (tp_client_register_poller(
-            producer->client,
+            instance->client,
             tp_producer_poll_dispatch,
-            producer,
+            instance,
             TP_PRODUCER_DEFAULT_FRAGMENT_LIMIT) < 0)
         {
-            return -1;
+            goto cleanup;
         }
-        producer->conductor_poll_registered = true;
+        instance->conductor_poll_registered = true;
     }
 
-    return 0;
+    result = 0;
+    *producer = instance;
+
+cleanup:
+    if (result < 0 && instance)
+    {
+        tp_producer_close(instance);
+    }
+    return result;
 }
 
 static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_config_t *config)
@@ -1242,7 +1264,7 @@ static int tp_producer_attach_driver(tp_producer_t *producer)
 
     tp_producer_fill_driver_request(producer, &request);
 
-    if (tp_driver_attach(&producer->driver, &request, &info, (int64_t)producer->client->context.driver_timeout_ns) < 0)
+    if (tp_driver_attach(producer->driver, &request, &info, (int64_t)producer->client->context.driver_timeout_ns) < 0)
     {
         return -1;
     }
@@ -2112,6 +2134,57 @@ void tp_producer_clear_data_source_meta(tp_producer_t *producer)
     memset(&producer->cached_meta, 0, sizeof(producer->cached_meta));
 }
 
+tp_publication_t *tp_producer_descriptor_publication(tp_producer_t *producer)
+{
+    return NULL == producer ? NULL : producer->descriptor_publication;
+}
+
+tp_publication_t *tp_producer_control_publication(tp_producer_t *producer)
+{
+    return NULL == producer ? NULL : producer->control_publication;
+}
+
+tp_publication_t *tp_producer_qos_publication(tp_producer_t *producer)
+{
+    return NULL == producer ? NULL : producer->qos_publication;
+}
+
+tp_publication_t *tp_producer_metadata_publication(tp_producer_t *producer)
+{
+    return NULL == producer ? NULL : producer->metadata_publication;
+}
+
+int tp_producer_has_consumers(tp_producer_t *producer, bool *out)
+{
+    size_t i;
+    tp_consumer_registry_t *registry = NULL;
+
+    if (NULL == producer || NULL == out)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_producer_has_consumers: invalid input");
+        return -1;
+    }
+
+    if (NULL == producer->consumer_manager)
+    {
+        *out = false;
+        return 0;
+    }
+
+    registry = &producer->consumer_manager->registry;
+    for (i = 0; i < registry->capacity; i++)
+    {
+        if (registry->entries[i].in_use)
+        {
+            *out = true;
+            return 0;
+        }
+    }
+
+    *out = false;
+    return 0;
+}
+
 int tp_producer_close(tp_producer_t *producer)
 {
     size_t i;
@@ -2176,21 +2249,23 @@ int tp_producer_close(tp_producer_t *producer)
     if (producer->driver_attached)
     {
         tp_driver_detach(
-            &producer->driver,
+            producer->driver,
             tp_clock_now_ns(),
-            producer->driver.active_lease_id,
-            producer->driver.active_stream_id,
-            producer->driver.client_id,
-            producer->driver.role);
+            producer->driver->active_lease_id,
+            producer->driver->active_stream_id,
+            producer->driver->client_id,
+            producer->driver->role);
         tp_driver_attach_info_close(&producer->driver_attach);
         producer->driver_attached = false;
     }
 
     if (producer->driver_initialized)
     {
-        tp_driver_client_close(&producer->driver);
+        tp_driver_client_close(producer->driver);
+        producer->driver = NULL;
         producer->driver_initialized = false;
     }
 
+    aeron_free(producer);
     return 0;
 }

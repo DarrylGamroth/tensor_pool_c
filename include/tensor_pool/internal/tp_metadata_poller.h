@@ -4,25 +4,13 @@
 #include <stdbool.h>
 
 #include "tensor_pool/tp_client.h"
+#include "tensor_pool/client/tp_control_view.h"
 #include "tensor_pool/internal/tp_control_adapter.h"
 #include "tensor_pool/tp_handles.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct tp_metadata_handlers_stct
-{
-    tp_on_data_source_announce_t on_data_source_announce;
-    tp_on_data_source_meta_begin_t on_data_source_meta_begin;
-    tp_on_data_source_meta_attr_t on_data_source_meta_attr;
-    tp_on_data_source_meta_end_t on_data_source_meta_end;
-    tp_on_meta_blob_announce_t on_meta_blob_announce;
-    tp_on_meta_blob_chunk_t on_meta_blob_chunk;
-    tp_on_meta_blob_complete_t on_meta_blob_complete;
-    void *clientd;
-}
-tp_metadata_handlers_t;
 
 typedef struct tp_metadata_poller_stct
 {

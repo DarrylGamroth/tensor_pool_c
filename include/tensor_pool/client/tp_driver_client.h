@@ -5,12 +5,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_handles.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct tp_client_stct tp_client_t;
 
 typedef struct tp_driver_pool_info_stct
 {
@@ -102,21 +103,7 @@ typedef struct tp_driver_event_poller_stct
 }
 tp_driver_event_poller_t;
 
-typedef struct tp_driver_client_stct
-{
-    tp_client_t *client;
-    tp_publication_t *publication;
-    tp_subscription_t *subscription;
-    uint64_t active_lease_id;
-    uint64_t lease_expiry_timestamp_ns;
-    uint64_t last_keepalive_ns;
-    uint32_t active_stream_id;
-    uint32_t client_id;
-    uint8_t role;
-    bool registered;
-    struct tp_driver_client_stct *next;
-}
-tp_driver_client_t;
+typedef struct tp_driver_client_stct tp_driver_client_t;
 
 typedef struct tp_async_attach_stct
 {
@@ -141,7 +128,7 @@ typedef struct tp_async_detach_stct
 }
 tp_async_detach_t;
 
-int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base);
+int tp_driver_client_init(tp_driver_client_t **client, tp_client_t *base);
 int tp_driver_client_close(tp_driver_client_t *client);
 
 int64_t tp_driver_next_correlation_id(void);
@@ -174,6 +161,12 @@ int tp_driver_client_update_lease(
 int tp_driver_client_record_keepalive(tp_driver_client_t *client, uint64_t now_ns);
 int tp_driver_client_keepalive_due(const tp_driver_client_t *client, uint64_t now_ns, uint64_t interval_ns);
 int tp_driver_client_lease_expired(const tp_driver_client_t *client, uint64_t now_ns);
+
+uint64_t tp_driver_client_active_lease_id(const tp_driver_client_t *client);
+uint32_t tp_driver_client_active_stream_id(const tp_driver_client_t *client);
+uint32_t tp_driver_client_id(const tp_driver_client_t *client);
+uint8_t tp_driver_client_role(const tp_driver_client_t *client);
+tp_publication_t *tp_driver_client_publication(const tp_driver_client_t *client);
 
 int tp_driver_event_poller_init(
     tp_driver_event_poller_t *poller,

@@ -18,9 +18,7 @@
 extern "C" {
 #endif
 
-typedef struct tp_consumer_manager_stct tp_consumer_manager_t;
-typedef struct tp_tracelink_entry_stct tp_tracelink_entry_t;
-typedef struct tp_qos_poller_stct tp_qos_poller_t;
+typedef struct tp_producer_stct tp_producer_t;
 
 typedef struct tp_payload_pool_config_stct
 {
@@ -116,57 +114,6 @@ typedef struct tp_frame_progress_stct
 }
 tp_frame_progress_t;
 
-typedef struct tp_producer_stct
-{
-    tp_client_t *client;
-    tp_producer_context_t context;
-    tp_publication_t *descriptor_publication;
-    tp_publication_t *control_publication;
-    tp_publication_t *qos_publication;
-    tp_publication_t *metadata_publication;
-    tp_fragment_assembler_t *control_assembler;
-    tp_qos_poller_t *qos_poller;
-    tp_shm_region_t header_region;
-    char *header_uri;
-    tp_payload_pool_t *pools;
-    char **pool_uris;
-    size_t pool_uri_count;
-    size_t pool_count;
-    uint32_t stream_id;
-    uint32_t producer_id;
-    uint64_t epoch;
-    uint32_t layout_version;
-    uint32_t header_nslots;
-    uint64_t next_seq;
-    tp_driver_client_t driver;
-    tp_driver_attach_info_t driver_attach;
-    bool driver_initialized;
-    bool driver_attached;
-    tp_consumer_manager_t *consumer_manager;
-    uint64_t last_consumer_sweep_ns;
-    uint64_t last_qos_ns;
-    uint64_t last_activity_ns;
-    uint64_t last_shm_announce_ns;
-    uint64_t last_announce_ns;
-    uint64_t last_meta_ns;
-    tp_data_source_announce_t cached_announce;
-    bool has_announce;
-    tp_data_source_meta_t cached_meta;
-    tp_meta_attribute_owned_t *cached_attrs;
-    size_t cached_attr_count;
-    bool has_meta;
-    tp_trace_id_generator_t *trace_id_generator;
-    tp_tracelink_entry_t *tracelink_entries;
-    size_t tracelink_entry_count;
-    tp_tracelink_validate_t tracelink_validator;
-    void *tracelink_validator_clientd;
-    uint64_t next_attach_ns;
-    uint32_t attach_failures;
-    bool reattach_requested;
-    bool conductor_poll_registered;
-}
-tp_producer_t;
-
 int tp_producer_context_init(tp_producer_context_t *ctx);
 void tp_producer_context_set_use_conductor_polling(tp_producer_context_t *ctx, bool enabled);
 void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
@@ -180,7 +127,7 @@ void tp_producer_context_set_payload_flush(
     void (*payload_flush)(void *clientd, void *payload, size_t length),
     void *clientd);
 
-int tp_producer_init(tp_producer_t *producer, tp_client_t *client, const tp_producer_context_t *ctx);
+int tp_producer_init(tp_producer_t **producer, tp_client_t *client, const tp_producer_context_t *ctx);
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config);
 int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);
@@ -197,6 +144,12 @@ void tp_producer_clear_data_source_meta(tp_producer_t *producer);
 int tp_producer_enable_consumer_manager(tp_producer_t *producer, size_t capacity);
 int tp_producer_poll_control(tp_producer_t *producer, int fragment_limit);
 int tp_producer_close(tp_producer_t *producer);
+
+tp_publication_t *tp_producer_descriptor_publication(tp_producer_t *producer);
+tp_publication_t *tp_producer_control_publication(tp_producer_t *producer);
+tp_publication_t *tp_producer_qos_publication(tp_producer_t *producer);
+tp_publication_t *tp_producer_metadata_publication(tp_producer_t *producer);
+int tp_producer_has_consumers(tp_producer_t *producer, bool *out);
 
 #ifdef __cplusplus
 }

@@ -2,7 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#include "tensor_pool/tp_driver_client.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 
 #include <inttypes.h>
 #include <errno.h>
@@ -16,7 +17,9 @@
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_log.h"
+#include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_types.h"
+#include "tensor_pool/client/tp_client.h"
 #include "tp_aeron_wrap.h"
 #include "tensor_pool/internal/tp_context.h"
 
@@ -795,29 +798,39 @@ static void tp_driver_async_detach_handler(void *clientd, const uint8_t *buffer,
     }
 }
 
-int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
+int tp_driver_client_init(tp_driver_client_t **client, tp_client_t *base)
 {
+    tp_driver_client_t *instance = NULL;
+
     if (NULL == client || NULL == base)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: null input");
         return -1;
     }
 
-    memset(client, 0, sizeof(*client));
-    client->client = base;
-    client->subscription = tp_client_control_subscription(base);
+    if (aeron_alloc((void **)&instance, sizeof(*instance)) < 0 || NULL == instance)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_driver_client_init: allocation failed");
+        return -1;
+    }
+
+    memset(instance, 0, sizeof(*instance));
+    instance->client = base;
+    instance->subscription = tp_client_control_subscription(base);
 
     if (NULL == base->context.base ||
         base->context.base->control_channel[0] == '\0' ||
         base->context.base->control_stream_id < 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control channel not configured");
+        aeron_free(instance);
         return -1;
     }
 
-    if (NULL == client->subscription)
+    if (NULL == instance->subscription)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control subscription unavailable");
+        aeron_free(instance);
         return -1;
     }
 
@@ -829,24 +842,28 @@ int tp_driver_client_init(tp_driver_client_t *client, tp_client_t *base)
         base->context.base->control_stream_id,
         &async_add) < 0)
     {
+        aeron_free(instance);
         return -1;
     }
 
-    while (NULL == client->publication)
+    while (NULL == instance->publication)
     {
-        if (tp_client_async_add_publication_poll(&client->publication, async_add) < 0)
+        if (tp_client_async_add_publication_poll(&instance->publication, async_add) < 0)
         {
+            aeron_free(instance);
             return -1;
         }
         tp_client_do_work(base);
     }
 
-    if (tp_client_register_driver_client(base, client) < 0)
+    if (tp_client_register_driver_client(base, instance) < 0)
     {
-        tp_publication_close(&client->publication);
+        tp_publication_close(&instance->publication);
+        aeron_free(instance);
         return -1;
     }
 
+    *client = instance;
     return 0;
 }
 
@@ -865,6 +882,9 @@ int tp_driver_client_close(tp_driver_client_t *client)
     }
 
     client->subscription = NULL;
+    client->client = NULL;
+    client->next = NULL;
+    aeron_free(client);
 
     return 0;
 }
@@ -1637,4 +1657,29 @@ int tp_driver_client_lease_expired(const tp_driver_client_t *client, uint64_t no
     }
 
     return (now_ns >= client->lease_expiry_timestamp_ns) ? 1 : 0;
+}
+
+uint64_t tp_driver_client_active_lease_id(const tp_driver_client_t *client)
+{
+    return NULL == client ? 0 : client->active_lease_id;
+}
+
+uint32_t tp_driver_client_active_stream_id(const tp_driver_client_t *client)
+{
+    return NULL == client ? 0 : client->active_stream_id;
+}
+
+uint32_t tp_driver_client_id(const tp_driver_client_t *client)
+{
+    return NULL == client ? 0 : client->client_id;
+}
+
+uint8_t tp_driver_client_role(const tp_driver_client_t *client)
+{
+    return NULL == client ? 0 : client->role;
+}
+
+tp_publication_t *tp_driver_client_publication(const tp_driver_client_t *client)
+{
+    return NULL == client ? NULL : client->publication;
 }

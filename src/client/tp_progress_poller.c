@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 #include "tensor_pool/tp_error.h"
 #include "tp_aeron_wrap.h"
 

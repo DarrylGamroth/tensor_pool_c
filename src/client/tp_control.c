@@ -1,7 +1,7 @@
 #include "tensor_pool/tp_control.h"
 
-#include "tensor_pool/tp_consumer.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 
 #include <errno.h>
 #include <stdlib.h>

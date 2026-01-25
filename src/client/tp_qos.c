@@ -1,4 +1,6 @@
 #include "tensor_pool/internal/tp_qos.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
 
 #include <errno.h>
 

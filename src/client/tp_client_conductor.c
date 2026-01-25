@@ -458,7 +458,7 @@ int tp_client_conductor_init(
     }
 
     memset(&shim, 0, sizeof(shim));
-    shim.base = *context;
+    shim.base = (tp_context_t *)context;
     shim.use_agent_invoker = use_agent_invoker;
 
     return tp_client_conductor_init_with_client_context(conductor, &shim);

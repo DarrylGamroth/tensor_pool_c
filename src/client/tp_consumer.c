@@ -1,4 +1,6 @@
-#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/internal/tp_consumer_internal.h"
+#include "tensor_pool/internal/tp_client_internal.h"
+#include "tensor_pool/internal/tp_driver_client_internal.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -792,7 +794,10 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             {
                 tp_driver_attach_info_close(&consumer->driver_attach);
             }
-            consumer->driver.active_lease_id = 0;
+            if (consumer->driver)
+            {
+                consumer->driver->active_lease_id = 0;
+            }
             consumer->driver_attached = false;
             tp_consumer_schedule_reattach(consumer, now);
         }
@@ -915,78 +920,95 @@ void tp_consumer_context_set_use_conductor_polling(tp_consumer_context_t *ctx, b
     ctx->use_conductor_polling = enabled;
 }
 
-int tp_consumer_init(tp_consumer_t *consumer, tp_client_t *client, const tp_consumer_context_t *context)
+int tp_consumer_init(tp_consumer_t **consumer, tp_client_t *client, const tp_consumer_context_t *context)
 {
+    tp_consumer_t *instance = NULL;
+    int result = -1;
+
     if (NULL == consumer || NULL == client || NULL == context)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_consumer_init: null input");
         return -1;
     }
 
-    memset(consumer, 0, sizeof(*consumer));
-    consumer->client = client;
-    consumer->context = *context;
-    consumer->use_shm = true;
-    consumer->payload_fallback_uri[0] = '\0';
+    if (aeron_alloc((void **)&instance, sizeof(*instance)) < 0 || NULL == instance)
+    {
+        TP_SET_ERR(ENOMEM, "%s", "tp_consumer_init: allocation failed");
+        return -1;
+    }
+
+    memset(instance, 0, sizeof(*instance));
+    instance->client = client;
+    instance->context = *context;
+    instance->use_shm = true;
+    instance->payload_fallback_uri[0] = '\0';
 
     if (client->context.base->descriptor_channel[0] != '\0' && client->context.base->descriptor_stream_id >= 0)
     {
         if (tp_consumer_add_subscription(
-            consumer,
+            instance,
             client->context.base->descriptor_channel,
             client->context.base->descriptor_stream_id,
-            &consumer->descriptor_subscription) < 0)
+            &instance->descriptor_subscription) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
     if (client->context.base->control_channel[0] != '\0' && client->context.base->control_stream_id >= 0)
     {
         if (tp_consumer_add_publication(
-            consumer,
+            instance,
             client->context.base->control_channel,
             client->context.base->control_stream_id,
-            &consumer->control_publication) < 0)
+            &instance->control_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
     if (client->context.base->qos_channel[0] != '\0' && client->context.base->qos_stream_id >= 0)
     {
         if (tp_consumer_add_publication(
-            consumer,
+            instance,
             client->context.base->qos_channel,
             client->context.base->qos_stream_id,
-            &consumer->qos_publication) < 0)
+            &instance->qos_publication) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
-    if (consumer->context.use_driver)
+    if (instance->context.use_driver)
     {
-        if (tp_consumer_attach(consumer, NULL) < 0)
+        if (tp_consumer_attach(instance, NULL) < 0)
         {
-            return -1;
+            goto cleanup;
         }
     }
 
-    if (consumer->context.use_conductor_polling && consumer->client)
+    if (instance->context.use_conductor_polling && instance->client)
     {
         if (tp_client_register_poller(
-            consumer->client,
+            instance->client,
             tp_consumer_poll_dispatch,
-            consumer,
+            instance,
             TP_CONSUMER_DEFAULT_FRAGMENT_LIMIT) < 0)
         {
-            return -1;
+            goto cleanup;
         }
-        consumer->conductor_poll_registered = true;
+        instance->conductor_poll_registered = true;
     }
 
-    return 0;
+    result = 0;
+    *consumer = instance;
+
+cleanup:
+    if (result < 0 && instance)
+    {
+        tp_consumer_close(instance);
+    }
+    return result;
 }
 
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd)
@@ -1316,7 +1338,7 @@ static int tp_consumer_attach_driver(tp_consumer_t *consumer)
 
     tp_consumer_fill_driver_request(consumer, &request);
 
-    if (tp_driver_attach(&consumer->driver, &request, &info, (int64_t)consumer->client->context.driver_timeout_ns) < 0)
+    if (tp_driver_attach(consumer->driver, &request, &info, (int64_t)consumer->client->context.driver_timeout_ns) < 0)
     {
         return -1;
     }
@@ -1788,6 +1810,36 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     return tp_consumer_poll_control_internal(consumer, fragment_limit, true);
 }
 
+tp_subscription_t *tp_consumer_descriptor_subscription(tp_consumer_t *consumer)
+{
+    return NULL == consumer ? NULL : consumer->descriptor_subscription;
+}
+
+tp_subscription_t *tp_consumer_control_subscription(tp_consumer_t *consumer)
+{
+    return NULL == consumer ? NULL : consumer->control_subscription;
+}
+
+tp_publication_t *tp_consumer_control_publication(tp_consumer_t *consumer)
+{
+    return NULL == consumer ? NULL : consumer->control_publication;
+}
+
+tp_publication_t *tp_consumer_qos_publication(tp_consumer_t *consumer)
+{
+    return NULL == consumer ? NULL : consumer->qos_publication;
+}
+
+uint32_t tp_consumer_assigned_descriptor_stream_id(const tp_consumer_t *consumer)
+{
+    return NULL == consumer ? 0 : consumer->assigned_descriptor_stream_id;
+}
+
+uint32_t tp_consumer_assigned_control_stream_id(const tp_consumer_t *consumer)
+{
+    return NULL == consumer ? 0 : consumer->assigned_control_stream_id;
+}
+
 const char *tp_consumer_payload_fallback_uri(const tp_consumer_t *consumer)
 {
     if (NULL == consumer)
@@ -1846,22 +1898,24 @@ int tp_consumer_close(tp_consumer_t *consumer)
     if (consumer->driver_attached)
     {
         tp_driver_detach(
-            &consumer->driver,
+            consumer->driver,
             tp_clock_now_ns(),
-            consumer->driver.active_lease_id,
-            consumer->driver.active_stream_id,
-            consumer->driver.client_id,
-            consumer->driver.role);
+            consumer->driver->active_lease_id,
+            consumer->driver->active_stream_id,
+            consumer->driver->client_id,
+            consumer->driver->role);
         tp_driver_attach_info_close(&consumer->driver_attach);
         consumer->driver_attached = false;
     }
 
     if (consumer->driver_initialized)
     {
-        tp_driver_client_close(&consumer->driver);
+        tp_driver_client_close(consumer->driver);
+        consumer->driver = NULL;
         consumer->driver_initialized = false;
     }
 
+    aeron_free(consumer);
     return 0;
 }
 

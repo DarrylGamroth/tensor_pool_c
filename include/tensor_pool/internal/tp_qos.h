@@ -21,38 +21,6 @@ int tp_qos_publish_consumer(
     uint64_t drops_late,
     tp_mode_t mode);
 
-typedef enum tp_qos_event_type_enum
-{
-    TP_QOS_EVENT_PRODUCER,
-    TP_QOS_EVENT_CONSUMER
-}
-tp_qos_event_type_t;
-
-typedef struct tp_qos_event_stct
-{
-    tp_qos_event_type_t type;
-    uint32_t stream_id;
-    uint32_t producer_id;
-    uint32_t consumer_id;
-    uint64_t epoch;
-    uint64_t current_seq;
-    uint32_t watermark;
-    uint64_t last_seq_seen;
-    uint64_t drops_gap;
-    uint64_t drops_late;
-    tp_mode_t mode;
-}
-tp_qos_event_t;
-
-typedef void (*tp_on_qos_event_t)(void *clientd, const tp_qos_event_t *event);
-
-typedef struct tp_qos_handlers_stct
-{
-    tp_on_qos_event_t on_qos_event;
-    void *clientd;
-}
-tp_qos_handlers_t;
-
 typedef struct tp_qos_poller_stct
 {
     tp_client_t *client;

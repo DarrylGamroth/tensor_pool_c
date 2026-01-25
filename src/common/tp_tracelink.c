@@ -7,7 +7,7 @@
 
 #include "tp_aeron_wrap.h"
 #include "tensor_pool/tp_error.h"
-#include "tensor_pool/tp_producer.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 
 #include "trace/tensor_pool/messageHeader.h"
 #include "trace/tensor_pool/traceLinkSet.h"

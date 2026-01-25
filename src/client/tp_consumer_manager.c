@@ -1,4 +1,5 @@
 #include "tensor_pool/internal/tp_consumer_manager.h"
+#include "tensor_pool/internal/tp_producer_internal.h"
 
 #include <errno.h>
 #include <string.h>
