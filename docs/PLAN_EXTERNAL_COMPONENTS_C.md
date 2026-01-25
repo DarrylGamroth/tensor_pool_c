@@ -42,11 +42,11 @@ Out of scope:
 - [x] Provide `tp_driver` executable with lifecycle control and logging.
 
 ## Phase 4: Discovery Service / Registry (Advisory)
-- [ ] Implement discovery registry state model (streams, pools, QoS metadata).
-- [ ] Encode/decode DiscoveryRequest/DiscoveryResponse; enforce validity rules.
-- [ ] Support authority rules: driver is authoritative, discovery is advisory.
-- [ ] Provide `tp_discoveryd` executable with config + logging.
-- [ ] Add client-facing utilities to query discovery and print JSON.
+- [x] Implement discovery registry state model (streams, pools, QoS metadata).
+- [x] Encode/decode DiscoveryRequest/DiscoveryResponse; enforce validity rules.
+- [x] Support authority rules: driver is authoritative, discovery is advisory.
+- [x] Provide `tp_discoveryd` executable with config + logging.
+- [x] Add client-facing utilities to query discovery and print JSON.
 
 ## Phase 5: Supervisor / Unified Management (Policy Layer)
 - [ ] Implement supervisor policy engine (admission control, quotas, priorities).
@@ -69,7 +69,7 @@ Out of scope:
 - Phase 1: Completed
 - Phase 2: Completed
 - Phase 3: Completed (node-id reuse cooldown missing)
-- Phase 4: Not started
+- Phase 4: Completed
 - Phase 5: Not started
 - Phase 6: Not started
 - Phase 7: Not started

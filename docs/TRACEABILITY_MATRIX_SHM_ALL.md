@@ -105,9 +105,9 @@ Columns:
 | DS-4.2-1 | 4.2 | Gate decode by `schemaId`/`templateId` on shared streams | `src/client/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-4.3-1 | 4.3 | Request must include response channel and non-zero stream ID | `src/client/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
 | DS-5.0-1 | 5.0 | Optional fields use nullValue or zero-length strings | `src/client/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | Optional dataSourceId nullValue handled |
-| DS-5.1-1 | 5.1 | Filter AND semantics, tag matching rules | n/a | n/a | Missing | Provider responsibility not yet implemented |
+| DS-5.1-1 | 5.1 | Filter AND semantics, tag matching rules | `src/discovery/tp_discovery_service.c` | `tests/test_tp_discovery_service.c` | Compliant | Tags can be injected via provider API and matched with AND semantics. |
 | DS-5.2-1 | 5.2 | Response validation: headerSlotBytes/maxDims, pool_nslots match, authority fields non-empty | `src/client/tp_discovery_client.c` | `tests/test_tp_discovery_client.c` | Compliant | |
-| DS-6-1 | 6 | Registry expiry/indexing/conflict resolution | n/a | n/a | Missing | Provider responsibility not yet implemented |
+| DS-6-1 | 6 | Registry expiry/indexing/conflict resolution | `src/discovery/tp_discovery_service.c` | `tests/test_tp_discovery_service.c` | Compliant | Expiry based on announce period and epoch monotonicity. |
 
 ## SHM_TraceLink_Spec_v1.0
 

@@ -52,7 +52,7 @@ Detailed section-by-section coverage lives in `docs/COMPLIANCE_MATRIX_SHM_WIRE_V
 | DiscoveryRequest encode | Compliant | `tp_discovery_request` validates non-empty response channel and stream ID. |
 | DiscoveryResponse decode | Compliant | Required fields validated; schema version/block length gated; pool `nslots` vs header `nslots` mismatch rejected. |
 | Client polling / async handling | Compliant | `tp_discovery_poll` and `tp_discovery_poller` implemented. |
-| Discovery provider / registry | Missing | No provider implementation in this repo. |
+| Discovery provider / registry | Compliant | `tp_discovery_service` + `tp_discoveryd` implement registry, expiry, and request handling. |
 | Authority rules | Missing | Driver/registry responsibilities not yet implemented. |
 
 ## SHM_TraceLink_Spec_v1.0

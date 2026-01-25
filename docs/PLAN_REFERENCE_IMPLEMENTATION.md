@@ -40,11 +40,11 @@ Related design docs:
 - [x] Provide `tp_driver` executable with config + logging.
 
 ## Phase 4: Discovery Service (Advisory)
-- [ ] Implement discovery registry and stream index.
-- [ ] Serve DiscoveryRequest/DiscoveryResponse with filter semantics.
-- [ ] Respect authority rules (driver authoritative, discovery advisory).
-- [ ] Provide `tp_discoveryd` executable and JSON output tooling.
-- [ ] Allow optional embedded mode (agent can run inside driver).
+- [x] Implement discovery registry and stream index.
+- [x] Serve DiscoveryRequest/DiscoveryResponse with filter semantics.
+- [x] Respect authority rules (driver authoritative, discovery advisory).
+- [x] Provide `tp_discoveryd` executable and JSON output tooling.
+- [x] Allow optional embedded mode (agent can run inside driver).
 
 ## Phase 5: Supervisor / Unified Management
 - [ ] Implement supervisor/console agent.
@@ -67,7 +67,7 @@ Related design docs:
 - Phase 1: Completed
 - Phase 2: Completed
 - Phase 3: Completed
-- Phase 4: Not started
+- Phase 4: Completed
 - Phase 5: Not started
 - Phase 6: Not started
 - Phase 7: Not started
@@ -75,6 +75,5 @@ Related design docs:
 ## Checklist (Specs → Tests)
 - [ ] Add integration coverage for driver server-side requirements (D-2.1, D-4.3-1, D-4.8-1, D-4.2-4/TL-6.2-1).
 - [ ] Add node ID reuse cooldown policy (TraceLink §6.2) or document explicit verification.
-- [ ] Implement discovery provider/registry service.
 - [ ] Implement supervisor/unified management layer.
 - [ ] Expand config-matrix integration tests beyond external driver availability.

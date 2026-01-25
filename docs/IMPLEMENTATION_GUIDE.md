@@ -157,7 +157,7 @@ Status keywords: DONE / PARTIAL / MISSING / EXTERNAL.
 
 ### Discovery
 - DONE: DiscoveryRequest encode + response decode + poller API.
-- MISSING: Discovery provider/registry service.
+- DONE: Discovery provider/registry service (`tp_discoveryd`, `tp_discovery_service`).
   - SHOULD be a standalone agent/executable; MAY run embedded in the driver.
 
 ### Driver (Server-side)

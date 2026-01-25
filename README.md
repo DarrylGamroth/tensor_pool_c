@@ -87,3 +87,4 @@ tools/run_fuzz_smoke.sh
 - `docs/STREAM_ID_CONVENTIONS.md`
 - `docs/C_CLIENT_API_USAGE.md`
 - `docs/DRIVER_USAGE.md`
+- `docs/DISCOVERY_USAGE.md`
