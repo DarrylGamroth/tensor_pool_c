@@ -6,7 +6,6 @@
 #include <string.h>
 
 #include "aeron_alloc.h"
-#include "aeron_fragment_assembler.h"
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
@@ -16,6 +15,7 @@
 #include "tensor_pool/tp_slot.h"
 #include "tensor_pool/tp_types.h"
 #include "tensor_pool/tp_uri.h"
+#include "tp_aeron_wrap.h"
 
 #include "driver/tensor_pool/hugepagesPolicy.h"
 #include "driver/tensor_pool/publishMode.h"
@@ -695,7 +695,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 
         if (view.descriptor_channel.length > 0 && view.descriptor_stream_id > 0)
         {
-            aeron_subscription_t *new_subscription = NULL;
+            tp_subscription_t *new_subscription = NULL;
             char channel[4096];
             size_t copy_len = view.descriptor_channel.length;
             if (copy_len >= sizeof(channel))
@@ -711,10 +711,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                 (int32_t)view.descriptor_stream_id,
                 &new_subscription) == 0 && new_subscription)
             {
-                if (consumer->descriptor_subscription)
-                {
-                    aeron_subscription_close(consumer->descriptor_subscription, NULL, NULL);
-                }
+                tp_subscription_close(&consumer->descriptor_subscription);
                 consumer->descriptor_subscription = new_subscription;
                 consumer->assigned_descriptor_stream_id = view.descriptor_stream_id;
             }
@@ -731,7 +728,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
 
         if (view.control_channel.length > 0 && view.control_stream_id > 0)
         {
-            aeron_subscription_t *new_subscription = NULL;
+            tp_subscription_t *new_subscription = NULL;
             char channel[4096];
             size_t copy_len = view.control_channel.length;
             if (copy_len >= sizeof(channel))
@@ -747,10 +744,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                 (int32_t)view.control_stream_id,
                 &new_subscription) == 0 && new_subscription)
             {
-                if (consumer->control_subscription)
-                {
-                    aeron_subscription_close(consumer->control_subscription, NULL, NULL);
-                }
+                tp_subscription_close(&consumer->control_subscription);
                 consumer->control_subscription = new_subscription;
                 consumer->assigned_control_stream_id = view.control_stream_id;
             }
@@ -822,9 +816,9 @@ static int tp_consumer_add_publication(
     tp_consumer_t *consumer,
     const char *channel,
     int32_t stream_id,
-    aeron_publication_t **out_pub)
+    tp_publication_t **out_pub)
 {
-    aeron_async_add_publication_t *async_add = NULL;
+    tp_async_add_publication_t *async_add = NULL;
 
     if (NULL == consumer || NULL == consumer->client || NULL == out_pub || NULL == channel || stream_id < 0)
     {
@@ -854,9 +848,9 @@ static int tp_consumer_add_subscription(
     tp_consumer_t *consumer,
     const char *channel,
     int32_t stream_id,
-    aeron_subscription_t **out_sub)
+    tp_subscription_t **out_sub)
 {
-    aeron_async_add_subscription_t *async_add = NULL;
+    tp_async_add_subscription_t *async_add = NULL;
 
     if (NULL == consumer || NULL == consumer->client || NULL == out_sub || NULL == channel || stream_id < 0)
     {
@@ -868,10 +862,6 @@ static int tp_consumer_add_subscription(
         consumer->client,
         channel,
         stream_id,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
         &async_add) < 0)
     {
         return -1;
@@ -1500,6 +1490,12 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
         return 1;
     }
 
+    if (tp_seq_value(seq_commit_begin) != progress->seq)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: seq mismatch");
+        return -1;
+    }
+
     if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context.base.log) < 0)
     {
         return -1;
@@ -1514,6 +1510,17 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
     if (slot_view.seq_commit != seq_commit_end)
     {
         return 1;
+    }
+
+    if (!tp_seq_is_committed(slot_view.seq_commit))
+    {
+        return 1;
+    }
+
+    if (tp_seq_value(slot_view.seq_commit) != progress->seq)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_consumer_validate_progress: seq mismatch");
+        return -1;
     }
 
     if (tp_seq_value(seq_commit_end) != progress->seq)
@@ -1593,7 +1600,7 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
 
     if (NULL == consumer->descriptor_assembler)
     {
-        if (aeron_fragment_assembler_create(
+        if (tp_fragment_assembler_create(
             &consumer->descriptor_assembler,
             tp_consumer_descriptor_handler,
             consumer) < 0)
@@ -1603,9 +1610,9 @@ int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit)
     }
 
     int fragments = aeron_subscription_poll(
-        consumer->descriptor_subscription,
+        tp_subscription_handle(consumer->descriptor_subscription),
         aeron_fragment_assembler_handler,
-        consumer->descriptor_assembler,
+        tp_fragment_assembler_handle(consumer->descriptor_assembler),
         fragment_limit);
     if (fragments < 0)
     {
@@ -1632,7 +1639,7 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
 
     if (NULL == consumer->control_assembler)
     {
-        if (aeron_fragment_assembler_create(
+        if (tp_fragment_assembler_create(
             &consumer->control_assembler,
             tp_consumer_control_handler,
             consumer) < 0)
@@ -1644,9 +1651,9 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     if (consumer->client->control_subscription)
     {
         polled = aeron_subscription_poll(
-            consumer->client->control_subscription,
+            tp_subscription_handle(consumer->client->control_subscription),
             aeron_fragment_assembler_handler,
-            consumer->control_assembler,
+            tp_fragment_assembler_handle(consumer->control_assembler),
             fragment_limit);
         if (polled < 0)
         {
@@ -1658,9 +1665,9 @@ int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit)
     if (consumer->client->announce_subscription)
     {
         polled = aeron_subscription_poll(
-            consumer->client->announce_subscription,
+            tp_subscription_handle(consumer->client->announce_subscription),
             aeron_fragment_assembler_handler,
-            consumer->control_assembler,
+            tp_fragment_assembler_handle(consumer->control_assembler),
             fragment_limit);
         if (polled < 0)
         {

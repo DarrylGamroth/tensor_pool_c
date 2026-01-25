@@ -27,14 +27,28 @@ static int tp_progress_poller_validate(tp_progress_poller_t *poller, const tp_fr
         return -1;
     }
 
+    if (poller->header_nslots > 0 && poller->tracker_capacity < poller->header_nslots)
+    {
+        if (tp_progress_poller_resize(poller, poller->header_nslots) < 0)
+        {
+            return -1;
+        }
+    }
+
     if (NULL == poller->tracker || poller->tracker_capacity == 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: tracker unavailable");
         return -1;
     }
 
-    if (poller->header_nslots > 0 && poller->tracker_capacity >= poller->header_nslots)
+    if (poller->header_nslots > 0)
     {
+        if (poller->tracker_capacity < poller->header_nslots)
+        {
+            TP_SET_ERR(EINVAL, "%s", "tp_progress_poller_validate: tracker capacity too small");
+            return -1;
+        }
+
         size_t index = (size_t)(view->seq & (poller->header_nslots - 1));
         tp_progress_tracker_entry_t *entry = &poller->tracker[index];
 
