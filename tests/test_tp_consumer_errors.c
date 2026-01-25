@@ -389,7 +389,8 @@ static void test_consumer_hello_request_validation(void)
     memset(&consumer, 0, sizeof(consumer));
     memset(&hello, 0, sizeof(hello));
 
-    if (tp_publication_wrap(&publication, (aeron_publication_t *)0x1) < 0)
+    publication = (tp_publication_t *)calloc(1, sizeof(*publication));
+    if (NULL == publication)
     {
         goto cleanup;
     }

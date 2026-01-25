@@ -119,7 +119,8 @@ void tp_test_progress_poller_monotonic_capacity(void)
     handlers.on_progress = tp_on_progress_count;
     handlers.clientd = &count;
 
-    if (tp_subscription_wrap(&subscription, (aeron_subscription_t *)0x1) < 0)
+    subscription = (tp_subscription_t *)calloc(1, sizeof(*subscription));
+    if (NULL == subscription)
     {
         goto cleanup;
     }

@@ -138,6 +138,11 @@ static int tp_client_conductor_apply_context(
 
 static tp_client_conductor_state_t *tp_client_conductor_state(tp_client_conductor_t *conductor)
 {
+    if (NULL == conductor)
+    {
+        return NULL;
+    }
+
     return (tp_client_conductor_state_t *)conductor->state;
 }
 
@@ -584,14 +589,13 @@ int tp_client_conductor_close(tp_client_conductor_t *conductor)
 
 int tp_client_conductor_do_work(tp_client_conductor_t *conductor)
 {
-    tp_client_conductor_state_t *state = tp_client_conductor_state(conductor);
-
     if (NULL == conductor || NULL == conductor->aeron.aeron)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_client_conductor_do_work: invalid input");
         return -1;
     }
 
+    tp_client_conductor_state_t *state = tp_client_conductor_state(conductor);
     int work = 0;
 
     if (conductor->use_agent_invoker)

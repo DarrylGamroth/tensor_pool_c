@@ -15,6 +15,7 @@
 #include "aeronc.h"
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -651,7 +652,8 @@ static void test_tracelink_send_errors(void)
     assert(tp_producer_send_tracelink_set(NULL, NULL) < 0);
     assert(tp_producer_send_tracelink_set(&producer, &set) < 0);
 
-    if (tp_publication_wrap(&publication, (aeron_publication_t *)0x1) < 0)
+    publication = (tp_publication_t *)calloc(1, sizeof(*publication));
+    if (NULL == publication)
     {
         goto cleanup;
     }
