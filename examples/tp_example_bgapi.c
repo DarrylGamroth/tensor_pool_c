@@ -1,4 +1,5 @@
 #include "tensor_pool/tp.h"
+#include "tp_sample_util.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -123,18 +124,17 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_context_init(&client_context) < 0)
+    if (tp_example_init_client_context(
+            &client_context,
+            aeron_dir,
+            channel,
+            1001,
+            allowed_paths,
+            2) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
     }
-
-    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
-    tp_client_context_set_control_channel(&client_context, channel, 1000);
-    tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
-    tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);
-    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {

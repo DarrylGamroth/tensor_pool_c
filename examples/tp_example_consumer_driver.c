@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_sample_util.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -123,47 +124,6 @@ static void on_error(void *clientd, int errcode, const char *message)
     {
         fprintf(stderr, "[tp][ERROR] (%d) %s\n", errcode, message);
     }
-}
-
-static void log_subscription_status(
-    const char *label,
-    tp_subscription_t *subscription,
-    int *last_images,
-    int64_t *last_status)
-{
-    int image_count;
-    int64_t status;
-
-    if (NULL == subscription)
-    {
-        return;
-    }
-
-    image_count = tp_subscription_image_count(subscription);
-    status = tp_subscription_channel_status(subscription);
-    if (image_count != *last_images || status != *last_status)
-    {
-        fprintf(stderr, "%s images=%d channel_status=%" PRId64 "\n", label, image_count, status);
-        *last_images = image_count;
-        *last_status = status;
-    }
-}
-
-static void log_publication_status(const char *label, tp_publication_t *publication)
-{
-    if (NULL == publication)
-    {
-        fprintf(stderr, "%s publication unavailable\n", label);
-        return;
-    }
-
-    fprintf(stderr,
-        "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
-        label,
-        tp_publication_channel(publication),
-        tp_publication_stream_id(publication),
-        tp_publication_channel_status(publication),
-        tp_publication_is_connected(publication) ? 1 : 0);
 }
 
 static void tp_example_detach_driver(tp_driver_client_t *driver)
@@ -440,7 +400,13 @@ int main(int argc, char **argv)
         require_per_consumer = 0;
     }
 
-    if (tp_client_context_init(&client_context) < 0)
+    if (tp_example_init_client_context(
+            &client_context,
+            aeron_dir,
+            channel,
+            announce_stream_id,
+            allowed_paths,
+            2) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
@@ -455,16 +421,10 @@ int main(int argc, char **argv)
         tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
     }
 
-    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
-    tp_client_context_set_control_channel(&client_context, channel, 1000);
-    tp_client_context_set_announce_channel(&client_context, channel, announce_stream_id);
-    tp_client_context_set_descriptor_channel(&client_context, channel, 1100);
-    tp_client_context_set_qos_channel(&client_context, channel, 1200);
     fprintf(stderr,
         "Descriptor subscription config channel=%s stream_id=%d\n",
         client_context.base.descriptor_channel,
         client_context.base.descriptor_stream_id);
-    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
     if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
     {
         uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;
@@ -579,8 +539,8 @@ int main(int argc, char **argv)
 
     if (verbose)
     {
-        log_publication_status("Control", consumer.control_publication);
-        log_publication_status("QoS", consumer.qos_publication);
+        tp_example_log_publication_status("Control", consumer.control_publication);
+        tp_example_log_publication_status("QoS", consumer.qos_publication);
     }
 
     memset(&consumer_cfg, 0, sizeof(consumer_cfg));
@@ -696,12 +656,12 @@ int main(int argc, char **argv)
             control_connected = 1;
             fprintf(stderr, "Control subscription connected\n");
         }
-        log_subscription_status(
+        tp_example_log_subscription_status(
             "Descriptor subscription",
             consumer.descriptor_subscription,
             &desc_images,
             &desc_status);
-        log_subscription_status(
+        tp_example_log_subscription_status(
             "Control subscription",
             tp_client_control_subscription(&client),
             &ctrl_images,

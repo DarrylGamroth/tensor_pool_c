@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_sample_util.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -33,26 +34,6 @@ static void usage(const char *name)
         "Example header_uri: shm:file?path=/dev/shm/tensorpool-${USER}/demo/10000/1/header.ring\n"
         "Example pool_uri:   shm:file?path=/dev/shm/tensorpool-${USER}/demo/10000/1/1.pool\n",
         name);
-}
-
-static int wait_for_publication(tp_client_t *client, tp_publication_t *publication)
-{
-    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
-
-    while (tp_clock_now_ns() < deadline)
-    {
-        if (tp_publication_is_connected(publication))
-        {
-            return 0;
-        }
-        tp_client_do_work(client);
-        {
-            struct timespec ts = { 0, 1000000 };
-            nanosleep(&ts, NULL);
-        }
-    }
-
-    return -1;
 }
 
 int main(int argc, char **argv)
@@ -164,18 +145,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_context_init(&client_context) < 0)
+    if (tp_example_init_client_context_nodriver(
+            &client_context,
+            aeron_dir,
+            channel,
+            allowed_paths,
+            2) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
     }
-
-    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
-    tp_client_context_set_control_channel(&client_context, channel, 1000);
-    tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
-    tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(&client_context, "aeron:ipc", 1300);
-    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
@@ -222,7 +201,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    if (wait_for_publication(&client, producer.descriptor_publication) < 0)
+    if (tp_example_wait_for_publication(&client, producer.descriptor_publication, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Descriptor publication not connected\n");
         goto cleanup;

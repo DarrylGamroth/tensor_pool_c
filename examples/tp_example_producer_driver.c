@@ -4,6 +4,7 @@
 
 #include "tensor_pool/tp.h"
 #include "tensor_pool/tp_consumer_manager.h"
+#include "tp_sample_util.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -50,23 +51,6 @@ static void drive_keepalives(tp_client_t *client)
         tp_client_do_work(client);
         nanosleep(&ts, NULL);
     }
-}
-
-static void log_publication_status(const char *label, tp_publication_t *publication)
-{
-    if (NULL == publication)
-    {
-        fprintf(stderr, "%s publication unavailable\n", label);
-        return;
-    }
-
-    fprintf(stderr,
-        "%s publication channel=%s stream_id=%d status=%" PRId64 " connected=%d\n",
-        label,
-        tp_publication_channel(publication),
-        tp_publication_stream_id(publication),
-        tp_publication_channel_status(publication),
-        tp_publication_is_connected(publication) ? 1 : 0);
 }
 
 typedef enum tp_example_pattern_stct
@@ -149,7 +133,7 @@ static void wait_for_descriptor_connection(tp_producer_t *producer)
         return;
     }
 
-    log_publication_status("Descriptor", producer->descriptor_publication);
+    tp_example_log_publication_status("Descriptor", producer->descriptor_publication);
     deadline = (uint64_t)tp_clock_now_ns() + wait_ms * 1000ULL * 1000ULL;
     while ((uint64_t)tp_clock_now_ns() < deadline)
     {
@@ -363,7 +347,13 @@ int main(int argc, char **argv)
         attach_timeout_ns = (int64_t)strtoll(attach_timeout_env, NULL, 10) * 1000LL * 1000LL;
     }
 
-    if (tp_client_context_init(&client_context) < 0)
+    if (tp_example_init_client_context(
+            &client_context,
+            aeron_dir,
+            channel,
+            announce_stream_id,
+            allowed_paths,
+            2) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
@@ -378,13 +368,6 @@ int main(int argc, char **argv)
         tp_log_set_level(&client_context.base.log, TP_LOG_DEBUG);
     }
 
-    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
-    tp_client_context_set_control_channel(&client_context, channel, 1000);
-    tp_client_context_set_announce_channel(&client_context, channel, announce_stream_id);
-    tp_client_context_set_descriptor_channel(&client_context, channel, 1100);
-    tp_client_context_set_qos_channel(&client_context, channel, 1200);
-    tp_client_context_set_metadata_channel(&client_context, channel, 1300);
-    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
     if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
     {
         uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;
@@ -501,10 +484,10 @@ int main(int argc, char **argv)
 
     if (verbose)
     {
-        log_publication_status("Descriptor", producer.descriptor_publication);
-        log_publication_status("Control", producer.control_publication);
-        log_publication_status("QoS", producer.qos_publication);
-        log_publication_status("Metadata", producer.metadata_publication);
+        tp_example_log_publication_status("Descriptor", producer.descriptor_publication);
+        tp_example_log_publication_status("Control", producer.control_publication);
+        tp_example_log_publication_status("QoS", producer.qos_publication);
+        tp_example_log_publication_status("Metadata", producer.metadata_publication);
     }
 
     wait_for_consumer(&producer);

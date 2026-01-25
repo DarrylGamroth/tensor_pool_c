@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp.h"
+#include "tp_sample_util.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -97,26 +98,6 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
         state->errors++;
         fprintf(stderr, "Read failed for seq=%" PRIu64 ": %s\n", desc->seq, tp_errmsg());
     }
-}
-
-static int wait_for_subscription(tp_client_t *client, tp_subscription_t *subscription)
-{
-    int64_t deadline = tp_clock_now_ns() + 2 * 1000 * 1000 * 1000LL;
-
-    while (tp_clock_now_ns() < deadline)
-    {
-        if (tp_subscription_is_connected(subscription))
-        {
-            return 0;
-        }
-        tp_client_do_work(client);
-        {
-            struct timespec ts = { 0, 1000000 };
-            nanosleep(&ts, NULL);
-        }
-    }
-
-    return -1;
 }
 
 int main(int argc, char **argv)
@@ -220,17 +201,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_context_init(&client_context) < 0)
+    if (tp_example_init_client_context_nodriver(
+            &client_context,
+            aeron_dir,
+            channel,
+            allowed_paths,
+            2) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
     }
-
-    tp_client_context_set_aeron_dir(&client_context, aeron_dir);
-    tp_client_context_set_control_channel(&client_context, channel, 1000);
-    tp_client_context_set_descriptor_channel(&client_context, "aeron:ipc", 1100);
-    tp_client_context_set_qos_channel(&client_context, "aeron:ipc", 1200);
-    tp_context_set_allowed_paths(&client_context.base, allowed_paths, 2);
 
     if (tp_client_init(&client, &client_context) < 0 || tp_client_start(&client) < 0)
     {
@@ -276,7 +256,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    if (wait_for_subscription(&client, consumer.descriptor_subscription) < 0)
+    if (tp_example_wait_for_subscription(&client, consumer.descriptor_subscription, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         fprintf(stderr, "Descriptor subscription not connected\n");
         goto cleanup;
