@@ -1,0 +1,16 @@
+# Discovery service config (standalone registry)
+[discovery]
+request_channel = "aeron:ipc?term-length=4m"
+request_stream_id = 9000
+announce_channel = "aeron:ipc?term-length=4m"
+announce_stream_id = 1001
+metadata_channel = "aeron:ipc?term-length=4m"
+metadata_stream_id = 1300
+driver_instance_id = "driver-example"
+driver_control_channel = "aeron:ipc?term-length=4m"
+driver_control_stream_id = 1000
+announce_period_ms = 1000
+max_results = 1000
+
+[driver]
+aeron_dir = ""
