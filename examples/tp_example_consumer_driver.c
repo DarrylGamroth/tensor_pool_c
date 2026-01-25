@@ -595,13 +595,7 @@ int main(int argc, char **argv)
     if (tp_consumer_attach(&consumer, &consumer_cfg) < 0)
     {
         fprintf(stderr, "Consumer attach failed: %s\n", tp_errmsg());
-        tp_consumer_close(&consumer);
-        free(pool_cfg);
-        tp_driver_attach_info_close(&info);
-        tp_example_detach_driver(&driver);
-        tp_driver_client_close(&driver);
-        tp_client_close(&client);
-        return 1;
+        goto cleanup;
     }
 
     state.consumer = &consumer;
