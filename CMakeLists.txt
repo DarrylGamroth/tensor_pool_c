@@ -52,10 +52,7 @@ FetchContent_Declare(
     GIT_REPOSITORY ${TP_TOML_SOURCE}
     GIT_TAG ${TP_TOML_TAG}
 )
-FetchContent_GetProperties(tomlc17)
-if (NOT tomlc17_POPULATED)
-    FetchContent_Populate(tomlc17)
-endif ()
+FetchContent_MakeAvailable(tomlc17)
 add_library(tomlc17 STATIC "${tomlc17_SOURCE_DIR}/src/tomlc17.c")
 target_include_directories(tomlc17 PUBLIC "${tomlc17_SOURCE_DIR}/src")
 
