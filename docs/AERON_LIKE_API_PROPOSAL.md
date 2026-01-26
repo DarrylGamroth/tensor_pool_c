@@ -19,6 +19,7 @@ Observed in `examples/tp_example_consumer_driver.c` / `examples/tp_example_produ
 ## 2. Design Goals
 
 - Mirror Aeron C client patterns: context, client, async add, pollers/adapters, error handling.
+- Provide optional blocking wrappers that delegate to async + poll (Aeron-style convenience).
 - Move Aeron ownership into TensorPool objects; apps only use TensorPool API.
 - Make control/QoS/metadata/discovery first-class with typed handlers.
 - Support per-consumer descriptor/progress streams with minimal app logic.
@@ -145,7 +146,7 @@ int tp_driver_event_poll(tp_driver_event_poller_t *poller, int fragment_limit);
 
 Notes:
 - Keepalive should reference stored lease/stream/client/role state in `tp_driver_client_t` to reduce boilerplate.
-- Async API mirrors Aeron add semantics and avoids blocking.
+- Async API mirrors Aeron add semantics and avoids blocking. Blocking wrappers (`tp_driver_attach`, `tp_producer_attach_driver`, `tp_consumer_attach_driver`) are optional convenience helpers layered on the async calls.
 - Async correlation IDs are exposed for diagnostics and tracing.
 
 ## 5. Producer API (Aeron-like)

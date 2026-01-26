@@ -7,7 +7,7 @@ Authoritative references:
 - `docs/SHM_Discovery_Service_Spec_v_1.0.md`
 - `docs/DRIVER_USAGE.md`
 
-This guide focuses on practical usage patterns and callback flow. The API uses TensorPool enums (`tp_mode_t`, `tp_progress_state_t`) so SBE symbols do not leak into application code.
+This guide focuses on practical usage patterns and callback flow. The primary APIs follow Aeron’s async + poll model; blocking wrappers are optional convenience calls. The API uses TensorPool enums (`tp_mode_t`, `tp_progress_state_t`) so SBE symbols do not leak into application code.
 
 Include the umbrella header for client-facing APIs:
 
@@ -23,12 +23,13 @@ tp_client_t *client = NULL;
 
 tp_context_init(&ctx);
 tp_context_set_aeron_dir(ctx, "/dev/shm/aeron-dgamroth");
-tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
-tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
-tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
-tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
-// Or use defaults from docs/STREAM_ID_CONVENTIONS.md:
-// tp_context_set_default_channels(ctx, "aeron:ipc", 1001);
+// Defaults from docs/STREAM_ID_CONVENTIONS.md:
+tp_context_set_default_channels(ctx, "aeron:ipc", 1001);
+// Optional overrides:
+// tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
+// tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+// tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
+// tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
 const char *allowed_paths[] = { "/dev/shm", "/tmp" };
 tp_context_set_allowed_paths(ctx, allowed_paths, 2);
 
@@ -123,6 +124,27 @@ const tp_discovery_result_t *result = response.result_count ? &response.results[
 ```
 
 Discovery results are advisory; clients must still attach via the driver and handle rejections or stream reassignments.
+
+## 2.1 Driver Attach (Async + Poll)
+
+```c
+tp_driver_attach_request_t request;
+tp_driver_attach_info_t info;
+tp_async_attach_t *async = NULL;
+
+memset(&request, 0, sizeof(request));
+request.stream_id = 10000;
+request.client_id = 42;
+request.role = TP_ROLE_CONSUMER;
+
+tp_driver_attach_async(driver, &request, &async);
+while (tp_driver_attach_poll(async, &info) == 0)
+{
+    tp_client_do_work(client);
+}
+```
+
+The async poll returns `0` until complete, `1` on success, and `-1` on error. Blocking wrappers (`tp_driver_attach`, `tp_producer_attach_driver`, `tp_consumer_attach_driver`) are convenience helpers built on top of the async calls.
 
 ## 3. Consumer: Descriptor Callback Path (12.1)
 

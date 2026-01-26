@@ -203,6 +203,7 @@ int main(int argc, char **argv)
     tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
     tp_driver_attach_info_t info;
+    tp_async_attach_t *async_attach = NULL;
     tp_payload_pool_config_t *pool_cfg = NULL;
     tp_producer_t *producer = NULL;
     tp_producer_context_t producer_context;
@@ -236,6 +237,7 @@ int main(int argc, char **argv)
     int publish_progress = 0;
     int print_attach = 0;
     int64_t attach_timeout_ns = 2 * 1000 * 1000 * 1000LL;
+    int poll_result = 0;
     int result = 1;
     bool client_inited = false;
     bool driver_inited = false;
@@ -243,6 +245,7 @@ int main(int argc, char **argv)
     bool producer_inited = false;
     int opt;
     size_t i;
+    size_t pool_count = 0;
 
     while ((opt = getopt(argc, argv, "a:c:s:i:n:h")) != -1)
     {
@@ -387,12 +390,37 @@ int main(int argc, char **argv)
         request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
     }
 
-    if (tp_driver_attach(driver, &request, &info, attach_timeout_ns) < 0)
+    if (tp_driver_attach_async(driver, &request, &async_attach) < 0)
     {
-        fprintf(stderr, "Attach failed: %s\n", tp_errmsg());
+        fprintf(stderr, "Attach async failed: %s\n", tp_errmsg());
         goto cleanup;
     }
-    attach_info_valid = true;
+    {
+        struct timespec ts = { 0, 10 * 1000 * 1000 };
+        uint64_t deadline = (uint64_t)tp_clock_now_ns() + (uint64_t)attach_timeout_ns;
+
+        while (true)
+        {
+            poll_result = tp_driver_attach_poll(async_attach, &info);
+            if (poll_result < 0)
+            {
+                fprintf(stderr, "Attach poll failed: %s\n", tp_errmsg());
+                goto cleanup;
+            }
+            if (poll_result > 0)
+            {
+                attach_info_valid = true;
+                break;
+            }
+            if ((uint64_t)tp_clock_now_ns() >= deadline)
+            {
+                fprintf(stderr, "Attach timed out\n");
+                goto cleanup;
+            }
+            tp_client_do_work(client);
+            nanosleep(&ts, NULL);
+        }
+    }
 
     if (info.code != TP_RESPONSE_OK)
     {
@@ -419,14 +447,6 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Allocation failed\n");
         goto cleanup;
-    }
-
-    for (i = 0; i < info.pool_count; i++)
-    {
-        pool_cfg[i].pool_id = info.pools[i].pool_id;
-        pool_cfg[i].nslots = info.pools[i].nslots;
-        pool_cfg[i].stride_bytes = info.pools[i].stride_bytes;
-        pool_cfg[i].uri = info.pools[i].region_uri;
     }
 
     if (tp_producer_context_init(&producer_context) < 0)
@@ -475,15 +495,17 @@ int main(int argc, char **argv)
     wait_for_consumer(producer);
     wait_for_descriptor_connection(client, producer);
 
-    memset(&producer_cfg, 0, sizeof(producer_cfg));
-    producer_cfg.stream_id = info.stream_id;
-    producer_cfg.producer_id = resolved_client_id;
-    producer_cfg.epoch = info.epoch;
-    producer_cfg.layout_version = info.layout_version;
-    producer_cfg.header_nslots = info.header_nslots;
-    producer_cfg.header_uri = info.header_region_uri;
-    producer_cfg.pools = pool_cfg;
-    producer_cfg.pool_count = info.pool_count;
+    if (tp_driver_attach_producer_config(
+            &info,
+            resolved_client_id,
+            pool_cfg,
+            info.pool_count,
+            &producer_cfg,
+            &pool_count) < 0)
+    {
+        fprintf(stderr, "Producer config failed: %s\n", tp_errmsg());
+        goto cleanup;
+    }
 
     if (tp_producer_attach(producer, &producer_cfg) < 0)
     {

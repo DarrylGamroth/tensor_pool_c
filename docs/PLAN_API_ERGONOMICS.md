@@ -95,10 +95,10 @@ clear lifecycle semantics and consistent naming.
 
 ## Phase 5: Migration & Examples
 - [x] Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
-- [ ] Update examples to use the new public API names and async + poll patterns.
-- [ ] Update `docs/C_CLIENT_API_USAGE.md` to highlight the async model first.
-- [ ] Update `docs/AERON_LIKE_API_PROPOSAL.md` to reflect the new public API.
-- [ ] Add a migration table old→new API names (no backward compatibility).
+- [x] Update examples to use the new public API names and async + poll patterns.
+- [x] Update `docs/C_CLIENT_API_USAGE.md` to highlight the async model first.
+- [x] Update `docs/AERON_LIKE_API_PROPOSAL.md` to reflect the new public API.
+- [x] Add a migration table old→new API names (`docs/API_MIGRATION.md`).
 
 ### Helper API Candidates (merged)
 - Driver attach config helpers: `tp_driver_attach_producer_config`, `tp_driver_attach_consumer_config`.

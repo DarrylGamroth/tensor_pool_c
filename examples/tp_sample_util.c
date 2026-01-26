@@ -28,11 +28,7 @@ int tp_example_init_client_context(
     }
 
     tp_context_set_aeron_dir(*ctx, aeron_dir);
-    tp_context_set_control_channel(*ctx, channel, 1000);
-    tp_context_set_announce_channel(*ctx, channel, announce_stream_id);
-    tp_context_set_descriptor_channel(*ctx, channel, 1100);
-    tp_context_set_qos_channel(*ctx, channel, 1200);
-    tp_context_set_metadata_channel(*ctx, channel, 1300);
+    tp_context_set_default_channels(*ctx, channel, announce_stream_id);
     if (allowed_paths && allowed_path_count > 0)
     {
         tp_context_set_allowed_paths(*ctx, allowed_paths, allowed_path_count);
@@ -59,7 +55,7 @@ int tp_example_init_client_context_nodriver(
     }
 
     tp_context_set_aeron_dir(*ctx, aeron_dir);
-    tp_context_set_control_channel(*ctx, channel, 1000);
+    tp_context_set_default_channels(*ctx, channel, 1001);
     tp_context_set_descriptor_channel(*ctx, "aeron:ipc", 1100);
     tp_context_set_qos_channel(*ctx, "aeron:ipc", 1200);
     tp_context_set_metadata_channel(*ctx, "aeron:ipc", 1300);
