@@ -158,17 +158,21 @@ int main(int argc, char **argv)
     }
     driver_inited = true;
 
-    memset(&request, 0, sizeof(request));
-    request.correlation_id = 0;
-    request.stream_id = stream_id;
-    request.client_id = client_id;
-    request.role = TP_ROLE_PRODUCER;
-    request.expected_layout_version = 0;
-    request.publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
-    request.require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
+    if (tp_driver_attach_request_init(&request, stream_id, TP_ROLE_PRODUCER) < 0)
+    {
+        fprintf(stderr, "Attach request init failed: %s\n", tp_errmsg());
+        goto cleanup;
+    }
+    if (client_id != 0)
+    {
+        tp_driver_attach_request_set_client_id(&request, client_id);
+    }
     {
         const char *env = getenv("TP_DESIRED_NODE_ID");
-        request.desired_node_id = (env && env[0] != '\0') ? (uint32_t)strtoul(env, NULL, 10) : TP_NULL_U32;
+        if (env && env[0] != '\0')
+        {
+            tp_driver_attach_request_set_desired_node_id(&request, (uint32_t)strtoul(env, NULL, 10));
+        }
     }
 
     if (tp_driver_attach_async(driver, &request, &async_attach) < 0)
@@ -222,15 +226,12 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    if (tp_producer_context_init(&producer_context) < 0)
+    if (tp_producer_context_init_default(&producer_context, info.stream_id, resolved_client_id, false) < 0)
     {
         fprintf(stderr, "Producer context init failed: %s\n", tp_errmsg());
         goto cleanup;
     }
-
-    producer_context.stream_id = info.stream_id;
-    producer_context.producer_id = resolved_client_id;
-    producer_context.fixed_pool_mode = true;
+    tp_producer_context_set_fixed_pool_mode(&producer_context, true);
 
     if (tp_producer_init(&producer, client, &producer_context) < 0)
     {

@@ -42,7 +42,6 @@ int main(int argc, char **argv)
     tp_client_t *client = NULL;
     tp_payload_pool_config_t pool_cfg;
     tp_producer_t *producer = NULL;
-    tp_producer_context_t producer_context;
     tp_producer_config_t producer_cfg;
     tp_frame_t frame;
     tp_frame_metadata_t meta;
@@ -169,16 +168,7 @@ int main(int argc, char **argv)
     pool_cfg.stride_bytes = pool_stride;
     pool_cfg.uri = pool_uri;
 
-    if (tp_producer_context_init(&producer_context) < 0)
-    {
-        fprintf(stderr, "Producer context init failed: %s\n", tp_errmsg());
-        goto cleanup;
-    }
-
-    producer_context.stream_id = stream_id;
-    producer_context.producer_id = client_id;
-
-    if (tp_producer_init(&producer, client, &producer_context) < 0)
+    if (tp_producer_init_simple(&producer, client, stream_id, client_id, false) < 0)
     {
         fprintf(stderr, "Producer init failed: %s\n", tp_errmsg());
         goto cleanup;

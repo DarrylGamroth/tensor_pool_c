@@ -104,7 +104,6 @@ int main(int argc, char **argv)
 {
     tp_context_t *client_context = NULL;
     tp_client_t *client = NULL;
-    tp_consumer_context_t consumer_context;
     tp_consumer_t *consumer = NULL;
     tp_consumer_config_t consumer_cfg;
     tp_consumer_pool_config_t pool_cfg;
@@ -225,16 +224,7 @@ int main(int argc, char **argv)
     pool_cfg.stride_bytes = pool_stride;
     pool_cfg.uri = pool_uri;
 
-    if (tp_consumer_context_init(&consumer_context) < 0)
-    {
-        fprintf(stderr, "Consumer context init failed: %s\n", tp_errmsg());
-        goto cleanup;
-    }
-
-    consumer_context.stream_id = stream_id;
-    consumer_context.consumer_id = client_id;
-
-    if (tp_consumer_init(&consumer, client, &consumer_context) < 0)
+    if (tp_consumer_init_simple(&consumer, client, stream_id, client_id, false) < 0)
     {
         fprintf(stderr, "Consumer init failed: %s\n", tp_errmsg());
         goto cleanup;
