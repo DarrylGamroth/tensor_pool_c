@@ -136,6 +136,9 @@ tp_discovery_poll(&discovery, request.request_id, &response, 5 * 1000 * 1000 * 1
 
 // Pick a stream id.
 const tp_discovery_result_t *result = response.result_count ? &response.results[0] : NULL;
+
+// Release response resources when done.
+tp_discovery_response_close(&response);
 ```
 
 Discovery results are advisory; clients must still attach via the driver and handle rejections or stream reassignments.
@@ -143,9 +146,12 @@ Discovery results are advisory; clients must still attach via the driver and han
 ## 2.1 Driver Attach (Async + Poll)
 
 ```c
+tp_driver_client_t *driver = NULL;
 tp_driver_attach_request_t request;
 tp_driver_attach_info_t info;
 tp_async_attach_t *async = NULL;
+
+tp_driver_client_init(&driver, client);
 
 memset(&request, 0, sizeof(request));
 request.stream_id = 10000;
@@ -157,6 +163,10 @@ while (tp_driver_attach_poll(async, &info) == 0)
 {
     tp_client_do_work(client);
 }
+
+// Use info.stream_id/info.epoch/info.node_id as needed, then release:
+tp_driver_attach_info_close(&info);
+tp_driver_client_close(driver);
 ```
 
 The async poll returns `0` until complete, `1` on success, and `-1` on error. The blocking wrapper `tp_driver_attach` is a convenience helper built on top of the async calls.
@@ -165,6 +175,7 @@ The async poll returns `0` until complete, `1` on success, and `-1` on error. Th
 
 ```c
 tp_driver_attach_info_t info;
+uint32_t producer_id = 7;
 tp_payload_pool_config_t producer_pools[8];
 tp_producer_config_t producer_cfg;
 size_t producer_pool_count = 0;
@@ -187,6 +198,8 @@ tp_driver_attach_consumer_config(
     8,
     &consumer_cfg,
     &consumer_pool_count);
+
+tp_driver_attach_info_close(&info);
 ```
 
 ## 3. Consumer: Descriptor Callback Path (12.1)
@@ -315,9 +328,9 @@ tp_producer_queue_claim(producer, &slots[i]); // re-queue same slot
 ```c
 tp_trace_id_generator_t trace_gen;
 tp_frame_t frame;
-uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
-    ? producer.driver_attach.node_id
-    : 42;
+// Prefer the driver-assigned node id from tp_driver_attach_info_t when available.
+// Assume tp_driver_attach_info_t info was captured during attach.
+uint64_t node_id = (info.node_id != TP_NULL_U32) ? info.node_id : 42;
 
 tp_trace_id_generator_init_default(&trace_gen, node_id);
 tp_producer_set_trace_id_generator(producer, &trace_gen);
@@ -363,8 +376,8 @@ int64_t seq = tp_producer_offer_frame(producer, &frame, &out_meta);
 Note: for N→1 stages, set `frame.trace_id` explicitly so you can emit TraceLinkSet for the derived output.
 
 tp_tracelink_set_t link = {
-    .stream_id = producer.stream_id,
-    .epoch = producer.epoch,
+    .stream_id = info.stream_id,
+    .epoch = info.epoch,
     .seq = (uint64_t)seq,
     .trace_id = out_trace_id,
     .parents = parent_ids,
@@ -375,6 +388,8 @@ if (emit_tracelink)
     tp_producer_send_tracelink_set(producer, &link);
 }
 ```
+
+If you do not have driver attach info, use the stream/epoch from your manual attach config or prefer `tp_producer_send_tracelink_set_ex`, which fills them automatically.
 
 Convenience form (fills stream/epoch automatically):
 
@@ -492,16 +507,17 @@ tp_frame_progress_t progress = {
 };
 tp_producer_offer_progress(producer, &progress);
 
-tp_progress_handlers_t progress_handlers = {
-    .on_progress = on_progress,
-    .clientd = NULL
-};
-tp_progress_poller_t progress_poller;
-tp_progress_poller_init(&progress_poller, client, &progress_handlers);
-tp_progress_poll(&progress_poller, 10);
+static void on_progress(void *clientd, const tp_frame_progress_t *evt)
+{
+    (void)clientd;
+    // Handle progress update.
+}
+
+tp_consumer_set_progress_handler(consumer, on_progress, NULL);
+tp_consumer_poll_progress(consumer, 10);
 ```
 
-If the consumer receives a per-consumer control stream in `ConsumerConfig`, use `tp_progress_poller_init_with_subscription` with the assigned subscription.
+When the consumer receives a per-consumer control stream in `ConsumerConfig`, `tp_consumer_poll_progress` automatically follows the assigned control stream.
 
 When a `ConsumerConfig` sets `use_shm=0`, the consumer disables SHM mapping and exposes the configured fallback URI. Use this to switch to an external payload path (e.g., a bridge):
 
@@ -511,13 +527,6 @@ if (!tp_consumer_uses_shm(consumer))
     const char *fallback = tp_consumer_payload_fallback_uri(consumer);
     // Connect to fallback transport using fallback (may be empty if not provided).
 }
-```
-
-Producers can force fallback for specific deployments by configuring the consumer manager before handling hellos:
-
-```c
-tp_consumer_manager_set_payload_fallback_uri(&manager, "aeron:udp?endpoint=10.0.0.2:40125");
-tp_consumer_manager_set_force_no_shm(&manager, true);
 ```
 
 ## 11. MergeMap and JoinBarrier
@@ -610,8 +619,7 @@ tp_control_handlers_t handlers = {
     .timestamp_join_barrier = NULL,
     .clientd = NULL
 };
-tp_control_poller_t control_poller;
-tp_control_poller_init(&control_poller, client, &handlers);
+tp_client_set_control_handlers(client, &handlers, 10);
 ```
 
 ## 12. Consumer Manager + Fallback (Producer Side)
@@ -631,7 +639,19 @@ Fallback decisions (force no-SHM, fallback URI, per-consumer streams) are policy
 - `init/close/poll` APIs return `0` on success and `-1` on error.
 - Offer/claim/queue functions return `>= 0` on success (position/seq) or negative backpressure/admin codes (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`).
 
-## 14. Direct SHM (No Driver)
+## 14. Cleanup and Ownership
+
+Release resources when you are done with them:
+
+- `tp_driver_attach_info_close(&info)` for attach responses (frees pool list).
+- `tp_discovery_response_close(&response)` after discovery poll.
+- `tp_discovery_client_close(&discovery)` when done with discovery.
+- `tp_driver_client_close(driver)` when done with driver control-plane.
+- `tp_producer_close(producer)` and `tp_consumer_close(consumer)` for endpoints.
+- `tp_client_close(client)` and `tp_context_close(ctx)` for global context.
+- `tp_join_barrier_close(&barrier)` if you initialized a join barrier.
+
+## 15. Direct SHM (No Driver)
 
 In no-driver mode, create or map SHM regions directly and attach with explicit configs.
 
@@ -644,6 +664,11 @@ prod_ctx.producer_id = 1;
 prod_ctx.use_driver = false;
 
 tp_producer_init(&producer, client, &prod_ctx);
+tp_payload_pool_config_t pools[] = {
+    { .pool_id = 1, .nslots = 1024, .stride_bytes = 4096,
+      .uri = "shm:file?path=/dev/shm/tensorpool-user/default/10000/1/1.pool" }
+};
+size_t pool_count = sizeof(pools) / sizeof(pools[0]);
 tp_producer_config_t producer_cfg = {
     .stream_id = 10000,
     .producer_id = 1,
@@ -659,7 +684,7 @@ tp_producer_attach(producer, &producer_cfg);
 
 Use `tp_shm_create` to create and validate canonical SHM layouts for tests.
 
-## 15. Tools
+## 16. Tools
 
 - `tp_control_listen`: Inspect control/metadata/qos streams with text or JSON output. Use `--raw` / `--raw-out` to dump hex fragments for offline decoding.
 - `tp_descriptor_listen`: Inspect descriptor stream traffic (FrameDescriptor) with JSON or raw output. Useful for verifying producer publish behavior without SHM mapping.
