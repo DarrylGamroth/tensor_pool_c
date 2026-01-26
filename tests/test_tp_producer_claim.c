@@ -33,7 +33,7 @@
 
 static bool tp_test_has_aeron_dir(const tp_client_t *client)
 {
-    const char *dir = tp_context_get_aeron_dir(client->context.base);
+    const char *dir = tp_context_get_aeron_dir(client->context);
     return NULL != dir && dir[0] != '\0';
 }
 
@@ -276,7 +276,7 @@ static int tp_test_add_subscription(tp_client_t *client, const char *channel, in
     return 0;
 }
 
-static int tp_test_start_client(tp_client_t **client, tp_client_context_t *ctx, const char *aeron_dir)
+static int tp_test_start_client(tp_client_t **client, tp_context_t **ctx, const char *aeron_dir)
 {
     const char *allowed_paths[] = { "/tmp" };
 
@@ -285,20 +285,20 @@ static int tp_test_start_client(tp_client_t **client, tp_client_context_t *ctx, 
         return -1;
     }
 
-    if (tp_client_context_init(ctx) < 0)
+    if (tp_context_init(ctx) < 0)
     {
         return -1;
     }
 
     if (NULL != aeron_dir && aeron_dir[0] != '\0')
     {
-        tp_client_context_set_aeron_dir(ctx, aeron_dir);
+        tp_context_set_aeron_dir(*ctx, aeron_dir);
     }
-    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
-    tp_client_context_set_use_agent_invoker(ctx, true);
-    tp_context_set_allowed_paths(ctx->base, allowed_paths, 1);
+    tp_context_set_descriptor_channel(*ctx, "aeron:ipc", 1100);
+    tp_context_set_use_agent_invoker(*ctx, true);
+    tp_context_set_allowed_paths(*ctx, allowed_paths, 1);
 
-    if (tp_client_init(client, ctx) < 0)
+    if (tp_client_init(client, *ctx) < 0)
     {
         return -1;
     }
@@ -312,7 +312,7 @@ static int tp_test_start_client(tp_client_t **client, tp_client_context_t *ctx, 
     return 0;
 }
 
-static int tp_test_start_client_any(tp_client_t **client, tp_client_context_t *ctx)
+static int tp_test_start_client_any(tp_client_t **client, tp_context_t **ctx)
 {
     char default_dir[AERON_MAX_PATH];
     const char *env_dir = getenv("AERON_DIR");
@@ -388,7 +388,7 @@ static int tp_test_init_producer(
 
 static void tp_test_claim_lifecycle(bool fixed_pool_mode)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -594,7 +594,7 @@ cleanup:
 
 static void tp_test_producer_invalid_tensor_header(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -711,7 +711,7 @@ cleanup:
 
 static void tp_test_producer_offer_pool_selection(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -845,7 +845,7 @@ static void tp_test_producer_offer_pool_selection(void)
 
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
+        TP_HEADER_SLOT_BYTES, tp_context_log(client->context)) < 0)
     {
         goto cleanup;
     }
@@ -859,7 +859,7 @@ static void tp_test_producer_offer_pool_selection(void)
     }
     header_index = (uint32_t)(seq & (config.header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
-        TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
+        TP_HEADER_SLOT_BYTES, tp_context_log(client->context)) < 0)
     {
         goto cleanup;
     }
@@ -913,7 +913,7 @@ cleanup:
 
 static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timestamp)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -1011,7 +1011,7 @@ static void tp_test_producer_descriptor_timestamp(bool publish_descriptor_timest
 
     header_index = (uint32_t)(seq & (producer->header_nslots - 1));
     if (tp_slot_decode(&slot_view, tp_slot_at(producer->header_region.addr, header_index),
-            TP_HEADER_SLOT_BYTES, tp_context_log(client->context.base)) < 0)
+            TP_HEADER_SLOT_BYTES, tp_context_log(client->context)) < 0)
     {
         goto cleanup;
     }
@@ -1073,7 +1073,7 @@ cleanup:
 
 static void tp_test_producer_payload_flush(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;

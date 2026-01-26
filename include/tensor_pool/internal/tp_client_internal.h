@@ -10,7 +10,7 @@ typedef struct tp_client_conductor_agent_stct tp_client_conductor_agent_t;
 
 struct tp_client_stct
 {
-    tp_client_context_t context;
+    tp_context_t *context;
     tp_client_conductor_t *conductor;
     tp_client_conductor_agent_t *agent;
     void *control_poller;

@@ -13,6 +13,7 @@
 #include <string.h>
 #include "aeron_alloc.h"
 #include "aeron_agent.h"
+#include "aeronc.h"
 
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_error.h"
@@ -718,7 +719,7 @@ static void tp_driver_response_handler(
 
     if (ctx->client && ctx->client->client)
     {
-        log = tp_context_log(ctx->client->client->context.base);
+        log = tp_context_log(ctx->client->client->context);
     }
 
     if (log && log->min_level <= TP_LOG_DEBUG && length >= tensor_pool_messageHeader_encoded_length())
@@ -820,9 +821,9 @@ int tp_driver_client_init(tp_driver_client_t **client, tp_client_t *base)
     instance->client = base;
     instance->subscription = tp_client_control_subscription(base);
 
-    if (NULL == base->context.base ||
-        base->context.base->control_channel[0] == '\0' ||
-        base->context.base->control_stream_id < 0)
+    if (NULL == base->context ||
+        base->context->control_channel[0] == '\0' ||
+        base->context->control_stream_id < 0)
     {
         TP_SET_ERR(EINVAL, "%s", "tp_driver_client_init: control channel not configured");
         aeron_free(instance);
@@ -840,8 +841,8 @@ int tp_driver_client_init(tp_driver_client_t **client, tp_client_t *base)
 
     if (tp_client_async_add_publication(
         base,
-        base->context.base->control_channel,
-        base->context.base->control_stream_id,
+        base->context->control_channel,
+        base->context->control_stream_id,
         &async_add) < 0)
     {
         aeron_free(instance);
@@ -932,15 +933,6 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 
     if (!async->sent)
     {
-        int ready = tp_driver_client_ready(async->client);
-        if (ready < 0)
-        {
-            return -1;
-        }
-        if (ready == 0)
-        {
-            return 0;
-        }
         {
             int64_t now_ns = tp_clock_now_ns();
             if (async->last_send_ns != 0 && now_ns - async->last_send_ns < retry_interval_ns)
@@ -948,12 +940,26 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
                 return 0;
             }
         }
-        if (tp_driver_send_attach(async->client, &async->request) < 0)
+        {
+            int64_t now_ns = tp_clock_now_ns();
+            int send_result = tp_driver_send_attach(async->client, &async->request);
+            async->last_send_ns = now_ns;
+            if (send_result < 0)
+            {
+                if (send_result == AERON_PUBLICATION_NOT_CONNECTED ||
+                    send_result == AERON_PUBLICATION_BACK_PRESSURED ||
+                    send_result == AERON_PUBLICATION_ADMIN_ACTION)
+                {
+                    return 0;
+                }
+                return -1;
+            }
+        }
+        if (tp_driver_client_ready(async->client) < 0)
         {
             return -1;
         }
         async->sent = 1;
-        async->last_send_ns = tp_clock_now_ns();
     }
 
     if (NULL == async->assembler)
@@ -1096,7 +1102,7 @@ static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_att
 
     if (client && client->client)
     {
-        log = tp_context_log(client->client->context.base);
+        log = tp_context_log(client->client->context);
     }
 
     tensor_pool_messageHeader_wrap(
@@ -1189,14 +1195,6 @@ static int tp_driver_client_ready(tp_driver_client_t *client)
         }
         return 0;
     }
-    if (!aeron_subscription_is_connected(tp_subscription_handle(client->subscription)))
-    {
-        if (client->client)
-        {
-            tp_client_do_work(client->client);
-        }
-        return 0;
-    }
 
     return 1;
 }
@@ -1246,7 +1244,7 @@ int tp_driver_attach(
 
     if (client->client)
     {
-        log = tp_context_log(client->client->context.base);
+        log = tp_context_log(client->client->context);
     }
 
     memset(out, 0, sizeof(*out));
@@ -1717,8 +1715,8 @@ int tp_driver_client_record_keepalive(tp_driver_client_t *client, uint64_t now_n
     if (client->lease_expiry_timestamp_ns != TP_NULL_U64)
     {
         owner = client->client;
-        interval_ns = owner ? owner->context.keepalive_interval_ns : 0;
-        grace_intervals = owner ? owner->context.lease_expiry_grace_intervals : 0;
+        interval_ns = owner ? owner->context->keepalive_interval_ns : 0;
+        grace_intervals = owner ? owner->context->lease_expiry_grace_intervals : 0;
         if (interval_ns > 0 && grace_intervals > 0)
         {
             uint64_t extension = interval_ns * grace_intervals;

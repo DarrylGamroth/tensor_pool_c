@@ -48,7 +48,7 @@
 
 static bool tp_test_has_aeron_dir(const tp_client_t *client)
 {
-    const char *dir = tp_context_get_aeron_dir(client->context.base);
+    const char *dir = tp_context_get_aeron_dir(client->context);
     return NULL != dir && dir[0] != '\0';
 }
 
@@ -131,7 +131,7 @@ static int tp_test_driver_active(const char *aeron_dir)
 
 static int tp_test_start_client(
     tp_client_t **client,
-    tp_client_context_t *ctx,
+    tp_context_t **ctx,
     const char *aeron_dir,
     uint64_t announce_period_ns)
 {
@@ -142,27 +142,27 @@ static int tp_test_start_client(
         return -1;
     }
 
-    if (tp_client_context_init(ctx) < 0)
+    if (tp_context_init(ctx) < 0)
     {
         return -1;
     }
 
     if (NULL != aeron_dir && aeron_dir[0] != '\0')
     {
-        tp_client_context_set_aeron_dir(ctx, aeron_dir);
+        tp_context_set_aeron_dir(*ctx, aeron_dir);
     }
-    tp_client_context_set_control_channel(ctx, "aeron:ipc", 1000);
-    tp_client_context_set_qos_channel(ctx, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
-    tp_client_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
-    tp_client_context_set_use_agent_invoker(ctx, true);
+    tp_context_set_control_channel(*ctx, "aeron:ipc", 1000);
+    tp_context_set_qos_channel(*ctx, "aeron:ipc", 1200);
+    tp_context_set_metadata_channel(*ctx, "aeron:ipc", 1300);
+    tp_context_set_descriptor_channel(*ctx, "aeron:ipc", 1100);
+    tp_context_set_use_agent_invoker(*ctx, true);
     if (announce_period_ns > 0)
     {
-        tp_client_context_set_announce_period_ns(ctx, announce_period_ns);
+        tp_context_set_announce_period_ns(*ctx, announce_period_ns);
     }
-    tp_context_set_allowed_paths(ctx->base, allowed_paths, 1);
+    tp_context_set_allowed_paths(*ctx, allowed_paths, 1);
 
-    if (tp_client_init(client, ctx) < 0)
+    if (tp_client_init(client, *ctx) < 0)
     {
         return -1;
     }
@@ -178,7 +178,7 @@ static int tp_test_start_client(
 
 static int tp_test_start_client_any(
     tp_client_t **client,
-    tp_client_context_t *ctx,
+    tp_context_t **ctx,
     uint64_t announce_period_ns)
 {
     char default_dir[AERON_MAX_PATH];
@@ -600,7 +600,7 @@ static void tp_on_descriptor_fragment(void *clientd, const uint8_t *buffer, size
 
 void tp_test_cadence(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -784,7 +784,7 @@ cleanup:
 
 void tp_test_shm_announce_freshness(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -852,7 +852,7 @@ void tp_test_shm_announce_freshness(void)
     {
         goto cleanup;
     }
-    freshness_ns = tp_context_get_announce_period_ns(ctx.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    freshness_ns = tp_context_get_announce_period_ns(ctx) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
 
     tensor_pool_messageHeader_wrap(
         &header,
@@ -973,7 +973,7 @@ cleanup:
 
 void tp_test_rate_limit(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -1005,7 +1005,7 @@ void tp_test_rate_limit(void)
         return;
     }
 
-    tp_context_set_descriptor_channel(ctx.base, "", -1);
+    tp_context_set_descriptor_channel(ctx, "", -1);
 
     if (tp_test_add_subscription(client, "aeron:ipc", 2100, &descriptor_sub) < 0)
     {
@@ -1208,7 +1208,7 @@ cleanup:
 
 void tp_test_qos_liveness(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -1404,7 +1404,7 @@ cleanup:
 
 void tp_test_qos_drop_counts(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -1595,7 +1595,7 @@ cleanup:
 
 void tp_test_epoch_regression(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -1773,7 +1773,7 @@ cleanup:
 
 void tp_test_epoch_remap(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -1985,7 +1985,7 @@ cleanup:
 
 void tp_test_meta_blob_ordering(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_metadata_poller_t poller;
     tp_metadata_handlers_t handlers;
@@ -2206,7 +2206,7 @@ cleanup:
 
 void tp_test_activity_liveness(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -2292,7 +2292,7 @@ void tp_test_activity_liveness(void)
         goto cleanup;
     }
 
-    stale_ns = tp_context_get_announce_period_ns(ctx.base) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+    stale_ns = tp_context_get_announce_period_ns(ctx) * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
     consumer->attach_time_ns = now_ns - stale_ns - 1;
     if (now_ns > stale_ns * 2)
     {
@@ -2344,7 +2344,7 @@ cleanup:
 
 void tp_test_pid_liveness(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -2472,7 +2472,7 @@ cleanup:
 
 void tp_test_consumer_fallback_state(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -2579,7 +2579,7 @@ cleanup:
 
 void tp_test_consumer_fallback_recover(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -2828,7 +2828,7 @@ cleanup:
 
 void tp_test_progress_per_consumer_control(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -3129,7 +3129,7 @@ cleanup:
 
 void tp_test_progress_layout_validation(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;
@@ -3298,7 +3298,7 @@ cleanup:
 
 void tp_test_progress_regression_rejected(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_publication_t *progress_pub = NULL;
     tp_subscription_t *progress_sub = NULL;
@@ -3431,7 +3431,7 @@ cleanup:
 
 void tp_test_pollers(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_ctx;
     tp_consumer_t *consumer = NULL;

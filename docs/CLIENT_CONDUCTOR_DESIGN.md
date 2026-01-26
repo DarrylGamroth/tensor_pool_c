@@ -139,7 +139,7 @@ Callbacks MUST be invoked from the conductor thread (`do_work`).
 - Non-fatal input errors are logged and dropped (per spec).
 
 ## Config and Defaults
-- Use `tp_client_context_t` for channels/stream IDs and timeouts.
+- Use `tp_context_t` for channels/stream IDs and timeouts.
 - Defaults follow `docs/STREAM_ID_CONVENTIONS.md` and the spec.
 - Respect driver/discovery authority fields; client does not override them.
 

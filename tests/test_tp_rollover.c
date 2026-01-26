@@ -158,7 +158,7 @@ static void tp_on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 
 void tp_test_rollover(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_context_t producer_ctx;
     tp_producer_t *producer = NULL;
@@ -237,14 +237,14 @@ void tp_test_rollover(void)
     {
         int started = 0;
 
-        if (tp_client_context_init(&ctx) < 0)
+        if (tp_context_init(&ctx) < 0)
         {
             goto cleanup;
         }
-        tp_client_context_set_aeron_dir(&ctx, aeron_dir);
-        tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
-        tp_context_set_allowed_paths(ctx.base, allowed_paths, 1);
-        if (tp_client_init(&client, &ctx) == 0 && tp_client_start(client) == 0)
+        tp_context_set_aeron_dir(ctx, aeron_dir);
+        tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+        tp_context_set_allowed_paths(ctx, allowed_paths, 1);
+        if (tp_client_init(&client, ctx) == 0 && tp_client_start(client) == 0)
         {
             started = 1;
         }

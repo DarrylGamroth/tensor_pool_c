@@ -102,7 +102,7 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 
 int main(int argc, char **argv)
 {
-    tp_client_context_t client_context;
+    tp_context_t *client_context = NULL;
     tp_client_t *client = NULL;
     tp_consumer_context_t consumer_context;
     tp_consumer_t *consumer = NULL;
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;

@@ -862,7 +862,7 @@ int main(int argc, char **argv)
     int32_t metadata_stream_id = 1300;
     int32_t qos_stream_id = 1200;
     tp_listen_state_t state;
-    tp_client_context_t context;
+    tp_context_t *context = NULL;
     tp_client_t *client = NULL;
     tp_subscription_t *control_subscription = NULL;
     tp_subscription_t *metadata_subscription = NULL;
@@ -953,7 +953,7 @@ int main(int argc, char **argv)
         qos_channel = control_channel;
     }
 
-    if (tp_client_context_init(&context) < 0)
+    if (tp_context_init(&context) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
@@ -961,14 +961,14 @@ int main(int argc, char **argv)
 
     if (aeron_dir)
     {
-        tp_client_context_set_aeron_dir(&context, aeron_dir);
+        tp_context_set_aeron_dir(context, aeron_dir);
     }
 
-    tp_client_context_set_control_channel(&context, control_channel, control_stream_id);
-    tp_client_context_set_metadata_channel(&context, metadata_channel, metadata_stream_id);
-    tp_client_context_set_qos_channel(&context, qos_channel, qos_stream_id);
+    tp_context_set_control_channel(context, control_channel, control_stream_id);
+    tp_context_set_metadata_channel(context, metadata_channel, metadata_stream_id);
+    tp_context_set_qos_channel(context, qos_channel, qos_stream_id);
 
-    if (tp_client_init(&client, &context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Aeron init failed: %s\n", tp_errmsg());
         return 1;

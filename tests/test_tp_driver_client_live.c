@@ -255,7 +255,7 @@ static size_t tp_test_encode_detach_response(uint8_t *buffer, size_t length, int
 
 void tp_test_driver_client_attach_detach_live(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
@@ -283,20 +283,20 @@ void tp_test_driver_client_attach_detach_live(void)
     memset(&detach_info, 0, sizeof(detach_info));
 
     step = 1;
-    if (tp_client_context_init(&ctx) < 0)
+    if (tp_context_init(&ctx) < 0)
     {
         return;
     }
-    tp_client_context_set_aeron_dir(&ctx, aeron_dir);
-    tp_client_context_set_use_agent_invoker(&ctx, true);
-    tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
-    tp_client_context_set_announce_channel(&ctx, "aeron:ipc", 1001);
-    tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
-    tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
+    tp_context_set_aeron_dir(ctx, aeron_dir);
+    tp_context_set_use_agent_invoker(ctx, true);
+    tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
+    tp_context_set_announce_channel(ctx, "aeron:ipc", 1001);
+    tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
+    tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
+    tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 
     step = 2;
-    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, ctx) < 0 || tp_client_start(client) < 0)
     {
         goto cleanup;
     }

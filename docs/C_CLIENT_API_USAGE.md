@@ -18,20 +18,20 @@ Include the umbrella header for client-facing APIs:
 ## 1. Client Setup
 
 ```c
-tp_client_context_t ctx;
-tp_client_t client;
+tp_context_t *ctx = NULL;
+tp_client_t *client = NULL;
 
-tp_client_context_init(&ctx);
-tp_client_context_set_aeron_dir(&ctx, "/dev/shm/aeron-dgamroth");
-tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
-tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
-tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
-tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
+tp_context_init(&ctx);
+tp_context_set_aeron_dir(ctx, "/dev/shm/aeron-dgamroth");
+tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
+tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
+tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
+tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
 const char *allowed_paths[] = { "/dev/shm", "/tmp" };
-tp_context_set_allowed_paths(&ctx.base, allowed_paths, 2);
+tp_context_set_allowed_paths(ctx, allowed_paths, 2);
 
-tp_client_init(&client, &ctx);
-tp_client_start(&client);
+tp_client_init(&client, ctx);
+tp_client_start(client);
 ```
 
 Shared-memory mappings require an allowlist of base directories (`allowed_paths`) to satisfy the containment rules in the wire spec. If no allowlist is configured, SHM mappings are rejected.
@@ -39,42 +39,42 @@ Shared-memory mappings require an allowlist of base directories (`allowed_paths`
 By default, SHM mappings enforce restrictive permissions (no group/other write). Use `tp_context_set_shm_permissions` to relax or customize the checks:
 
 ```c
-tp_context_set_shm_permissions(&ctx.base, false, TP_NULL_U32, TP_NULL_U32, 0);
+tp_context_set_shm_permissions(ctx, false, TP_NULL_U32, TP_NULL_U32, 0);
 ```
 
 Noncanonical SHM paths from `tools/tp_shm_create --noncanonical` are test-only and require `--allow-noncompliant`; production deployments should use the canonical directory layout.
 
-Call `tp_client_do_work(&client)` in your poll loop to drive keepalives, conductor command processing, and any registered pollers.
+Call `tp_client_do_work(client)` in your poll loop to drive keepalives, conductor command processing, and any registered pollers.
 
 ### 1.1 Conductor Execution Model (Agent / Invoker)
 
 TensorPool mirrors Aeron’s agent pattern. Choose one of two modes:
 
 - Agent runner (dedicated agent loop): run `tp_client_do_work` in your own agent loop, or use `tp_client_conductor_agent_*` for an Aeron-style agent runner.
-- Agent invoker (single-threaded): set `tp_client_context_set_use_agent_invoker(&ctx, true)` and call `tp_client_do_work` frequently to drive the Aeron conductor in your loop.
+- Agent invoker (single-threaded): set `tp_context_set_use_agent_invoker(ctx, true)` and call `tp_client_do_work` frequently to drive the Aeron conductor in your loop.
 
 Example (agent invoker + shared pollers):
 
 ```c
-tp_client_context_t ctx;
-tp_client_t client;
+tp_context_t *ctx = NULL;
+tp_client_t *client = NULL;
 tp_control_handlers_t control_handlers = {0};
 tp_qos_handlers_t qos_handlers = {0};
 tp_metadata_handlers_t metadata_handlers = {0};
 
-tp_client_context_init(&ctx);
-tp_client_context_set_use_agent_invoker(&ctx, true);
+tp_context_init(&ctx);
+tp_context_set_use_agent_invoker(ctx, true);
 
-tp_client_init(&client, &ctx);
-tp_client_start(&client);
+tp_client_init(&client, ctx);
+tp_client_start(client);
 
-tp_client_set_control_handlers(&client, &control_handlers, 10);
-tp_client_set_qos_handlers(&client, &qos_handlers, 10);
-tp_client_set_metadata_handlers(&client, &metadata_handlers, 10);
+tp_client_set_control_handlers(client, &control_handlers, 10);
+tp_client_set_qos_handlers(client, &qos_handlers, 10);
+tp_client_set_metadata_handlers(client, &metadata_handlers, 10);
 
 while (running)
 {
-    tp_client_do_work(&client);
+    tp_client_do_work(client);
 }
 ```
 
@@ -352,7 +352,7 @@ tp_client_do_work(&client);
 
 ```c
 // Optional: set a cadence (default is 1s).
-tp_client_context_set_announce_period_ns(&ctx, 1000 * 1000 * 1000ULL);
+tp_context_set_announce_period_ns(ctx, 1000 * 1000 * 1000ULL);
 
 tp_data_source_announce_t announce = {
     .stream_id = stream_id,

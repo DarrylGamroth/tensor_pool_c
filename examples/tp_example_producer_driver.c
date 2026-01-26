@@ -198,7 +198,7 @@ static void wait_for_consumer(tp_producer_t *producer)
 
 int main(int argc, char **argv)
 {
-    tp_client_context_t client_context;
+    tp_context_t *client_context = NULL;
     tp_client_t *client = NULL;
     tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
@@ -343,20 +343,20 @@ int main(int argc, char **argv)
 
     if (trace)
     {
-        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_TRACE);
+        tp_log_set_level(tp_context_log(client_context), TP_LOG_TRACE);
     }
     else if (verbose)
     {
-        tp_log_set_level(tp_context_log(client_context.base), TP_LOG_DEBUG);
+        tp_log_set_level(tp_context_log(client_context), TP_LOG_DEBUG);
     }
 
     if (keepalive_interval_env && keepalive_interval_env[0] != '\0')
     {
         uint64_t keepalive_ns = (uint64_t)strtoull(keepalive_interval_env, NULL, 10) * 1000ULL * 1000ULL;
-        tp_client_context_set_keepalive_interval_ns(&client_context, keepalive_ns);
+        tp_context_set_keepalive_interval_ns(client_context, keepalive_ns);
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;

@@ -22,7 +22,7 @@ Status: completed
 
 Status: completed
 
-- [x] Add/extend `tp_client_context_t` with Aeron Archive-style knobs (client name, timeouts, retry attempts, error handler, delegating invoker, log handler).
+- [x] Add/extend `tp_context_t` with Aeron Archive-style knobs (client name, timeouts, retry attempts, error handler, delegating invoker, log handler).
 - [x] Implement `tp_client_t` lifecycle and ownership semantics (own or reuse Aeron instance).
 - [x] Implement async add wrappers for publication/subscription.
 - [x] Ensure `tp_client_do_work` drives keepalive timers and conductor work.

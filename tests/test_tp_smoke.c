@@ -57,6 +57,7 @@ void tp_test_driver_publish_mode_hugepages(void);
 void tp_test_driver_node_id_cooldown(void);
 void tp_test_driver_config_matrix(void);
 void tp_test_driver_lease_expiry(void);
+void tp_test_driver_async_attach_wrappers(void);
 void tp_test_discovery_service(void);
 void tp_test_supervisor(void);
 void tp_test_discovery_client_decoders(void);
@@ -623,6 +624,7 @@ int main(void)
     tp_test_driver_node_id_cooldown();
     tp_test_driver_config_matrix();
     tp_test_driver_lease_expiry();
+    tp_test_driver_async_attach_wrappers();
     tp_test_discovery_service();
     tp_test_supervisor();
     tp_test_discovery_client_decoders();

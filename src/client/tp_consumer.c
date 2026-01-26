@@ -67,10 +67,10 @@ static void tp_consumer_unmap_regions(tp_consumer_t *consumer)
 
     for (i = 0; i < consumer->pool_count; i++)
     {
-        tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base->log);
+        tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context->log);
     }
 
-    tp_shm_unmap(&consumer->header_region, &consumer->client->context.base->log);
+    tp_shm_unmap(&consumer->header_region, &consumer->client->context->log);
 
     if (consumer->pools)
     {
@@ -155,7 +155,7 @@ static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_
         return;
     }
 
-    period = consumer->client->context.base->announce_period_ns;
+    period = consumer->client->context->announce_period_ns;
     if (period == 0)
     {
         return;
@@ -167,7 +167,7 @@ static void tp_consumer_check_activity_liveness(tp_consumer_t *consumer, uint64_
     {
         return;
     }
-    if (tp_shm_read_activity_timestamp(&consumer->header_region, &activity_ns, &consumer->client->context.base->log) < 0)
+    if (tp_shm_read_activity_timestamp(&consumer->header_region, &activity_ns, &consumer->client->context->log) < 0)
     {
         return;
     }
@@ -188,7 +188,7 @@ static void tp_consumer_check_pid_liveness(tp_consumer_t *consumer)
         return;
     }
 
-    if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context.base->log) < 0)
+    if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context->log) < 0)
     {
         return;
     }
@@ -202,7 +202,7 @@ static void tp_consumer_check_pid_liveness(tp_consumer_t *consumer)
     for (i = 0; i < consumer->pool_count; i++)
     {
         tp_consumer_pool_t *pool = &consumer->pools[i];
-        if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context.base->log) < 0)
+        if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context->log) < 0)
         {
             return;
         }
@@ -499,7 +499,7 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
     view.trace_id = tensor_pool_frameDescriptor_traceId(&descriptor);
 
     tp_log_emit(
-        &consumer->client->context.base->log,
+        &consumer->client->context->log,
         TP_LOG_TRACE,
         "descriptor recv stream=%u epoch=%" PRIu64 " seq=%" PRIu64 " ts=%" PRIu64 " meta=%u trace=%" PRIu64 " length=%zu",
         stream_id,
@@ -512,14 +512,14 @@ static void tp_consumer_descriptor_handler(void *clientd, const uint8_t *buffer,
 
     if (!consumer->shm_mapped)
     {
-        tp_log_emit(&consumer->client->context.base->log, TP_LOG_DEBUG, "%s", "descriptor drop: shm not mapped");
+        tp_log_emit(&consumer->client->context->log, TP_LOG_DEBUG, "%s", "descriptor drop: shm not mapped");
         return;
     }
 
     if (consumer->mapped_epoch != epoch)
     {
         tp_log_emit(
-            &consumer->client->context.base->log,
+            &consumer->client->context->log,
             TP_LOG_DEBUG,
             "descriptor drop: epoch mismatch desc=%" PRIu64 " mapped=%" PRIu64,
             epoch,
@@ -581,7 +581,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         }
 
         now_ns = (uint64_t)tp_clock_now_ns();
-        freshness_ns = consumer->client->context.base->announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
+        freshness_ns = consumer->client->context->announce_period_ns * TP_ANNOUNCE_FRESHNESS_MULTIPLIER;
         announce_now_ns = now_ns;
 
         if (announce.announce_clock_domain == TP_CLOCK_DOMAIN_REALTIME_SYNCED)
@@ -651,7 +651,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
         const char *fallback_uri = view.payload_fallback_uri.length > 0 ? view.payload_fallback_uri.data : "";
 
         tp_log_emit(
-            &consumer->client->context.base->log,
+            &consumer->client->context->log,
             TP_LOG_INFO,
             "ConsumerConfig stream=%" PRIu32 " consumer=%" PRIu32 " mode=%u use_shm=%u descriptor_channel=%.*s descriptor_stream_id=%" PRIu32 " control_channel=%.*s control_stream_id=%" PRIu32 " payload_fallback_uri=%.*s",
             view.stream_id,
@@ -725,7 +725,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             else
             {
                 tp_log_emit(
-                    &consumer->client->context.base->log,
+                    &consumer->client->context->log,
                     TP_LOG_WARN,
                     "ConsumerConfig descriptor subscription update failed stream=%" PRIu32 " consumer=%" PRIu32,
                     view.stream_id,
@@ -758,7 +758,7 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             else
             {
                 tp_log_emit(
-                    &consumer->client->context.base->log,
+                    &consumer->client->context->log,
                     TP_LOG_WARN,
                     "ConsumerConfig control subscription update failed stream=%" PRIu32 " consumer=%" PRIu32,
                     view.stream_id,
@@ -782,10 +782,10 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
                 revoked.stream_id,
                 revoked.reason,
                 revoked.error_message);
-            if (consumer->client && consumer->client->context.error_handler)
+            if (consumer->client && consumer->client->context->error_handler)
             {
-                consumer->client->context.error_handler(
-                    consumer->client->context.error_handler_clientd,
+                consumer->client->context->error_handler(
+                    consumer->client->context->error_handler_clientd,
                     tp_errcode(),
                     tp_errmsg());
             }
@@ -811,10 +811,10 @@ static void tp_consumer_control_handler(void *clientd, const uint8_t *buffer, si
             "driver shutdown reason=%u: %s",
             shutdown_event.reason,
             shutdown_event.error_message);
-        if (consumer->client && consumer->client->context.error_handler)
+        if (consumer->client && consumer->client->context->error_handler)
         {
-            consumer->client->context.error_handler(
-                consumer->client->context.error_handler_clientd,
+            consumer->client->context->error_handler(
+                consumer->client->context->error_handler_clientd,
                 tp_errcode(),
                 tp_errmsg());
         }
@@ -943,36 +943,36 @@ int tp_consumer_init(tp_consumer_t **consumer, tp_client_t *client, const tp_con
     instance->use_shm = true;
     instance->payload_fallback_uri[0] = '\0';
 
-    if (client->context.base->descriptor_channel[0] != '\0' && client->context.base->descriptor_stream_id >= 0)
+    if (client->context->descriptor_channel[0] != '\0' && client->context->descriptor_stream_id >= 0)
     {
         if (tp_consumer_add_subscription(
             instance,
-            client->context.base->descriptor_channel,
-            client->context.base->descriptor_stream_id,
+            client->context->descriptor_channel,
+            client->context->descriptor_stream_id,
             &instance->descriptor_subscription) < 0)
         {
             goto cleanup;
         }
     }
 
-    if (client->context.base->control_channel[0] != '\0' && client->context.base->control_stream_id >= 0)
+    if (client->context->control_channel[0] != '\0' && client->context->control_stream_id >= 0)
     {
         if (tp_consumer_add_publication(
             instance,
-            client->context.base->control_channel,
-            client->context.base->control_stream_id,
+            client->context->control_channel,
+            client->context->control_stream_id,
             &instance->control_publication) < 0)
         {
             goto cleanup;
         }
     }
 
-    if (client->context.base->qos_channel[0] != '\0' && client->context.base->qos_stream_id >= 0)
+    if (client->context->qos_channel[0] != '\0' && client->context->qos_stream_id >= 0)
     {
         if (tp_consumer_add_publication(
             instance,
-            client->context.base->qos_channel,
-            client->context.base->qos_stream_id,
+            client->context->qos_channel,
+            client->context->qos_stream_id,
             &instance->qos_publication) < 0)
         {
             goto cleanup;
@@ -1168,8 +1168,8 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         &consumer->header_region,
         config->header_uri,
         0,
-        &consumer->client->context.base->allowed_paths,
-        &consumer->client->context.base->log) < 0)
+        &consumer->client->context->allowed_paths,
+        &consumer->client->context->log) < 0)
     {
         goto cleanup;
     }
@@ -1184,13 +1184,13 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
     expected.slot_bytes = TP_HEADER_SLOT_BYTES;
     expected.stride_bytes = TP_NULL_U32;
 
-    if (tp_shm_validate_superblock(&consumer->header_region, &expected, &consumer->client->context.base->log) < 0)
+    if (tp_shm_validate_superblock(&consumer->header_region, &expected, &consumer->client->context->log) < 0)
     {
         goto cleanup;
     }
     {
         uint64_t pid = 0;
-        if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context.base->log) < 0)
+        if (tp_shm_read_pid(&consumer->header_region, &pid, &consumer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1220,7 +1220,7 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         if (tp_shm_validate_stride_alignment(
             pool_cfg->uri,
             pool->stride_bytes,
-            &consumer->client->context.base->log) < 0)
+            &consumer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1229,8 +1229,8 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
             &pool->region,
             pool_cfg->uri,
             0,
-            &consumer->client->context.base->allowed_paths,
-            &consumer->client->context.base->log) < 0)
+            &consumer->client->context->allowed_paths,
+            &consumer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1245,13 +1245,13 @@ static int tp_consumer_attach_config(tp_consumer_t *consumer, const tp_consumer_
         expected.slot_bytes = TP_NULL_U32;
         expected.stride_bytes = pool->stride_bytes;
 
-        if (tp_shm_validate_superblock(&pool->region, &expected, &consumer->client->context.base->log) < 0)
+        if (tp_shm_validate_superblock(&pool->region, &expected, &consumer->client->context->log) < 0)
         {
             goto cleanup;
         }
         {
             uint64_t pid = 0;
-            if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context.base->log) < 0)
+            if (tp_shm_read_pid(&pool->region, &pid, &consumer->client->context->log) < 0)
             {
                 goto cleanup;
             }
@@ -1283,11 +1283,11 @@ cleanup:
     {
         for (i = 0; i < consumer->pool_count; i++)
         {
-            tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context.base->log);
+            tp_shm_unmap(&consumer->pools[i].region, &consumer->client->context->log);
         }
     }
 
-    tp_shm_unmap(&consumer->header_region, &consumer->client->context.base->log);
+    tp_shm_unmap(&consumer->header_region, &consumer->client->context->log);
 
     if (consumer->pools)
     {
@@ -1338,7 +1338,7 @@ static int tp_consumer_attach_driver(tp_consumer_t *consumer)
 
     tp_consumer_fill_driver_request(consumer, &request);
 
-    if (tp_driver_attach(consumer->driver, &request, &info, (int64_t)consumer->client->context.driver_timeout_ns) < 0)
+    if (tp_driver_attach(consumer->driver, &request, &info, (int64_t)consumer->client->context->driver_timeout_ns) < 0)
     {
         return -1;
     }
@@ -1551,7 +1551,7 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
         return 1;
     }
 
-    if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context.base->log) < 0)
+    if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context->log) < 0)
     {
         return -1;
     }
@@ -1582,12 +1582,12 @@ int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_
         return 1;
     }
 
-    if (tp_tensor_header_decode(&out->tensor, slot_view.header_bytes, slot_view.header_bytes_length, &consumer->client->context.base->log) < 0)
+    if (tp_tensor_header_decode(&out->tensor, slot_view.header_bytes, slot_view.header_bytes_length, &consumer->client->context->log) < 0)
     {
         return 1;
     }
 
-    if (tp_tensor_header_validate(&out->tensor, &consumer->client->context.base->log) < 0)
+    if (tp_tensor_header_validate(&out->tensor, &consumer->client->context->log) < 0)
     {
         return 1;
     }
@@ -1672,7 +1672,7 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
         return -1;
     }
 
-    if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context.base->log) < 0)
+    if (tp_slot_decode(&slot_view, slot, TP_HEADER_SLOT_BYTES, &consumer->client->context->log) < 0)
     {
         return -1;
     }
@@ -1730,12 +1730,12 @@ int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_
         return -1;
     }
 
-    if (tp_tensor_header_decode(&tensor, slot_view.header_bytes, slot_view.header_bytes_length, &consumer->client->context.base->log) < 0)
+    if (tp_tensor_header_decode(&tensor, slot_view.header_bytes, slot_view.header_bytes_length, &consumer->client->context->log) < 0)
     {
         return -1;
     }
 
-    if (tp_tensor_header_validate(&tensor, &consumer->client->context.base->log) < 0)
+    if (tp_tensor_header_validate(&tensor, &consumer->client->context->log) < 0)
     {
         return -1;
     }
@@ -1862,9 +1862,9 @@ static int tp_consumer_poll_control_internal(tp_consumer_t *consumer, int fragme
     }
 
     now_ns = (uint64_t)tp_clock_now_ns();
-    if (consumer->qos_publication && consumer->client->context.base->announce_period_ns > 0)
+    if (consumer->qos_publication && consumer->client->context->announce_period_ns > 0)
     {
-        uint64_t period = consumer->client->context.base->announce_period_ns;
+        uint64_t period = consumer->client->context->announce_period_ns;
         if (consumer->last_qos_ns == 0 || now_ns - consumer->last_qos_ns >= period)
         {
             tp_qos_publish_consumer(

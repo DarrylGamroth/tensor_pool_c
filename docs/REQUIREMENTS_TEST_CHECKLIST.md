@@ -17,6 +17,7 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 - Driver server-side behavior now has end-to-end coverage for exclusive producer, node ID assignment, publishMode, and hugepages semantics (see `tests/test_tp_driver_integration.c`).
 - Attach layout-version mismatch is covered in `tests/test_tp_driver_integration.c`.
 - Lease expiry is covered via client-side expiry detection in `tests/test_tp_driver_integration.c`.
+- Producer/consumer async attach wrappers are exercised by `tp_test_driver_async_attach_wrappers` in `tests/test_tp_driver_integration.c`.
 - Config-matrix coverage is exercised in-process via `tests/test_tp_driver_integration.c` (announce-separate + dynamic stream cases).
 - Agent runner behavior is smoke-tested in `tests/test_tp_agent.c`.
 - Coverage and fuzz smoke runs should be executed for new driver/supervisor/integration code paths (CI jobs: `coverage`, `fuzz-smoke`).

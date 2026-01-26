@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 int tp_example_init_client_context(
-    tp_client_context_t *ctx,
+    tp_context_t **ctx,
     const char *aeron_dir,
     const char *channel,
     int32_t announce_stream_id,
@@ -19,7 +19,7 @@ int tp_example_init_client_context(
     size_t allowed_path_count);
 
 int tp_example_init_client_context_nodriver(
-    tp_client_context_t *ctx,
+    tp_context_t **ctx,
     const char *aeron_dir,
     const char *channel,
     const char **allowed_paths,

@@ -387,7 +387,7 @@ int tp_producer_publish_descriptor_to(
 
     if (producer->client)
     {
-        log = &producer->client->context.base->log;
+        log = &producer->client->context->log;
     }
 
     memset(buffer, 0, header_len + tensor_pool_tensorHeader_sbe_block_length());
@@ -664,13 +664,13 @@ static void tp_producer_unmap_regions(tp_producer_t *producer)
         return;
     }
 
-    tp_shm_unmap(&producer->header_region, &producer->client->context.base->log);
+    tp_shm_unmap(&producer->header_region, &producer->client->context->log);
 
     if (producer->pools)
     {
         for (i = 0; i < producer->pool_count; i++)
         {
-            tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base->log);
+            tp_shm_unmap(&producer->pools[i].region, &producer->client->context->log);
         }
         aeron_free(producer->pools);
         producer->pools = NULL;
@@ -801,10 +801,10 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
                 revoked.stream_id,
                 revoked.reason,
                 revoked.error_message);
-            if (producer->client && producer->client->context.error_handler)
+            if (producer->client && producer->client->context->error_handler)
             {
-                producer->client->context.error_handler(
-                    producer->client->context.error_handler_clientd,
+                producer->client->context->error_handler(
+                    producer->client->context->error_handler_clientd,
                     tp_errcode(),
                     tp_errmsg());
             }
@@ -830,10 +830,10 @@ static void tp_producer_control_handler(void *clientd, const uint8_t *buffer, si
             "driver shutdown reason=%u: %s",
             shutdown_event.reason,
             shutdown_event.error_message);
-        if (producer->client && producer->client->context.error_handler)
+        if (producer->client && producer->client->context->error_handler)
         {
-            producer->client->context.error_handler(
-                producer->client->context.error_handler_clientd,
+            producer->client->context->error_handler(
+                producer->client->context->error_handler_clientd,
                 tp_errcode(),
                 tp_errmsg());
         }
@@ -874,9 +874,9 @@ static void tp_producer_update_activity(tp_producer_t *producer, uint64_t now_ns
 
     if (producer->header_region.addr)
     {
-        if (tp_shm_update_activity_timestamp(&producer->header_region, now_ns, &producer->client->context.base->log) < 0)
+        if (tp_shm_update_activity_timestamp(&producer->header_region, now_ns, &producer->client->context->log) < 0)
         {
-            tp_log_emit(&producer->client->context.base->log, TP_LOG_WARN, "%s", tp_errmsg());
+            tp_log_emit(&producer->client->context->log, TP_LOG_WARN, "%s", tp_errmsg());
         }
     }
 
@@ -884,9 +884,9 @@ static void tp_producer_update_activity(tp_producer_t *producer, uint64_t now_ns
     {
         if (producer->pools[i].region.addr)
         {
-            if (tp_shm_update_activity_timestamp(&producer->pools[i].region, now_ns, &producer->client->context.base->log) < 0)
+            if (tp_shm_update_activity_timestamp(&producer->pools[i].region, now_ns, &producer->client->context->log) < 0)
             {
-                tp_log_emit(&producer->client->context.base->log, TP_LOG_WARN, "%s", tp_errmsg());
+                tp_log_emit(&producer->client->context->log, TP_LOG_WARN, "%s", tp_errmsg());
             }
         }
     }
@@ -1007,48 +1007,48 @@ int tp_producer_init(tp_producer_t **producer, tp_client_t *client, const tp_pro
     instance->tracelink_validator = tp_producer_default_tracelink_validator;
     instance->tracelink_validator_clientd = instance;
 
-    if (client->context.base->descriptor_channel[0] != '\0' && client->context.base->descriptor_stream_id >= 0)
+    if (client->context->descriptor_channel[0] != '\0' && client->context->descriptor_stream_id >= 0)
     {
         if (tp_producer_add_publication(
             instance,
-            client->context.base->descriptor_channel,
-            client->context.base->descriptor_stream_id,
+            client->context->descriptor_channel,
+            client->context->descriptor_stream_id,
             &instance->descriptor_publication) < 0)
         {
             goto cleanup;
         }
     }
 
-    if (client->context.base->control_channel[0] != '\0' && client->context.base->control_stream_id >= 0)
+    if (client->context->control_channel[0] != '\0' && client->context->control_stream_id >= 0)
     {
         if (tp_producer_add_publication(
             instance,
-            client->context.base->control_channel,
-            client->context.base->control_stream_id,
+            client->context->control_channel,
+            client->context->control_stream_id,
             &instance->control_publication) < 0)
         {
             goto cleanup;
         }
     }
 
-    if (client->context.base->qos_channel[0] != '\0' && client->context.base->qos_stream_id >= 0)
+    if (client->context->qos_channel[0] != '\0' && client->context->qos_stream_id >= 0)
     {
         if (tp_producer_add_publication(
             instance,
-            client->context.base->qos_channel,
-            client->context.base->qos_stream_id,
+            client->context->qos_channel,
+            client->context->qos_stream_id,
             &instance->qos_publication) < 0)
         {
             goto cleanup;
         }
     }
 
-    if (client->context.base->metadata_channel[0] != '\0' && client->context.base->metadata_stream_id >= 0)
+    if (client->context->metadata_channel[0] != '\0' && client->context->metadata_stream_id >= 0)
     {
         if (tp_producer_add_publication(
             instance,
-            client->context.base->metadata_channel,
-            client->context.base->metadata_stream_id,
+            client->context->metadata_channel,
+            client->context->metadata_stream_id,
             &instance->metadata_publication) < 0)
         {
             goto cleanup;
@@ -1135,8 +1135,8 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
         &producer->header_region,
         config->header_uri,
         1,
-        &producer->client->context.base->allowed_paths,
-        &producer->client->context.base->log) < 0)
+        &producer->client->context->allowed_paths,
+        &producer->client->context->log) < 0)
     {
         goto cleanup;
     }
@@ -1151,7 +1151,7 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
     expected.slot_bytes = TP_HEADER_SLOT_BYTES;
     expected.stride_bytes = TP_NULL_U32;
 
-    if (tp_shm_validate_superblock(&producer->header_region, &expected, &producer->client->context.base->log) < 0)
+    if (tp_shm_validate_superblock(&producer->header_region, &expected, &producer->client->context->log) < 0)
     {
         goto cleanup;
     }
@@ -1174,7 +1174,7 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
         if (tp_shm_validate_stride_alignment(
             pool_cfg->uri,
             pool->stride_bytes,
-            &producer->client->context.base->log) < 0)
+            &producer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1183,8 +1183,8 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
             &pool->region,
             pool_cfg->uri,
             1,
-            &producer->client->context.base->allowed_paths,
-            &producer->client->context.base->log) < 0)
+            &producer->client->context->allowed_paths,
+            &producer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1199,7 +1199,7 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
         expected.slot_bytes = TP_NULL_U32;
         expected.stride_bytes = pool->stride_bytes;
 
-        if (tp_shm_validate_superblock(&pool->region, &expected, &producer->client->context.base->log) < 0)
+        if (tp_shm_validate_superblock(&pool->region, &expected, &producer->client->context->log) < 0)
         {
             goto cleanup;
         }
@@ -1215,10 +1215,10 @@ static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_
 cleanup:
     for (i = 0; i < producer->pool_count; i++)
     {
-        tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base->log);
+        tp_shm_unmap(&producer->pools[i].region, &producer->client->context->log);
     }
 
-    tp_shm_unmap(&producer->header_region, &producer->client->context.base->log);
+    tp_shm_unmap(&producer->header_region, &producer->client->context->log);
 
     if (producer->pools)
     {
@@ -1265,7 +1265,7 @@ static int tp_producer_attach_driver(tp_producer_t *producer)
 
     tp_producer_fill_driver_request(producer, &request);
 
-    if (tp_driver_attach(producer->driver, &request, &info, (int64_t)producer->client->context.driver_timeout_ns) < 0)
+    if (tp_driver_attach(producer->driver, &request, &info, (int64_t)producer->client->context->driver_timeout_ns) < 0)
     {
         return -1;
     }
@@ -1494,7 +1494,7 @@ static int tp_prepare_tensor_header(tp_producer_t *producer, const tp_tensor_hea
 
     if (producer && producer->client)
     {
-        log = &producer->client->context.base->log;
+        log = &producer->client->context->log;
     }
 
     memcpy(out, tensor, sizeof(*out));
@@ -2026,9 +2026,9 @@ static int tp_producer_poll_control_internal(tp_producer_t *producer, int fragme
         {
             return -1;
         }
-        if (producer->client && producer->client->context.base->announce_period_ns > 0)
+        if (producer->client && producer->client->context->announce_period_ns > 0)
         {
-            stale_ns = producer->client->context.base->announce_period_ns * 5ULL;
+            stale_ns = producer->client->context->announce_period_ns * 5ULL;
         }
 
         now_ns = (uint64_t)tp_clock_now_ns();
@@ -2036,9 +2036,9 @@ static int tp_producer_poll_control_internal(tp_producer_t *producer, int fragme
     }
 
     now_ns = (uint64_t)tp_clock_now_ns();
-    if (producer->client->context.base->announce_period_ns > 0)
+    if (producer->client->context->announce_period_ns > 0)
     {
-        uint64_t period = producer->client->context.base->announce_period_ns;
+        uint64_t period = producer->client->context->announce_period_ns;
         if (producer->qos_publication &&
             (producer->last_qos_ns == 0 || now_ns - producer->last_qos_ns >= period))
         {
@@ -2072,7 +2072,7 @@ static int tp_producer_poll_control_internal(tp_producer_t *producer, int fragme
     }
 
     {
-        uint64_t period = producer->client->context.base->announce_period_ns;
+        uint64_t period = producer->client->context->announce_period_ns;
         if (period == 0 || producer->last_activity_ns == 0 || now_ns - producer->last_activity_ns >= period)
         {
             tp_producer_update_activity(producer, now_ns);
@@ -2299,13 +2299,13 @@ int tp_producer_close(tp_producer_t *producer)
         producer->qos_poller = NULL;
     }
 
-    tp_shm_unmap(&producer->header_region, &producer->client->context.base->log);
+    tp_shm_unmap(&producer->header_region, &producer->client->context->log);
 
     if (producer->pools)
     {
         for (i = 0; i < producer->pool_count; i++)
         {
-            tp_shm_unmap(&producer->pools[i].region, &producer->client->context.base->log);
+            tp_shm_unmap(&producer->pools[i].region, &producer->client->context->log);
         }
         aeron_free(producer->pools);
         producer->pools = NULL;

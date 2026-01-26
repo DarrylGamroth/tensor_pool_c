@@ -46,14 +46,14 @@ clear lifecycle semantics and consistent naming.
   - `tp_publication_t`, `tp_subscription_t`, `tp_fragment_assembler_t` remain opaque handles only.
 
 ## Phase 2: Context + Lifecycle Alignment
-- [ ] Align to Aeron core lifecycle:
+- [x] Align to Aeron core lifecycle:
   - `tp_context_init(tp_context_t **out)` and `tp_context_close(tp_context_t *ctx)`.
   - `tp_client_init(tp_client_t **out, tp_context_t *ctx)` and `tp_client_close(tp_client_t *client)`.
-- [ ] Decision: `tp_context_t` is opaque (Aeron core model).
-- [ ] Add `*_get_*` accessors for all context settings (mirror Aeron `get`/`set` pairs).
-- [ ] Provide `tp_client_context_set_use_conductor_agent_invoker` naming to match Aeron.
-- [ ] Provide `tp_client_context_set_idle_strategy`/`tp_client_idle` to align with Aeron idle handling.
-- [ ] Add `tp_client_main_do_work` wrapper to match Aeron `aeron_main_do_work`.
+- [x] Decision: `tp_context_t` is opaque (Aeron core model).
+- [x] Add `*_get_*` accessors for all context settings (mirror Aeron `get`/`set` pairs).
+- [x] Provide `tp_context_set_use_conductor_agent_invoker` naming to match Aeron.
+- [x] Provide `tp_context_set_idle_strategy`/`tp_client_idle` to align with Aeron idle handling.
+- [x] Add `tp_client_main_do_work` wrapper to match Aeron `aeron_main_do_work`.
 
 ## Phase 3: Naming & Consistency Pass
 - [ ] Standardize naming across public API:
@@ -85,7 +85,7 @@ clear lifecycle semantics and consistent naming.
 ### Public (opaque handles + accessors)
 - `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`
 - `tp_publication_t`, `tp_subscription_t`, `tp_fragment_assembler_t`
-- `tp_context_t`, `tp_client_context_t`, `tp_producer_context_t`, `tp_consumer_context_t`
+- `tp_context_t`, `tp_producer_context_t`, `tp_consumer_context_t`
 - `tp_producer_config_t`, `tp_consumer_config_t`, `tp_driver_config_t`
 
 ### Private (internal-only)
@@ -102,9 +102,9 @@ clear lifecycle semantics and consistent naming.
 - [ ] Add a migration table old→new API names (no backward compatibility).
 
 ## Phase 6: Tests + Traceability
-- [ ] Add tests for new async + poll functions (success, timeout, error paths).
+- [x] Add tests for new async + poll functions (success, timeout, error paths).
 - [ ] Add tests for blocking convenience wrappers.
-- [ ] Update requirements-to-tests checklist with new API and lifecycle coverage.
+- [x] Update requirements-to-tests checklist with new API and lifecycle coverage.
 - [ ] Add integration coverage for client-conductor agent invoker vs thread.
 
 ## Phase 7: Breaking Changes
@@ -127,7 +127,7 @@ clear lifecycle semantics and consistent naming.
 - [x] Add unit coverage for new accessor APIs.
 - [x] Run coverage + fuzzing for the new API work and record results.
 - [x] Add async + poll attach APIs for producer/consumer and align naming.
-- [ ] Decide and implement `tp_context_t` opaque lifecycle and context getters.
+- [x] Decide and implement `tp_context_t` opaque lifecycle and context getters.
 - [ ] Standardize poll return semantics (`0/1/-1`) across all pollers/helpers.
 - [ ] Add registration-id accessors for all async operations.
 - [ ] Add minimal client defaults API (Aeron sample-style).
@@ -138,5 +138,6 @@ clear lifecycle semantics and consistent naming.
 - [ ] Remove/rename old APIs (breaking changes) and add migration guide.
 
 ## Latest Runs
-- Coverage (build-coverage): lines 59.5%, functions 80.6%, branches 48.2% (gcovr warned on negative hits).
+- Tests: `ctest --test-dir build --output-on-failure`.
+- Coverage (build-coverage): lines 60.9%, functions 82.6%, branches 49.0% (gcovr warned on negative hits).
 - Fuzz smoke: `tools/run_fuzz_smoke.sh` completed.

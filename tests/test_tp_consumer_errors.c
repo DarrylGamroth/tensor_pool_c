@@ -120,7 +120,7 @@ static void test_consumer_read_frame_validation_failures(void)
     memset(&view, 0, sizeof(view));
     memset(header_bytes, 0, sizeof(header_bytes));
 
-    if (tp_context_init(&client.context.base) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }
@@ -293,7 +293,7 @@ static void test_consumer_validate_progress_errors(void)
     consumer.header_nslots = 0;
     assert(tp_consumer_validate_progress(&consumer, &progress) < 0);
 
-    if (tp_context_init(&client.context.base) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }

@@ -38,7 +38,7 @@ static void usage(const char *name)
 
 int main(int argc, char **argv)
 {
-    tp_client_context_t client_context;
+    tp_context_t *client_context = NULL;
     tp_client_t *client = NULL;
     tp_payload_pool_config_t pool_cfg;
     tp_producer_t *producer = NULL;
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;

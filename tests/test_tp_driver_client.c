@@ -958,6 +958,7 @@ static void test_driver_keepalive_errors(void)
     tp_driver_client_t client;
     tp_driver_attach_info_t info;
     tp_client_t owner;
+    tp_context_t *context = NULL;
 
     memset(&client, 0, sizeof(client));
     memset(&info, 0, sizeof(info));
@@ -976,11 +977,15 @@ static void test_driver_keepalive_errors(void)
     assert(client.active_lease_id == 5);
     assert(client.client_id == 2);
 
-    owner.context.keepalive_interval_ns = 10;
-    owner.context.lease_expiry_grace_intervals = 2;
+    assert(tp_context_init(&context) == 0);
+    tp_context_set_keepalive_interval_ns(context, 10);
+    tp_context_set_lease_expiry_grace_intervals(context, 2);
+    owner.context = context;
     client.client = &owner;
     assert(tp_driver_client_record_keepalive(&client, 200) == 0);
     assert(client.lease_expiry_timestamp_ns >= 220);
+
+    tp_context_close(context);
 }
 
 static void test_driver_client_init_errors(void)
@@ -995,18 +1000,18 @@ static void test_driver_client_init_errors(void)
     assert(tp_driver_client_init(&client, NULL) < 0);
     assert(tp_driver_client_init(NULL, &base) < 0);
 
-    assert(tp_client_context_init(&base.context) == 0);
-    tp_context_set_control_channel(base.context.base, "", -1);
+    assert(tp_context_init(&base.context) == 0);
+    tp_context_set_control_channel(base.context, "", -1);
     assert(tp_driver_client_init(&client, &base) < 0);
 
-    tp_context_set_control_channel(base.context.base, "", 1000);
+    tp_context_set_control_channel(base.context, "", 1000);
     assert(tp_driver_client_init(&client, &base) < 0);
 
     result = 0;
 
     assert(result == 0);
 
-    tp_client_context_close(&base.context);
+    tp_context_close(base.context);
 }
 
 static void test_driver_client_async_errors(void)

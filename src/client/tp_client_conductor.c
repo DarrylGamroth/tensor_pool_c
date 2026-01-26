@@ -73,7 +73,7 @@ static char *tp_client_strdup(const char *value)
 
 static int tp_client_conductor_apply_context(
     aeron_context_t *aeron_ctx,
-    const tp_client_context_t *context)
+    const tp_context_t *context)
 {
     if (NULL == aeron_ctx || NULL == context)
     {
@@ -81,9 +81,9 @@ static int tp_client_conductor_apply_context(
         return -1;
     }
 
-    if (context->base && context->base->aeron_dir[0] != '\0')
+    if (context->aeron_dir[0] != '\0')
     {
-        if (aeron_context_set_dir(aeron_ctx, context->base->aeron_dir) < 0)
+        if (aeron_context_set_dir(aeron_ctx, context->aeron_dir) < 0)
         {
             return -1;
         }
@@ -449,7 +449,7 @@ int tp_client_conductor_init(
     const tp_context_t *context,
     bool use_agent_invoker)
 {
-    tp_client_context_t shim;
+    tp_context_t shim;
 
     if (NULL == conductor || NULL == context)
     {
@@ -457,8 +457,7 @@ int tp_client_conductor_init(
         return -1;
     }
 
-    memset(&shim, 0, sizeof(shim));
-    shim.base = (tp_context_t *)context;
+    shim = *context;
     shim.use_agent_invoker = use_agent_invoker;
 
     return tp_client_conductor_init_with_client_context(conductor, &shim);
@@ -466,7 +465,7 @@ int tp_client_conductor_init(
 
 int tp_client_conductor_init_with_client_context(
     tp_client_conductor_t *conductor,
-    const tp_client_context_t *context)
+    const tp_context_t *context)
 {
     aeron_context_t *aeron_ctx = NULL;
     aeron_t *aeron_client = NULL;

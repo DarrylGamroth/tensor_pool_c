@@ -727,7 +727,7 @@ static int tp_test_tracelink_validator_fail(const tp_tracelink_set_t *set, void 
 
 static void test_tracelink_send(void)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_producer_t producer;
     tp_publication_t *control_pub = NULL;
@@ -747,19 +747,19 @@ static void test_tracelink_send(void)
     memset(&producer, 0, sizeof(producer));
     memset(&set, 0, sizeof(set));
 
-    if (tp_client_context_init(&ctx) < 0)
+    if (tp_context_init(&ctx) < 0)
     {
         return;
     }
-    tp_client_context_set_aeron_dir(&ctx, aeron_dir);
-    tp_client_context_set_use_agent_invoker(&ctx, true);
-    tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
-    tp_client_context_set_announce_channel(&ctx, "aeron:ipc", 1001);
-    tp_client_context_set_qos_channel(&ctx, "aeron:ipc", 1200);
-    tp_client_context_set_metadata_channel(&ctx, "aeron:ipc", 1300);
-    tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
+    tp_context_set_aeron_dir(ctx, aeron_dir);
+    tp_context_set_use_agent_invoker(ctx, true);
+    tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
+    tp_context_set_announce_channel(ctx, "aeron:ipc", 1001);
+    tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
+    tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
+    tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 
-    if (tp_client_init(&client, &ctx) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, ctx) < 0 || tp_client_start(client) < 0)
     {
         goto cleanup;
     }

@@ -37,7 +37,7 @@ int tp_client_conductor_init(
     bool use_agent_invoker);
 int tp_client_conductor_init_with_client_context(
     tp_client_conductor_t *conductor,
-    const tp_client_context_t *context);
+    const tp_context_t *context);
 int tp_client_conductor_init_with_aeron(
     tp_client_conductor_t *conductor,
     void *aeron,

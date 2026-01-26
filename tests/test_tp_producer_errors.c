@@ -96,7 +96,7 @@ static void test_producer_publish_frame_errors(void)
     assert(tp_producer_publish_frame(&producer, 0, &tensor, NULL, 1, 0, 0, 0, 0) < 0);
     assert(tp_producer_publish_frame(&producer, 0, &tensor, payload, 0, 0, 0, 0, 0) < 0);
 
-    if (tp_context_init(&client.context.base) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }

@@ -51,7 +51,7 @@ static void tp_example_detach_driver(tp_driver_client_t *driver)
 
 int main(int argc, char **argv)
 {
-    tp_client_context_t client_context;
+    tp_context_t *client_context = NULL;
     tp_client_t *client = NULL;
     tp_driver_client_t *driver = NULL;
     tp_driver_attach_request_t request;
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_init(&client, &client_context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, client_context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Client init failed: %s\n", tp_errmsg());
         goto cleanup;

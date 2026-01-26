@@ -62,7 +62,7 @@ void tp_test_shm_roundtrip(void)
     memset(&view, 0, sizeof(view));
     memset(&progress, 0, sizeof(progress));
 
-    if (tp_client_context_init(&client.context) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }

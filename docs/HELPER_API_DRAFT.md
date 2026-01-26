@@ -129,8 +129,8 @@ Behavior:
 
 ### 3.1 Client Context Defaults
 ```c
-int tp_client_context_set_default_channels(
-    tp_client_context_t *ctx,
+int tp_context_set_default_channels(
+    tp_context_t *ctx,
     const char *channel,
     int32_t announce_stream_id);
 ```

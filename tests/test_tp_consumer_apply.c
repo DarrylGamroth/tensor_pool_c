@@ -23,7 +23,7 @@ void tp_test_consumer_fallback_invalid_announce(void)
     memset(&announce, 0, sizeof(announce));
     memset(&pool, 0, sizeof(pool));
 
-    if (tp_context_init(&client.context.base) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }
@@ -79,7 +79,7 @@ void tp_test_consumer_fallback_layout_version(void)
     memset(&announce, 0, sizeof(announce));
     memset(&pool, 0, sizeof(pool));
 
-    if (tp_context_init(&client.context.base) < 0)
+    if (tp_context_init(&client.context) < 0)
     {
         goto cleanup;
     }

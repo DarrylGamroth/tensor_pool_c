@@ -6,16 +6,16 @@
 
 static void test_client_context_null_inputs(void)
 {
-    assert(tp_client_context_init(NULL) < 0);
+    assert(tp_context_init(NULL) < 0);
 }
 
 static void test_client_null_inputs(void)
 {
-    tp_client_context_t context;
+    tp_context_t *context = NULL;
 
     memset(&context, 0, sizeof(context));
 
-    assert(tp_client_init(NULL, &context) < 0);
+    assert(tp_client_init(NULL, context) < 0);
     assert(tp_client_init((tp_client_t **)1, NULL) < 0);
     assert(tp_client_start(NULL) < 0);
     assert(tp_client_do_work(NULL) < 0);

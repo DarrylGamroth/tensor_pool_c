@@ -29,41 +29,38 @@ Observed in `examples/tp_example_consumer_driver.c` / `examples/tp_example_produ
 ### 3.1 Context and Client (Aeron-style lifecycle)
 
 ```c
-// Context holds configuration and defaults.
-typedef struct tp_client_context_stct
-{
-    tp_context_t base;          // existing config (aeron dir, channels, streams)
-    uint64_t driver_timeout_ns;
-    uint64_t keepalive_interval_ns;
-    uint64_t idle_sleep_duration_ns;
-    bool use_agent_invoker;
-} tp_client_context_t;
+typedef struct tp_context_stct tp_context_t;
 
-int tp_client_context_init(tp_client_context_t *ctx);
-void tp_client_context_set_aeron_dir(tp_client_context_t *ctx, const char *dir);
-void tp_client_context_set_aeron(tp_client_context_t *ctx, aeron_t *aeron);
-void tp_client_context_set_owns_aeron_client(tp_client_context_t *ctx, bool owns);
-void tp_client_context_set_client_name(tp_client_context_t *ctx, const char *name);
-void tp_client_context_set_message_timeout_ns(tp_client_context_t *ctx, int64_t timeout_ns);
-void tp_client_context_set_message_retry_attempts(tp_client_context_t *ctx, int32_t attempts);
-void tp_client_context_set_error_handler(tp_client_context_t *ctx, tp_error_handler_t handler, void *clientd);
-void tp_client_context_set_delegating_invoker(tp_client_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
-void tp_client_context_set_log_handler(tp_client_context_t *ctx, tp_log_func_t handler, void *clientd);
-void tp_client_context_set_control_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
-void tp_client_context_set_descriptor_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
-void tp_client_context_set_qos_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
-void tp_client_context_set_metadata_channel(tp_client_context_t *ctx, const char *channel, int32_t stream_id);
-void tp_client_context_set_driver_timeout_ns(tp_client_context_t *ctx, uint64_t value);
-void tp_client_context_set_keepalive_interval_ns(tp_client_context_t *ctx, uint64_t value);
-void tp_client_context_set_idle_sleep_duration_ns(tp_client_context_t *ctx, uint64_t value);
-void tp_client_context_set_use_agent_invoker(tp_client_context_t *ctx, bool value);
+int tp_context_init(tp_context_t **ctx);
+int tp_context_close(tp_context_t *ctx);
+void tp_context_set_aeron_dir(tp_context_t *ctx, const char *dir);
+void tp_context_set_aeron(tp_context_t *ctx, aeron_t *aeron);
+void tp_context_set_owns_aeron_client(tp_context_t *ctx, bool owns);
+void tp_context_set_client_name(tp_context_t *ctx, const char *name);
+void tp_context_set_message_timeout_ns(tp_context_t *ctx, int64_t timeout_ns);
+void tp_context_set_message_retry_attempts(tp_context_t *ctx, int32_t attempts);
+void tp_context_set_error_handler(tp_context_t *ctx, tp_error_handler_t handler, void *clientd);
+void tp_context_set_delegating_invoker(tp_context_t *ctx, tp_delegating_invoker_t invoker, void *clientd);
+void tp_context_set_log_handler(tp_context_t *ctx, tp_log_func_t handler, void *clientd);
+void tp_context_set_control_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_context_set_descriptor_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_context_set_qos_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_context_set_metadata_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
+void tp_context_set_driver_timeout_ns(tp_context_t *ctx, uint64_t value);
+void tp_context_set_keepalive_interval_ns(tp_context_t *ctx, uint64_t value);
+void tp_context_set_idle_sleep_duration_ns(tp_context_t *ctx, uint64_t value);
+void tp_context_set_idle_strategy(tp_context_t *ctx, uint64_t sleep_ns);
+void tp_context_set_use_agent_invoker(tp_context_t *ctx, bool value);
+void tp_context_set_use_conductor_agent_invoker(tp_context_t *ctx, bool value);
 
 // Client owns Aeron instance, conductor, and shared pollers.
 typedef struct tp_client_stct tp_client_t;
 
-int tp_client_init(tp_client_t *client, const tp_client_context_t *ctx);
+int tp_client_init(tp_client_t **client, tp_context_t *ctx);
 int tp_client_start(tp_client_t *client);
 int tp_client_do_work(tp_client_t *client);   // Aeron-style if use_agent_invoker
+int tp_client_main_do_work(tp_client_t *client);
+int tp_client_idle(tp_client_t *client, int work_count);
 int tp_client_close(tp_client_t *client);
 ```
 
@@ -316,10 +313,10 @@ Progress is a control-plane message. The API should expose:
 ### 12.1 Consumer (Driver Model)
 
 ```c
-tp_client_context_t ctx;
-tp_client_t client;
+tp_context_t *ctx = NULL;
+tp_client_t *client = NULL;
 tp_consumer_context_t consumer_ctx;
-tp_consumer_t consumer;
+tp_consumer_t *consumer = NULL;
 tp_frame_descriptor_handler_t on_descriptor;
 tp_discovery_client_t discovery;
 tp_discovery_context_t discovery_ctx;
@@ -341,14 +338,14 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 }
 
 // Init
-tp_client_context_init(&ctx);
-tp_client_context_set_aeron_dir(&ctx, "/dev/shm/aeron-dgamroth");
-tp_client_context_set_control_channel(&ctx, "aeron:ipc", 1000);
-tp_client_context_set_descriptor_channel(&ctx, "aeron:ipc", 1100);
+tp_context_init(&ctx);
+tp_context_set_aeron_dir(ctx, "/dev/shm/aeron-dgamroth");
+tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
+tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 
 // Start client
-tp_client_init(&client, &ctx);
-tp_client_start(&client);
+tp_client_init(&client, ctx);
+tp_client_start(client);
 
 // Discovery: find a pool and stream id
 tp_discovery_request_init(&request);
@@ -403,14 +400,14 @@ tp_client_close(&client);
 ### 12.2 Producer (Driver Model)
 
 ```c
-tp_client_context_t ctx;
-tp_client_t client;
+tp_context_t *ctx = NULL;
+tp_client_t *client = NULL;
 tp_producer_context_t prod_ctx;
-tp_producer_t producer;
+tp_producer_t *producer = NULL;
 
-tp_client_context_init(&ctx);
-tp_client_init(&client, &ctx);
-tp_client_start(&client);
+tp_context_init(&ctx);
+tp_client_init(&client, ctx);
+tp_client_start(client);
 
 tp_producer_context_init(&prod_ctx);
 prod_ctx.stream_id = 10000;
@@ -661,13 +658,13 @@ attach_req.role = TP_ROLE_CONSUMER;
 tp_driver_attach_async(&driver, &attach_req, &attach_async);
 while (tp_driver_attach_poll(attach_async, &attach_info) == 0)
 {
-    tp_client_do_work(&client);
+    tp_client_do_work(client);
 }
 
 while (running)
 {
     tp_driver_keepalive(&driver, tp_clock_now_ns());
-    tp_client_do_work(&client);
+    tp_client_do_work(client);
 }
 ```
 
@@ -680,9 +677,9 @@ static void on_log(void *clientd, int level, const char *message)
     fprintf(stderr, "[tp] %d %s\n", level, message);
 }
 
-tp_client_context_t ctx;
-tp_client_context_init(&ctx);
-tp_client_context_set_log_handler(&ctx, on_log, NULL);
+tp_context_t *ctx = NULL;
+tp_context_init(&ctx);
+tp_context_set_log_handler(ctx, on_log, NULL);
 ```
 
 ## 13. Migration Notes (Current -> Proposed)
@@ -733,13 +730,13 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Keepalive scheduling**: keepalive work runs inside `tp_client_do_work` and/or `tp_driver_client_do_work` and uses the same idle strategy/intervals configured in the client context.
 - **Fragment limits and polling**: `tp_*_poll` functions take `fragment_limit` like Aeron, and return number of fragments/events processed.
 - **Poll return semantics**: `tp_*_poll` returns fragment count (`>= 0`) or `-1` on error with `tp_errcode()/tp_errmsg()` set.
-- **Logging coverage**: `tp_client_context_set_log_handler` is the single hook used across client/driver/discovery/control/QoS/metadata modules.
+- **Logging coverage**: `tp_context_set_log_handler` is the single hook used across client/driver/discovery/control/QoS/metadata modules.
 - **Poller close order**: close discovery/QoS/metadata/control pollers before `tp_client_close` if they hold references to shared subscriptions.
 
 ## 17. Ownership and Resource Management
 
 - **Client ownership**: `tp_client_t` owns shared subscriptions (control/QoS/metadata) and the Aeron instance; close it last.
-- **External Aeron client**: like Aeron Archive, allow `tp_client_context_set_aeron(...)` and `tp_client_context_set_owns_aeron_client(false)` to reuse a pre-existing Aeron instance without closing it.
+- **External Aeron client**: like Aeron Archive, allow `tp_context_set_aeron(...)` and `tp_context_set_owns_aeron_client(false)` to reuse a pre-existing Aeron instance without closing it.
 - **Producer/consumer ownership**: producers/consumers own their publications/subscriptions and must be closed before the client.
 - **Poller ownership**: pollers are lightweight wrappers around shared subscriptions; close them before `tp_client_close`.
 - **Callback lifetimes**: descriptor/QoS/metadata/discovery callbacks receive views valid only during the callback.
@@ -753,7 +750,7 @@ These align with Aeron C client patterns so the API feels familiar.
 - **Context configuration**: client name, message timeout, retry attempts, error handler, and delegating invoker are configured on the context.
 - **Proxy + poller**: request senders are separated from response pollers; responses are correlated by request IDs.
 - **Async connect**: preferred for driver attach/discovery workflows (state machine + poll) rather than blocking calls.
-- **Delegating invoker**: `tp_client_context_set_delegating_invoker` enables agent-invoker integration, mirroring `aeron_archive_context_invoke_aeron_client`.
+- **Delegating invoker**: `tp_context_set_delegating_invoker` enables agent-invoker integration, mirroring `aeron_archive_context_invoke_aeron_client`.
 
 ## 19. Implementation Notes
 
@@ -762,7 +759,7 @@ These align with Aeron C client patterns so the API feels familiar.
 ## 20. Error Codes and Logging
 
 - Error codes follow Aeron-style negative values (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`) for offer/claim/queue operations.
-- All modules emit logs through `tp_client_context_set_log_handler`.
+- All modules emit logs through `tp_context_set_log_handler`.
 - Naming conventions: `tp_*_init` returns 0/-1, `tp_*_poll` returns fragment count or -1, and offer/claim/queue return positions or negative codes.
 - Note: This document is the authoritative API proposal and should be referenced when implementing or reviewing client-facing behavior.
 

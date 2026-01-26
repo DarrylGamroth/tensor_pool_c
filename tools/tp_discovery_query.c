@@ -78,7 +78,7 @@ static void print_json(const tp_discovery_response_t *resp)
 
 int main(int argc, char **argv)
 {
-    tp_client_context_t ctx;
+    tp_context_t *ctx = NULL;
     tp_client_t *client = NULL;
     tp_discovery_context_t disco_ctx;
     tp_discovery_client_t disco;
@@ -151,10 +151,10 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    tp_client_context_init(&ctx);
-    tp_client_context_set_aeron_dir(&ctx, aeron_dir);
+    tp_context_init(&ctx);
+    tp_context_set_aeron_dir(ctx, aeron_dir);
 
-    tp_client_init(&client, &ctx);
+    tp_client_init(&client, ctx);
     if (tp_client_start(client) < 0)
     {
         fprintf(stderr, "client start failed: %s\n", tp_errmsg());

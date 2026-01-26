@@ -232,7 +232,7 @@ int main(int argc, char **argv)
     const char *channel = "aeron:ipc";
     int32_t descriptor_stream_id = 1100;
     tp_listen_state_t state;
-    tp_client_context_t context;
+    tp_context_t *context = NULL;
     tp_client_t *client = NULL;
     tp_subscription_t *descriptor_subscription = NULL;
     tp_fragment_assembler_t *assembler = NULL;
@@ -297,7 +297,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (tp_client_context_init(&context) < 0)
+    if (tp_context_init(&context) < 0)
     {
         fprintf(stderr, "Failed to init context\n");
         return 1;
@@ -305,14 +305,14 @@ int main(int argc, char **argv)
 
     if (aeron_dir)
     {
-        tp_client_context_set_aeron_dir(&context, aeron_dir);
+        tp_context_set_aeron_dir(context, aeron_dir);
     }
 
-    tp_client_context_set_control_channel(&context, channel, 1000);
-    tp_client_context_set_qos_channel(&context, channel, 1200);
-    tp_client_context_set_metadata_channel(&context, channel, 1300);
+    tp_context_set_control_channel(context, channel, 1000);
+    tp_context_set_qos_channel(context, channel, 1200);
+    tp_context_set_metadata_channel(context, channel, 1300);
 
-    if (tp_client_init(&client, &context) < 0 || tp_client_start(client) < 0)
+    if (tp_client_init(&client, context) < 0 || tp_client_start(client) < 0)
     {
         fprintf(stderr, "Aeron init failed: %s\n", tp_errmsg());
         return 1;
