@@ -36,6 +36,12 @@
 #define HUGETLBFS_MAGIC 0x958458f6
 #endif
 
+#ifndef TP_TEST_CONFIG_DIR
+#define TP_TEST_CONFIG_DIR "config"
+#endif
+
+#define TP_TEST_CONFIG_PATH(name) TP_TEST_CONFIG_DIR "/" name
+
 typedef struct tp_driver_revoke_state_stct
 {
     int revoked;
@@ -85,6 +91,7 @@ static int tp_test_is_hugepages_dir(const char *path)
 static int tp_test_driver_attach_with_work(
     tp_driver_t *driver,
     tp_driver_client_t *client,
+    tp_client_t *base,
     tp_driver_attach_request_t *request,
     tp_driver_attach_info_t *out,
     int64_t timeout_ns)
@@ -102,6 +109,10 @@ static int tp_test_driver_attach_with_work(
     for (;;)
     {
         tp_driver_do_work(driver);
+        if (base)
+        {
+            tp_client_do_work(base);
+        }
         poll_result = tp_driver_attach_poll(async, out);
         if (poll_result < 0)
         {
@@ -128,6 +139,7 @@ static int tp_test_driver_attach_with_work(
 static int tp_test_driver_detach_with_work(
     tp_driver_t *driver,
     tp_driver_client_t *client,
+    tp_client_t *base,
     int64_t timeout_ns)
 {
     tp_async_detach_t *async = NULL;
@@ -144,6 +156,10 @@ static int tp_test_driver_detach_with_work(
     for (;;)
     {
         tp_driver_do_work(driver);
+        if (base)
+        {
+            tp_client_do_work(base);
+        }
         poll_result = tp_driver_detach_poll(async, &info);
         if (poll_result < 0)
         {
@@ -344,7 +360,7 @@ static int tp_test_driver_attach_with_config(
     request.require_hugepages = 0;
     request.desired_node_id = 0;
 
-    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -397,7 +413,7 @@ void tp_test_driver_discovery_integration(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -417,7 +433,7 @@ void tp_test_driver_discovery_integration(void)
     {
         goto cleanup;
     }
-    if (tp_discovery_service_config_load(&discovery_config, "../config/discovery_example.toml") < 0)
+    if (tp_discovery_service_config_load(&discovery_config, TP_TEST_CONFIG_PATH("discovery_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -471,6 +487,7 @@ void tp_test_driver_discovery_integration(void)
     if (tp_test_driver_attach_with_work(
             &driver,
             driver_client,
+            client,
             &attach_request,
             &attach_info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -590,7 +607,7 @@ void tp_test_driver_exclusive_producer(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -651,6 +668,7 @@ void tp_test_driver_exclusive_producer(void)
     if (tp_test_driver_attach_with_work(
             &driver,
             driver_client,
+            client,
             &request,
             &info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -668,6 +686,7 @@ void tp_test_driver_exclusive_producer(void)
     if (tp_test_driver_attach_with_work(
             &driver,
             producer_client,
+            client,
             &request,
             &producer_info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -683,6 +702,7 @@ void tp_test_driver_exclusive_producer(void)
     if (tp_test_driver_attach_with_work(
             &driver,
             producer_client2,
+            client,
             &request,
             &producer_info2,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -734,7 +754,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -783,7 +803,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     request.require_hugepages = 0;
     request.desired_node_id = 0;
 
-    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -799,7 +819,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
     request.require_hugepages = tensor_pool_hugepagesPolicy_HUGEPAGES;
 
-    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -807,7 +827,7 @@ void tp_test_driver_publish_mode_hugepages(void)
     if (expect_hugepages_ok)
     {
         assert(info.code == tensor_pool_responseCode_OK);
-        if (tp_test_driver_detach_with_work(&driver, driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+        if (tp_test_driver_detach_with_work(&driver, driver_client, client, 2 * 1000 * 1000 * 1000LL) < 0)
         {
             goto cleanup;
         }
@@ -855,7 +875,7 @@ void tp_test_driver_node_id_cooldown(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -905,20 +925,20 @@ void tp_test_driver_node_id_cooldown(void)
     request.require_hugepages = 0;
     request.desired_node_id = 4242;
 
-    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, client, &request, &info, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
     step = 1;
     assert(info.code == tensor_pool_responseCode_OK);
 
-    if (tp_test_driver_detach_with_work(&driver, driver_client, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_detach_with_work(&driver, driver_client, client, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
 
     request.correlation_id++;
-    if (tp_test_driver_attach_with_work(&driver, driver_client, &request, &info2, 2 * 1000 * 1000 * 1000LL) < 0)
+    if (tp_test_driver_attach_with_work(&driver, driver_client, client, &request, &info2, 2 * 1000 * 1000 * 1000LL) < 0)
     {
         goto cleanup;
     }
@@ -947,13 +967,13 @@ void tp_test_driver_config_matrix(void)
     int result = 0;
 
     result |= tp_test_driver_attach_with_config(
-        "../config/driver_integration_announce_separate.toml",
+        TP_TEST_CONFIG_PATH("driver_integration_announce_separate.toml"),
         "test-matrix-announce",
         10001,
         tensor_pool_publishMode_EXISTING_OR_CREATE,
         tensor_pool_responseCode_OK);
     result |= tp_test_driver_attach_with_config(
-        "../config/driver_integration_dynamic.toml",
+        TP_TEST_CONFIG_PATH("driver_integration_dynamic.toml"),
         "test-matrix-dynamic",
         20001,
         tensor_pool_publishMode_EXISTING_OR_CREATE,
@@ -989,7 +1009,7 @@ void tp_test_driver_lease_expiry(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -1040,6 +1060,7 @@ void tp_test_driver_lease_expiry(void)
     if (tp_test_driver_attach_with_work(
             &driver,
             driver_client,
+            client,
             &request,
             &info,
             2 * 1000 * 1000 * 1000LL) < 0)
@@ -1097,7 +1118,7 @@ void tp_test_driver_async_attach_wrappers(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
@@ -1243,7 +1264,7 @@ void tp_test_driver_blocking_attach_wrappers(void)
     {
         goto cleanup;
     }
-    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    if (tp_driver_config_load(&driver_config, TP_TEST_CONFIG_PATH("driver_integration_example.toml")) < 0)
     {
         goto cleanup;
     }
