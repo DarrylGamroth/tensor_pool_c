@@ -360,6 +360,7 @@ add_executable(tensor_pool_tests
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
 target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/common")
 target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/internal")
+target_compile_definitions(tensor_pool_tests PRIVATE TP_TEST_CONFIG_DIR="${CMAKE_CURRENT_LIST_DIR}/config")
 target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
 target_compile_definitions(tensor_pool PRIVATE TP_TESTING=1)
 if (TARGET aeron::aeron_driver_static)

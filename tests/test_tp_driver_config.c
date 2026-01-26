@@ -6,9 +6,11 @@
 void tp_test_driver_config(void)
 {
     tp_driver_config_t config;
+    const char *example_config = TP_TEST_CONFIG_DIR "/driver_integration_example.toml";
+    const char *dynamic_config = TP_TEST_CONFIG_DIR "/driver_integration_dynamic.toml";
 
     assert(tp_driver_config_init(&config) == 0);
-    assert(tp_driver_config_load(&config, "../config/driver_integration_example.toml") == 0);
+    assert(tp_driver_config_load(&config, example_config) == 0);
 
     assert(tp_context_get_control_stream_id(config.base) == 1000);
     assert(tp_context_get_announce_stream_id(config.base) == 1001);
@@ -27,7 +29,7 @@ void tp_test_driver_config(void)
     tp_driver_config_close(&config);
 
     assert(tp_driver_config_init(&config) == 0);
-    assert(tp_driver_config_load(&config, "../config/driver_integration_dynamic.toml") == 0);
+    assert(tp_driver_config_load(&config, dynamic_config) == 0);
 
     assert(config.allow_dynamic_streams == true);
     assert(config.node_id_reuse_cooldown_ms == 1000);
