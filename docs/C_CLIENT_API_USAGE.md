@@ -100,6 +100,21 @@ while (tp_client_async_add_publication_poll(&pub, async_pub) == 0)
 
 Registration IDs return `TP_NULL_REGISTRATION_ID` until Aeron assigns one.
 
+### 1.3 Publication/Subscription Introspection
+
+```c
+const char *channel = tp_publication_channel(pub);
+int32_t stream_id = tp_publication_stream_id(pub);
+int64_t status = tp_publication_channel_status(pub);
+bool connected = tp_publication_is_connected(pub);
+
+const char *sub_channel = tp_subscription_channel(sub);
+int32_t sub_stream = tp_subscription_stream_id(sub);
+int64_t sub_status = tp_subscription_channel_status(sub);
+int image_count = tp_subscription_image_count(sub);
+bool sub_connected = tp_subscription_is_connected(sub);
+```
+
 ## 2. Discovery → Consumer (Driver Model)
 
 ```c
@@ -110,7 +125,7 @@ tp_discovery_response_t response;
 
 tp_discovery_context_init(&discovery_ctx);
 tp_discovery_context_set_channel(&discovery_ctx, "aeron:ipc", 9000);
-tp_discovery_client_init(&discovery, &client, &discovery_ctx);
+tp_discovery_client_init(&discovery, client, &discovery_ctx);
 
 memset(&request, 0, sizeof(request));
 request.request_id = 1;
@@ -144,7 +159,35 @@ while (tp_driver_attach_poll(async, &info) == 0)
 }
 ```
 
-The async poll returns `0` until complete, `1` on success, and `-1` on error. Blocking wrappers (`tp_driver_attach`, `tp_producer_attach_driver`, `tp_consumer_attach_driver`) are convenience helpers built on top of the async calls.
+The async poll returns `0` until complete, `1` on success, and `-1` on error. The blocking wrapper `tp_driver_attach` is a convenience helper built on top of the async calls.
+
+### 2.2 Driver Attach Helpers (Producer/Consumer Config)
+
+```c
+tp_driver_attach_info_t info;
+tp_payload_pool_config_t producer_pools[8];
+tp_producer_config_t producer_cfg;
+size_t producer_pool_count = 0;
+
+tp_driver_attach_producer_config(
+    &info,
+    producer_id,
+    producer_pools,
+    8,
+    &producer_cfg,
+    &producer_pool_count);
+
+tp_consumer_pool_config_t consumer_pools[8];
+tp_consumer_config_t consumer_cfg;
+size_t consumer_pool_count = 0;
+
+tp_driver_attach_consumer_config(
+    &info,
+    consumer_pools,
+    8,
+    &consumer_cfg,
+    &consumer_pool_count);
+```
 
 ## 3. Consumer: Descriptor Callback Path (12.1)
 
@@ -164,7 +207,7 @@ static void on_descriptor(void *clientd, const tp_frame_descriptor_t *desc)
 }
 
 tp_consumer_context_t consumer_ctx;
-tp_consumer_t consumer;
+tp_consumer_t *consumer = NULL;
 
 tp_consumer_context_init(&consumer_ctx);
 consumer_ctx.stream_id = result ? result->stream_id : 10000;
@@ -173,13 +216,13 @@ consumer_ctx.use_driver = true;
 consumer_ctx.hello.descriptor_channel = "aeron:ipc";
 consumer_ctx.hello.descriptor_stream_id = 31001;
 
-tp_consumer_init(&consumer, &client, &consumer_ctx);
-tp_consumer_set_descriptor_handler(&consumer, on_descriptor, &consumer);
+tp_consumer_init(&consumer, client, &consumer_ctx);
+tp_consumer_set_descriptor_handler(consumer, on_descriptor, consumer);
 
 while (running)
 {
-    tp_client_do_work(&client);
-    tp_consumer_poll_descriptors(&consumer, 10);
+    tp_client_do_work(client);
+    tp_consumer_poll_descriptors(consumer, 10);
 }
 ```
 
@@ -192,9 +235,9 @@ Notes:
 - Consumers MUST remain subscribed to the shared control stream for non-FrameProgress control-plane messages; per-consumer control streams carry FrameProgress only.
 
 ```c
-if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
+if (tp_consumer_reattach_due(consumer, (uint64_t)tp_clock_now_ns()))
 {
-    tp_consumer_attach(&consumer, NULL);
+    tp_consumer_attach(consumer, NULL);
 }
 ```
 
@@ -202,7 +245,7 @@ if (tp_consumer_reattach_due(&consumer, (uint64_t)tp_clock_now_ns()))
 
 ```c
 tp_producer_context_t prod_ctx;
-tp_producer_t producer;
+tp_producer_t *producer = NULL;
 
 tp_producer_context_init(&prod_ctx);
 prod_ctx.stream_id = 10000;
@@ -212,21 +255,21 @@ prod_ctx.fixed_pool_mode = true;
 tp_producer_context_set_payload_flush(&prod_ctx, flush_fn, flush_clientd); // optional DMA visibility hook
 // For non-coherent DMA, provide flush_fn to make payload visible before commit.
 
-tp_producer_init(&producer, &client, &prod_ctx);
-tp_producer_enable_consumer_manager(&producer, 128);
+tp_producer_init(&producer, client, &prod_ctx);
+tp_producer_enable_consumer_manager(producer, 128);
 
 while (running)
 {
-    tp_client_do_work(&client);
-    (void)tp_producer_offer_frame(&producer, &frame, &meta);
+    tp_client_do_work(client);
+    (void)tp_producer_offer_frame(producer, &frame, &meta);
 }
 ```
 
 Lease revoked handling (driver model):
 ```c
-if (tp_producer_reattach_due(&producer, (uint64_t)tp_clock_now_ns()))
+if (tp_producer_reattach_due(producer, (uint64_t)tp_clock_now_ns()))
 {
-    tp_producer_attach(&producer, NULL);
+    tp_producer_attach(producer, NULL);
 }
 ```
 
@@ -244,11 +287,11 @@ tp_buffer_claim_t claim;
 tp_frame_metadata_t meta;
 int64_t result;
 
-result = tp_producer_try_claim(&producer, payload_len, &claim);
+result = tp_producer_try_claim(producer, payload_len, &claim);
 if (result >= 0)
 {
     // claim.payload points at the slot; fill directly (DMA/SDK).
-    tp_producer_commit_claim(&producer, &claim, &meta);
+    tp_producer_commit_claim(producer, &claim, &meta);
 }
 ```
 
@@ -259,12 +302,12 @@ tp_buffer_claim_t slots[8];
 
 for (size_t i = 0; i < 8; ++i)
 {
-    tp_producer_try_claim(&producer, payload_len, &slots[i]);
+    tp_producer_try_claim(producer, payload_len, &slots[i]);
 }
 
 // When a buffer is filled:
-tp_producer_commit_claim(&producer, &slots[i], &meta);
-tp_producer_queue_claim(&producer, &slots[i]); // re-queue same slot
+tp_producer_commit_claim(producer, &slots[i], &meta);
+tp_producer_queue_claim(producer, &slots[i]); // re-queue same slot
 ```
 
 ## 7. Trace IDs + TraceLinkSet
@@ -277,14 +320,14 @@ uint64_t node_id = (producer.driver_attach.node_id != TP_NULL_U32)
     : 42;
 
 tp_trace_id_generator_init_default(&trace_gen, node_id);
-tp_producer_set_trace_id_generator(&producer, &trace_gen);
+tp_producer_set_trace_id_generator(producer, &trace_gen);
 
 memset(&frame, 0, sizeof(frame));
 // Populate frame.tensor/frame.payload/frame.payload_len before publishing.
 // pool_id is ignored by tp_producer_offer_frame (smallest-fit pool selection is automatic).
 frame.trace_id = 0;
 tp_frame_metadata_t meta = { .timestamp_ns = 0, .meta_version = 0 };
-tp_producer_offer_frame(&producer, &frame, &meta);
+tp_producer_offer_frame(producer, &frame, &meta);
 // If frame.trace_id is 0 and a generator is set, a trace_id is minted and written into FrameDescriptor.trace_id.
 // For try-claim paths, set claim.trace_id before tp_producer_commit_claim (0 uses the generator when configured).
 ```
@@ -294,11 +337,11 @@ Try-claim example:
 ```c
 tp_buffer_claim_t claim;
 
-if (tp_producer_try_claim(&producer, payload_len, &claim) >= 0)
+if (tp_producer_try_claim(producer, payload_len, &claim) >= 0)
 {
     // Fill claim.payload/claim.tensor as needed.
     claim.trace_id = 0; // or set a specific trace id
-    tp_producer_commit_claim(&producer, &claim, &meta);
+    tp_producer_commit_claim(producer, &claim, &meta);
 }
 ```
 
@@ -314,7 +357,7 @@ if (tp_tracelink_resolve_trace_id(&trace_gen, parent_ids, 2, &out_trace_id, &emi
 }
 frame.trace_id = out_trace_id;
 tp_frame_metadata_t out_meta = { .timestamp_ns = 0, .meta_version = 0 };
-int64_t seq = tp_producer_offer_frame(&producer, &frame, &out_meta);
+int64_t seq = tp_producer_offer_frame(producer, &frame, &out_meta);
 // frame.trace_id is encoded into FrameDescriptor.trace_id for the output frame.
 
 Note: for N→1 stages, set `frame.trace_id` explicitly so you can emit TraceLinkSet for the derived output.
@@ -329,14 +372,14 @@ tp_tracelink_set_t link = {
 };
 if (emit_tracelink)
 {
-    tp_producer_send_tracelink_set(&producer, &link);
+    tp_producer_send_tracelink_set(producer, &link);
 }
 ```
 
 Convenience form (fills stream/epoch automatically):
 
 ```c
-tp_producer_send_tracelink_set_ex(&producer, (uint64_t)seq, out_trace_id, parent_ids, 2);
+tp_producer_send_tracelink_set_ex(producer, (uint64_t)seq, out_trace_id, parent_ids, 2);
 ```
 
 Claim helper:
@@ -344,9 +387,9 @@ Claim helper:
 ```c
 tp_tracelink_set_t set;
 
-if (tp_tracelink_set_from_claim(&producer, &claim, parent_ids, 2, &set) == 0)
+if (tp_tracelink_set_from_claim(producer, &claim, parent_ids, 2, &set) == 0)
 {
-    tp_producer_send_tracelink_set(&producer, &set);
+    tp_producer_send_tracelink_set(producer, &set);
 }
 ```
 
@@ -360,7 +403,7 @@ static int tracelink_validator(const tp_tracelink_set_t *set, void *clientd)
     return 0;
 }
 
-tp_producer_set_tracelink_validator(&producer, tracelink_validator, NULL);
+tp_producer_set_tracelink_validator(producer, tracelink_validator, NULL);
 ```
 
 Control-plane listeners can subscribe to TraceLinkSet events:
@@ -373,8 +416,8 @@ static void on_tracelink(const tp_tracelink_set_t *set, void *clientd)
 }
 
 tp_control_handlers_t handlers = { .on_tracelink_set = on_tracelink, .clientd = NULL };
-tp_client_set_control_handlers(&client, &handlers, 10);
-tp_client_do_work(&client);
+tp_client_set_control_handlers(client, &handlers, 10);
+tp_client_do_work(client);
 ```
 
 Note: trace ID continuity across epoch changes is a deployment choice. The client API does not reset IDs automatically; mint new trace IDs when desired.
@@ -382,14 +425,14 @@ Note: trace ID continuity across epoch changes is a deployment choice. The clien
 ## 8. QoS
 
 ```c
-tp_qos_publish_consumer(&consumer, consumer_id, last_seq_seen, drops_gap, drops_late, TP_MODE_STREAM);
+tp_qos_publish_consumer(consumer, consumer_id, last_seq_seen, drops_gap, drops_late, TP_MODE_STREAM);
 
 tp_qos_handlers_t qos_handlers = {
     .on_qos_event = on_qos_event,
     .clientd = NULL
 };
-tp_client_set_qos_handlers(&client, &qos_handlers, 10);
-tp_client_do_work(&client);
+tp_client_set_qos_handlers(client, &qos_handlers, 10);
+tp_client_do_work(client);
 ```
 
 ## 9. Metadata
@@ -406,10 +449,10 @@ tp_data_source_announce_t announce = {
     .name = "camera0",
     .summary = "primary sensor"
 };
-tp_producer_send_data_source_announce(&producer, &announce);
+tp_producer_send_data_source_announce(producer, &announce);
 
 // Cache announce/meta for periodic re-broadcast on tp_producer_poll_control().
-tp_producer_set_data_source_announce(&producer, &announce);
+tp_producer_set_data_source_announce(producer, &announce);
 
 tp_metadata_handlers_t meta_handlers = {
     .on_data_source_announce = on_announce,
@@ -418,8 +461,8 @@ tp_metadata_handlers_t meta_handlers = {
     .on_data_source_meta_end = on_meta_end,
     .clientd = NULL
 };
-tp_client_set_metadata_handlers(&client, &meta_handlers, 10);
-tp_client_do_work(&client);
+tp_client_set_metadata_handlers(client, &meta_handlers, 10);
+tp_client_do_work(client);
 
 // Example metadata publish + cache.
 uint32_t fmt = 1;
@@ -433,11 +476,11 @@ tp_data_source_meta_t meta = {
     .attributes = attrs,
     .attribute_count = 1
 };
-tp_producer_send_data_source_meta(&producer, &meta);
-tp_producer_set_data_source_meta(&producer, &meta);
+tp_producer_send_data_source_meta(producer, &meta);
+tp_producer_set_data_source_meta(producer, &meta);
 ```
 
-## 9. Progress
+## 10. Progress
 
 ```c
 tp_frame_progress_t progress = {
@@ -447,14 +490,14 @@ tp_frame_progress_t progress = {
     .payload_bytes_filled = bytes,
     .state = TP_PROGRESS_STARTED
 };
-tp_producer_offer_progress(&producer, &progress);
+tp_producer_offer_progress(producer, &progress);
 
 tp_progress_handlers_t progress_handlers = {
     .on_progress = on_progress,
     .clientd = NULL
 };
 tp_progress_poller_t progress_poller;
-tp_progress_poller_init(&progress_poller, &client, &progress_handlers);
+tp_progress_poller_init(&progress_poller, client, &progress_handlers);
 tp_progress_poll(&progress_poller, 10);
 ```
 
@@ -477,7 +520,7 @@ tp_consumer_manager_set_payload_fallback_uri(&manager, "aeron:udp?endpoint=10.0.
 tp_consumer_manager_set_force_no_shm(&manager, true);
 ```
 
-## 10. MergeMap and JoinBarrier
+## 11. MergeMap and JoinBarrier
 
 MergeMap announcements are control-plane messages. Apply them to a JoinBarrier and use
 JoinBarrier readiness to gate processing attempts. You can either decode/apply manually or let
@@ -568,15 +611,55 @@ tp_control_handlers_t handlers = {
     .clientd = NULL
 };
 tp_control_poller_t control_poller;
-tp_control_poller_init(&control_poller, &client, &handlers);
+tp_control_poller_init(&control_poller, client, &handlers);
 ```
 
-## 11. Error Semantics
+## 12. Consumer Manager + Fallback (Producer Side)
+
+Consumer manager is embedded in producers and handles `ConsumerHello` → `ConsumerConfig` for per-consumer streams. Enable it when you want
+the producer to respond to hello/config flow:
+
+```c
+tp_producer_enable_consumer_manager(producer, 128);
+```
+
+Fallback decisions (force no-SHM, fallback URI, per-consumer streams) are policy-driven by the supervisor/driver configuration. Consumers read
+`tp_consumer_uses_shm` and `tp_consumer_payload_fallback_uri` after receiving `ConsumerConfig`.
+
+## 13. Error Semantics
 
 - `init/close/poll` APIs return `0` on success and `-1` on error.
 - Offer/claim/queue functions return `>= 0` on success (position/seq) or negative backpressure/admin codes (`TP_BACK_PRESSURED`, `TP_NOT_CONNECTED`, `TP_ADMIN_ACTION`, `TP_CLOSED`).
 
-## 12. Tools
+## 14. Direct SHM (No Driver)
+
+In no-driver mode, create or map SHM regions directly and attach with explicit configs.
+
+```c
+tp_producer_t *producer = NULL;
+tp_producer_context_t prod_ctx;
+tp_producer_context_init(&prod_ctx);
+prod_ctx.stream_id = 10000;
+prod_ctx.producer_id = 1;
+prod_ctx.use_driver = false;
+
+tp_producer_init(&producer, client, &prod_ctx);
+tp_producer_config_t producer_cfg = {
+    .stream_id = 10000,
+    .producer_id = 1,
+    .epoch = 1,
+    .layout_version = TP_LAYOUT_VERSION,
+    .header_nslots = 1024,
+    .header_uri = "shm:file?path=/dev/shm/tensorpool-user/default/10000/1/header.ring",
+    .pools = pools,
+    .pool_count = pool_count
+};
+tp_producer_attach(producer, &producer_cfg);
+```
+
+Use `tp_shm_create` to create and validate canonical SHM layouts for tests.
+
+## 15. Tools
 
 - `tp_control_listen`: Inspect control/metadata/qos streams with text or JSON output. Use `--raw` / `--raw-out` to dump hex fragments for offline decoding.
 - `tp_descriptor_listen`: Inspect descriptor stream traffic (FrameDescriptor) with JSON or raw output. Useful for verifying producer publish behavior without SHM mapping.

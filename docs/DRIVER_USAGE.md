@@ -27,6 +27,45 @@ TP_LOG_LEVEL=4 ./build/tp_driver config/driver_integration_example.toml
 
 Log levels are integers (0=ERROR .. 4=TRACE).
 
+To override the Aeron directory for embedded Media Driver or shared Aeron clients:
+
+```
+export AERON_DIR=/dev/shm/aeron-dgamroth
+```
+
+## Embedding the Driver (Library API)
+
+Use the C driver API when you want to embed the driver into another process:
+
+```c
+tp_driver_config_t config;
+tp_driver_t driver;
+
+tp_driver_config_init(&config);
+tp_driver_config_load(&config, "config/driver_integration_example.toml");
+
+tp_driver_init(&driver, &config);
+tp_driver_start(&driver);
+
+while (running)
+{
+    tp_driver_do_work(&driver);
+}
+
+tp_driver_close(&driver);
+```
+
+To run the driver in an agent loop (Aeron-style), use `tp_driver_agent`:
+
+```c
+tp_driver_agent_t agent;
+tp_driver_agent_init(&agent, &driver, 1000000ULL);
+tp_driver_agent_start(&agent);
+// ... later ...
+tp_driver_agent_stop(&agent);
+tp_driver_agent_close(&agent);
+```
+
 ## Config File
 
 The driver reads TOML configuration (see `config/driver_integration_example.toml`).
@@ -84,6 +123,37 @@ Key sections:
 - `force_mode`: override consumer mode (0 = no override).
 - `payload_fallback_uri`: optional fallback URI for non-SHM consumers.
 
+## Discovery Service (Optional)
+
+The discovery service can run as a standalone daemon or embedded service:
+
+```
+./build/tp_discoveryd config/discovery_integration_example.toml
+```
+
+Query discovery results with:
+
+```
+./build/tp_discovery_query /dev/shm/aeron-dgamroth "aeron:ipc?term-length=4m" 9000
+```
+
+Embedding:
+
+```c
+tp_discovery_service_config_t config;
+tp_discovery_service_t service;
+
+tp_discovery_service_config_init(&config);
+tp_discovery_service_config_load(&config, "config/discovery_integration_example.toml");
+tp_discovery_service_init(&service, &config);
+tp_discovery_service_start(&service);
+
+while (running)
+{
+    tp_discovery_service_do_work(&service);
+}
+```
+
 ## Canonical SHM Layout
 
 The driver MUST create backing files using the canonical layout:
@@ -109,6 +179,35 @@ shm:file?path=/dev/shm/tensorpool-USER/default/10000/123456/header.ring|require_
 - Lease revocations are reported with `ShmLeaseRevoked` before any epoch bump announce.
 - The driver assigns `nodeId` per lease when `desiredNodeId` is not provided. Node IDs are unique among active leases and obey reuse cooldown.
 
+## Per-Consumer Streams (Supervisor)
+
+When `per_consumer_enabled=true`, the supervisor assigns unique descriptor/control streams to each consumer via `ConsumerConfig`.
+Set the base/range in `[supervisor]` and ensure they do not overlap with shared streams.
+
+Example (per-consumer enable):
+
+```
+[supervisor]
+per_consumer_enabled = true
+per_consumer_descriptor_base = 31000
+per_consumer_descriptor_range = 100
+per_consumer_control_base = 32000
+per_consumer_control_range = 100
+```
+
+Consumers remain subscribed to the shared control stream for non-FrameProgress control-plane messages; per-consumer control streams carry FrameProgress only.
+
+## Dynamic Streams
+
+Allow dynamic stream creation by setting:
+
+```
+[policies]
+allow_dynamic_streams = true
+```
+
+Clients then use `publishMode=EXISTING_OR_CREATE` in `ShmAttachRequest` to create new streams within `stream_id_range`.
+
 ## Example: Driver Mode Exchange
 
 Run the driver, then a consumer and producer:
@@ -120,3 +219,10 @@ Run the driver, then a consumer and producer:
 ```
 
 The consumer should log frames with `seq` values 0..15.
+
+## Tools
+
+- `tp_control_listen`: Inspect control/metadata/qos streams with text or JSON output.
+- `tp_descriptor_listen`: Inspect descriptor stream traffic.
+- `tp_shm_inspect`: Inspect SHM superblocks and headers for a given region.
+- `tp_shm_create`: Create a canonical SHM layout for no-driver testing.
