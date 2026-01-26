@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
-AERON_TENSORPOOL_DIR="${AERON_TENSORPOOL_DIR:-$ROOT_DIR/../AeronTensorPool.jl}"
 
 if [[ -z "${AERON_DIR:-}" ]]; then
   if [[ -d "/dev/shm/aeron-dgamroth" ]]; then
@@ -39,23 +38,11 @@ MAX_FRAMES="${MAX_FRAMES:-1}"
 PRODUCER_FRAMES="${PRODUCER_FRAMES:-$MAX_FRAMES}"
 
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
-CONFIG_FALLBACK="$AERON_TENSORPOOL_DIR/config/driver_integration_example.toml"
 DRIVER_CONFIG="${DRIVER_CONFIG:-$CONFIG_DEFAULT}"
-DRIVER_SCRIPT=""
 
 if [[ ! -f "$DRIVER_CONFIG" ]]; then
-  if [[ -f "$CONFIG_FALLBACK" ]]; then
-    DRIVER_CONFIG="$CONFIG_FALLBACK"
-  else
-    echo "Driver config not found: $DRIVER_CONFIG" >&2
-    exit 1
-  fi
-fi
-
-if [[ -n "${DRIVER_SCRIPT_OVERRIDE:-}" ]]; then
-  DRIVER_SCRIPT="$DRIVER_SCRIPT_OVERRIDE"
-else
-  DRIVER_SCRIPT="$AERON_TENSORPOOL_DIR/scripts/run_driver.jl"
+  echo "Driver config not found: $DRIVER_CONFIG" >&2
+  exit 1
 fi
 
 if [[ -z "$STREAM_ID" ]]; then
@@ -73,29 +60,17 @@ STREAM_ID="${STREAM_ID:-10000}"
 
 PRODUCER_BIN="$BUILD_DIR/tp_example_producer_driver"
 CONSUMER_BIN="$BUILD_DIR/tp_example_consumer_driver"
+DRIVER_BIN="${DRIVER_BIN:-$BUILD_DIR/tp_driver}"
+DRIVER_LOG="${DRIVER_LOG:-/tmp/tp_driver_c.log}"
 
 if [[ ! -x "$PRODUCER_BIN" || ! -x "$CONSUMER_BIN" ]]; then
   echo "Missing binaries. Build first: cmake --build $BUILD_DIR" >&2
   exit 1
 fi
 
-if [[ ! -d "$AERON_TENSORPOOL_DIR" ]]; then
-  echo "AeronTensorPool.jl not found at $AERON_TENSORPOOL_DIR" >&2
+if [[ ! -x "$DRIVER_BIN" ]]; then
+  echo "Missing driver binary: $DRIVER_BIN" >&2
   exit 1
-fi
-
-if ! command -v julia >/dev/null 2>&1; then
-  echo "julia not found in PATH" >&2
-  exit 1
-fi
-
-launch_media_driver="${LAUNCH_MEDIA_DRIVER:-}"
-if [[ -z "$launch_media_driver" ]]; then
-  if [[ -f "$AERON_DIR/CnC.dat" || -f "$AERON_DIR/cnc.dat" ]]; then
-    launch_media_driver="false"
-  else
-    launch_media_driver="true"
-  fi
 fi
 
 cleanup() {
@@ -107,11 +82,7 @@ cleanup() {
 trap cleanup EXIT
 
 AERON_DIR="$AERON_DIR" \
-TP_CONTROL_CHANNEL="$CONTROL_CHANNEL" \
-TP_CONTROL_STREAM_ID="1000" \
-LAUNCH_MEDIA_DRIVER="$launch_media_driver" \
-  julia --project="$AERON_TENSORPOOL_DIR" \
-  "$DRIVER_SCRIPT" "$DRIVER_CONFIG" &
+  "$DRIVER_BIN" -c "$DRIVER_CONFIG" >"$DRIVER_LOG" 2>&1 &
 
 driver_pid=$!
 

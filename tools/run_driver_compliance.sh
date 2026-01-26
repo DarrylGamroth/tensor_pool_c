@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
-AERON_TENSORPOOL_DIR="${AERON_TENSORPOOL_DIR:-$ROOT_DIR/../AeronTensorPool.jl}"
 RUNNER="$ROOT_DIR/tools/run_driver_examples.sh"
 
 if [[ -z "${AERON_DIR:-}" ]]; then
@@ -34,23 +33,11 @@ fi
 READY_CONSUMER_ID_BASE="${READY_CONSUMER_ID_BASE:-$(( (CONSUMER_ID + 1000) & 0xffffffff ))}"
 
 CONFIG_DEFAULT="$ROOT_DIR/config/driver_integration_example.toml"
-CONFIG_FALLBACK="$AERON_TENSORPOOL_DIR/config/driver_integration_example.toml"
 DRIVER_CONFIG="${DRIVER_CONFIG:-$CONFIG_DEFAULT}"
-DRIVER_SCRIPT=""
 
 if [[ ! -f "$DRIVER_CONFIG" ]]; then
-  if [[ -f "$CONFIG_FALLBACK" ]]; then
-    DRIVER_CONFIG="$CONFIG_FALLBACK"
-  else
-    echo "Driver config not found: $DRIVER_CONFIG" >&2
-    exit 1
-  fi
-fi
-
-if [[ -n "${DRIVER_SCRIPT_OVERRIDE:-}" ]]; then
-  DRIVER_SCRIPT="$DRIVER_SCRIPT_OVERRIDE"
-else
-  DRIVER_SCRIPT="$AERON_TENSORPOOL_DIR/scripts/run_driver.jl"
+  echo "Driver config not found: $DRIVER_CONFIG" >&2
+  exit 1
 fi
 
 if [[ -z "$STREAM_ID" ]]; then
@@ -71,16 +58,6 @@ CONSUMER_BIN="$BUILD_DIR/tp_example_consumer_driver"
 
 if [[ ! -x "$PRODUCER_BIN" || ! -x "$CONSUMER_BIN" ]]; then
   echo "Missing binaries. Build first: cmake --build $BUILD_DIR" >&2
-  exit 1
-fi
-
-if [[ ! -d "$AERON_TENSORPOOL_DIR" ]]; then
-  echo "AeronTensorPool.jl not found at $AERON_TENSORPOOL_DIR" >&2
-  exit 1
-fi
-
-if ! command -v julia >/dev/null 2>&1; then
-  echo "julia not found in PATH" >&2
   exit 1
 fi
 
