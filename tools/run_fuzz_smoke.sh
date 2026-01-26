@@ -32,9 +32,10 @@ fi
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}"
 cmake --build "$BUILD_DIR"
 
-"$BUILD_DIR"/tp_fuzz_seed_gen
+mkdir -p "$CORPUS_DIR"
+"$BUILD_DIR"/tp_fuzz_seed_gen -o "$CORPUS_DIR"
 if [[ -x "$BUILD_DIR/tp_fuzz_seed_gen_discovery" ]]; then
-    "$BUILD_DIR"/tp_fuzz_seed_gen_discovery
+    "$BUILD_DIR"/tp_fuzz_seed_gen_discovery -o "$CORPUS_DIR"
 fi
 
 TMP_CORPUS_DIR="$BUILD_DIR/corpus-smoke"
