@@ -1,4 +1,5 @@
 #include "tensor_pool/internal/tp_client_conductor.h"
+#include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/tp_context.h"
 
 #include "aeronc.h"
@@ -127,6 +128,84 @@ cleanup:
     assert(result == 0);
 }
 
+static int tp_test_client_agent_mode(const char *aeron_dir, bool use_invoker, bool expect_agent)
+{
+    tp_context_t *context = NULL;
+    tp_client_t *client = NULL;
+    int result = -1;
+
+    if (tp_context_init(&context) != 0)
+    {
+        goto cleanup;
+    }
+
+    tp_context_set_aeron_dir(context, aeron_dir);
+    tp_context_set_default_channels(context, "aeron:ipc", 1001);
+    tp_context_set_use_agent_invoker(context, use_invoker);
+
+    if (tp_client_init(&client, context) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_client_start(client) < 0)
+    {
+        goto cleanup;
+    }
+    if ((client->agent != NULL) != expect_agent)
+    {
+        goto cleanup;
+    }
+    if (tp_client_do_work(client) < 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    tp_client_close(client);
+    tp_context_close(context);
+    return result;
+}
+
+static void test_client_agent_modes(void)
+{
+    char default_dir[AERON_MAX_PATH];
+    const char *aeron_dir = getenv("AERON_DIR");
+    int result = -1;
+
+    default_dir[0] = '\0';
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        if (aeron_default_path(default_dir, sizeof(default_dir)) >= 0 && default_dir[0] != '\0')
+        {
+            aeron_dir = default_dir;
+        }
+    }
+    if (NULL == aeron_dir || aeron_dir[0] == '\0')
+    {
+        return;
+    }
+    if (!tp_test_driver_active(aeron_dir))
+    {
+        return;
+    }
+
+    if (tp_test_client_agent_mode(aeron_dir, true, false) != 0)
+    {
+        goto cleanup;
+    }
+    if (tp_test_client_agent_mode(aeron_dir, false, true) != 0)
+    {
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    assert(result == 0);
+}
+
 static void test_client_conductor_errors(void)
 {
     tp_client_conductor_t conductor;
@@ -161,4 +240,5 @@ void tp_test_client_conductor_lifecycle(void)
 {
     test_client_conductor_lifecycle();
     test_client_conductor_errors();
+    test_client_agent_modes();
 }

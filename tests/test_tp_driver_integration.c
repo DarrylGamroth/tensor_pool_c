@@ -5,6 +5,7 @@
 #include "tensor_pool/tp_client.h"
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_driver.h"
+#include "tensor_pool/driver/tp_driver_agent.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_control.h"
 #include "tensor_pool/tp_discovery_service.h"
@@ -1215,6 +1216,147 @@ cleanup:
     if (result != 0)
     {
         fprintf(stderr, "tp_test_driver_async_attach_wrappers failed at step %d: %s\n", step, tp_errmsg());
+    }
+
+    assert(result == 0);
+}
+
+void tp_test_driver_blocking_attach_wrappers(void)
+{
+    tp_driver_config_t driver_config;
+    tp_driver_t driver;
+    tp_driver_agent_t driver_agent;
+    tp_context_t *ctx = NULL;
+    tp_client_t *client = NULL;
+    tp_driver_client_t *driver_client = NULL;
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+    int result = -1;
+    int step = 0;
+    int driver_agent_started = 0;
+
+    memset(&driver, 0, sizeof(driver));
+    memset(&request, 0, sizeof(request));
+    memset(&info, 0, sizeof(info));
+
+    if (tp_driver_config_init(&driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_config_load(&driver_config, "../config/driver_integration_example.toml") < 0)
+    {
+        goto cleanup;
+    }
+    strncpy(driver_config.shm_namespace, "test-blocking", sizeof(driver_config.shm_namespace) - 1);
+
+    if (tp_driver_init(&driver, &driver_config) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_start(&driver) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_agent_init(&driver_agent, &driver, 1000000ULL) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_driver_agent_start(&driver_agent) < 0)
+    {
+        tp_driver_agent_close(&driver_agent);
+        goto cleanup;
+    }
+    driver_agent_started = 1;
+
+    if (tp_context_init(&ctx) < 0)
+    {
+        goto cleanup;
+    }
+    tp_context_set_use_agent_invoker(ctx, true);
+    tp_context_set_control_channel(
+        ctx,
+        tp_context_get_control_channel(driver.config.base),
+        tp_context_get_control_stream_id(driver.config.base));
+    tp_context_set_announce_channel(
+        ctx,
+        tp_context_get_announce_channel(driver.config.base),
+        tp_context_get_announce_stream_id(driver.config.base));
+    tp_context_set_descriptor_channel(
+        ctx,
+        tp_context_get_descriptor_channel(driver.config.base),
+        tp_context_get_descriptor_stream_id(driver.config.base));
+    tp_context_set_qos_channel(
+        ctx,
+        tp_context_get_qos_channel(driver.config.base),
+        tp_context_get_qos_stream_id(driver.config.base));
+    tp_context_set_metadata_channel(
+        ctx,
+        tp_context_get_metadata_channel(driver.config.base),
+        tp_context_get_metadata_stream_id(driver.config.base));
+
+    if (tp_client_init(&client, ctx) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_client_start(client) < 0)
+    {
+        goto cleanup;
+    }
+    {
+        static const char *allowed_paths[] = { "/dev/shm", "/tmp" };
+        tp_context_set_allowed_paths(ctx, allowed_paths, 2);
+    }
+    if (tp_context_finalize_allowed_paths(ctx) < 0)
+    {
+        goto cleanup;
+    }
+    if (tp_context_allowed_paths(ctx)->canonical_length == 0)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_test_driver_blocking_attach_wrappers: allowed paths not configured");
+        goto cleanup;
+    }
+
+    if (tp_driver_client_init(&driver_client, client) < 0)
+    {
+        goto cleanup;
+    }
+
+    request.stream_id = 10000;
+    request.client_id = 0;
+    request.role = tensor_pool_role_PRODUCER;
+    request.expected_layout_version = TP_LAYOUT_VERSION;
+    request.publish_mode = tensor_pool_publishMode_EXISTING_OR_CREATE;
+    request.require_hugepages = 0;
+    request.desired_node_id = 0;
+
+    step = 1;
+    if (tp_driver_attach(driver_client, &request, &info, 5 * 1000 * 1000 * 1000LL) < 0)
+    {
+        goto cleanup;
+    }
+    if (info.code != tensor_pool_responseCode_OK)
+    {
+        TP_SET_ERR(EINVAL, "tp_test_driver_blocking_attach_wrappers: attach failed: %s", info.error_message);
+        goto cleanup;
+    }
+
+    result = 0;
+
+cleanup:
+    tp_driver_attach_info_close(&info);
+    if (driver_agent_started)
+    {
+        tp_driver_agent_stop(&driver_agent);
+        tp_driver_agent_close(&driver_agent);
+    }
+    tp_driver_client_close(driver_client);
+    tp_client_close(client);
+    tp_context_close(ctx);
+    tp_driver_close(&driver);
+
+    if (result != 0)
+    {
+        fprintf(stderr, "tp_test_driver_blocking_attach_wrappers failed at step %d: %s\n", step, tp_errmsg());
     }
 
     assert(result == 0);

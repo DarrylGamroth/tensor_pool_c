@@ -1138,6 +1138,19 @@ cleanup:
     assert(result == 0);
 }
 
+static void test_driver_attach_errors(void)
+{
+    tp_driver_attach_request_t request;
+    tp_driver_attach_info_t info;
+
+    memset(&request, 0, sizeof(request));
+    memset(&info, 0, sizeof(info));
+
+    assert(tp_driver_attach(NULL, &request, &info, 0) < 0);
+    assert(tp_driver_attach((tp_driver_client_t *)1, NULL, &info, 0) < 0);
+    assert(tp_driver_attach((tp_driver_client_t *)1, &request, NULL, 0) < 0);
+}
+
 void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
@@ -1165,4 +1178,5 @@ void tp_test_driver_client_decoders(void)
     test_driver_attach_async_normalizes_ids();
     test_driver_async_accessors();
     test_driver_id_generators();
+    test_driver_attach_errors();
 }

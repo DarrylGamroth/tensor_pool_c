@@ -18,8 +18,10 @@ This checklist is the authoritative mapping from normative requirements (MUST/SH
 - Attach layout-version mismatch is covered in `tests/test_tp_driver_integration.c`.
 - Lease expiry is covered via client-side expiry detection in `tests/test_tp_driver_integration.c`.
 - Producer/consumer async attach wrappers are exercised by `tp_test_driver_async_attach_wrappers` in `tests/test_tp_driver_integration.c`.
+- Blocking driver attach wrapper is exercised by `tp_test_driver_blocking_attach_wrappers` in `tests/test_tp_driver_integration.c`.
 - Config-matrix coverage is exercised in-process via `tests/test_tp_driver_integration.c` (announce-separate + dynamic stream cases).
 - Agent runner behavior is smoke-tested in `tests/test_tp_agent.c`.
+- Client agent-invoker vs background agent behavior is covered in `tests/test_tp_client_conductor.c` (agent mode checks).
 - Coverage and fuzz smoke runs should be executed for new driver/supervisor/integration code paths (CI jobs: `coverage`, `fuzz-smoke`).
 
 ## Config-Matrix Integration Tests

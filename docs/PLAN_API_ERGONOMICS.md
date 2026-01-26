@@ -110,13 +110,13 @@ clear lifecycle semantics and consistent naming.
 
 ## Phase 6: Tests + Traceability
 - [x] Add tests for new async + poll functions (success, timeout, error paths).
-- [ ] Add tests for blocking convenience wrappers.
+- [x] Add tests for blocking convenience wrappers.
 - [x] Update requirements-to-tests checklist with new API and lifecycle coverage.
-- [ ] Add integration coverage for client-conductor agent invoker vs thread.
+- [x] Add integration coverage for client-conductor agent invoker vs thread.
 
 ## Phase 7: Breaking Changes
-- [ ] No backwards compatibility: remove or rename old APIs directly.
-- [ ] Provide a migration guide with old→new mapping.
+- [x] No backwards compatibility: remove or rename old APIs directly.
+- [x] Provide a migration guide with old→new mapping.
 
 ## Open Questions
 - Primary API should mirror Aeron: a single `tp_driver_attach_async` + `tp_driver_attach_poll`
@@ -142,7 +142,8 @@ clear lifecycle semantics and consistent naming.
 - [x] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user docs.
 - [x] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md`.
 - [ ] Expand integration coverage for agent-invoker vs background agent and async wrappers.
-- [ ] Remove/rename old APIs (breaking changes) and add migration guide.
+- [x] Expand integration coverage for agent-invoker vs background agent and async wrappers.
+- [x] Remove/rename old APIs (breaking changes) and add migration guide.
 
 ## Latest Runs
 - Tests: `ctest --test-dir build --output-on-failure` (2026-01-25).
