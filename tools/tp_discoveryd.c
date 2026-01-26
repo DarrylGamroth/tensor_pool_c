@@ -123,13 +123,21 @@ int main(int argc, char **argv)
     signal(SIGINT, tp_discovery_handle_signal);
     signal(SIGTERM, tp_discovery_handle_signal);
 
+    tp_agent_idle_strategy_config_t idle_config;
+    idle_config.sleep_ns = 1000000ULL;
+    idle_config.max_spins = 0;
+    idle_config.max_yields = 0;
+    idle_config.min_park_period_ns = 0;
+    idle_config.max_park_period_ns = 0;
+
     if (tp_agent_runner_init(
             &agent,
             "tp-discovery",
             &service,
             (tp_agent_do_work_func_t)tp_discovery_service_do_work,
             NULL,
-            1000000ULL) < 0)
+            TP_AGENT_IDLE_SLEEPING,
+            &idle_config) < 0)
     {
         fprintf(stderr, "Discovery agent init failed: %s\n", tp_errmsg());
         tp_discovery_service_close(&service);

@@ -1,6 +1,7 @@
 #ifndef TENSOR_POOL_TP_HANDLES_H
 #define TENSOR_POOL_TP_HANDLES_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -16,10 +17,13 @@ typedef struct tp_async_add_subscription_stct tp_async_add_subscription_t;
 const char *tp_publication_channel(const tp_publication_t *publication);
 int32_t tp_publication_stream_id(const tp_publication_t *publication);
 int64_t tp_publication_channel_status(const tp_publication_t *publication);
+bool tp_publication_is_connected(const tp_publication_t *publication);
 
 const char *tp_subscription_channel(const tp_subscription_t *subscription);
 int32_t tp_subscription_stream_id(const tp_subscription_t *subscription);
 int64_t tp_subscription_channel_status(const tp_subscription_t *subscription);
+int tp_subscription_image_count(const tp_subscription_t *subscription);
+bool tp_subscription_is_connected(const tp_subscription_t *subscription);
 
 #ifdef __cplusplus
 }

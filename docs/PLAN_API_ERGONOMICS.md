@@ -145,6 +145,6 @@ clear lifecycle semantics and consistent naming.
 - [ ] Remove/rename old APIs (breaking changes) and add migration guide.
 
 ## Latest Runs
-- Tests: `ctest --test-dir build --output-on-failure`.
+- Tests: `ctest --test-dir build --output-on-failure` (2026-01-25).
 - Coverage (build-coverage): lines 60.9%, functions 82.6%, branches 49.0% (gcovr warned on negative hits).
 - Fuzz smoke: `tools/run_fuzz_smoke.sh` completed.
