@@ -119,6 +119,7 @@ int tp_client_async_add_publication(
 int tp_client_async_add_publication_poll(
     tp_publication_t **publication,
     tp_async_add_publication_t *async_add);
+int64_t tp_client_async_add_publication_registration_id(const tp_async_add_publication_t *async_add);
 
 int tp_client_async_add_subscription(
     tp_client_t *client,
@@ -128,6 +129,7 @@ int tp_client_async_add_subscription(
 int tp_client_async_add_subscription_poll(
     tp_subscription_t **subscription,
     tp_async_add_subscription_t *async_add);
+int64_t tp_client_async_add_subscription_registration_id(const tp_async_add_subscription_t *async_add);
 
 #ifdef __cplusplus
 }

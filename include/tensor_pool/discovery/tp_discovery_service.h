@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tensor_pool/internal/tp_aeron.h"
+#include "tensor_pool/common/tp_aeron_client.h"
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
 #include "tensor_pool/tp_log.h"

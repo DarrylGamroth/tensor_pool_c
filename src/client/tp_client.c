@@ -11,6 +11,7 @@
 #include "tensor_pool/tp_clock.h"
 #include "tensor_pool/tp_driver_client.h"
 #include "tensor_pool/tp_error.h"
+#include "tensor_pool/tp_types.h"
 #include "tensor_pool/internal/tp_context.h"
 #include "tensor_pool/internal/tp_control_poller.h"
 #include "tensor_pool/internal/tp_metadata_poller.h"
@@ -728,6 +729,16 @@ int tp_client_async_add_publication_poll(
     return tp_client_conductor_async_add_publication_poll(publication, async_add);
 }
 
+int64_t tp_client_async_add_publication_registration_id(const tp_async_add_publication_t *async_add)
+{
+    if (NULL == async_add || NULL == async_add->aeron_async)
+    {
+        return TP_NULL_REGISTRATION_ID;
+    }
+
+    return aeron_async_add_publication_get_registration_id(async_add->aeron_async);
+}
+
 int tp_client_async_add_subscription(
     tp_client_t *client,
     const char *channel,
@@ -748,4 +759,14 @@ int tp_client_async_add_subscription_poll(
     tp_async_add_subscription_t *async_add)
 {
     return tp_client_conductor_async_add_subscription_poll(subscription, async_add);
+}
+
+int64_t tp_client_async_add_subscription_registration_id(const tp_async_add_subscription_t *async_add)
+{
+    if (NULL == async_add || NULL == async_add->aeron_async)
+    {
+        return TP_NULL_REGISTRATION_ID;
+    }
+
+    return aeron_async_add_subscription_get_registration_id(async_add->aeron_async);
 }

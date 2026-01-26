@@ -3,6 +3,7 @@
 #endif
 
 #include "tensor_pool/tp_driver.h"
+#include "tensor_pool/internal/tp_aeron.h"
 
 #include <errno.h>
 #include <inttypes.h>

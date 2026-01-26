@@ -356,6 +356,23 @@ int32_t tp_context_get_metadata_stream_id(const tp_context_t *context)
     return NULL == context ? -1 : context->metadata_stream_id;
 }
 
+int tp_context_set_default_channels(tp_context_t *context, const char *channel, int32_t announce_stream_id)
+{
+    if (NULL == context || NULL == channel)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_context_set_default_channels: invalid input");
+        return -1;
+    }
+
+    tp_context_set_control_channel(context, channel, 1000);
+    tp_context_set_descriptor_channel(context, channel, 1100);
+    tp_context_set_qos_channel(context, channel, 1200);
+    tp_context_set_metadata_channel(context, channel, 1300);
+    tp_context_set_announce_channel(context, channel, announce_stream_id > 0 ? announce_stream_id : 1001);
+
+    return 0;
+}
+
 void tp_context_set_allowed_paths(tp_context_t *context, const char **paths, size_t length)
 {
     if (NULL == context)

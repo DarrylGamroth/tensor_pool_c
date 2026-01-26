@@ -1014,6 +1014,26 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
     return 1;
 }
 
+int64_t tp_driver_attach_async_correlation_id(const tp_async_attach_t *async)
+{
+    if (NULL == async)
+    {
+        return -1;
+    }
+
+    return async->request.correlation_id;
+}
+
+uint32_t tp_driver_attach_async_client_id(const tp_async_attach_t *async)
+{
+    if (NULL == async)
+    {
+        return TP_NULL_U32;
+    }
+
+    return async->request.client_id;
+}
+
 int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out)
 {
     tp_async_detach_t *async = NULL;
@@ -1088,6 +1108,16 @@ int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out
     *out = async->response;
     tp_fragment_assembler_close(&async->assembler);
     return 1;
+}
+
+int64_t tp_driver_detach_async_correlation_id(const tp_async_detach_t *async)
+{
+    if (NULL == async)
+    {
+        return -1;
+    }
+
+    return async->response.correlation_id;
 }
 
 static int tp_driver_send_attach(tp_driver_client_t *client, const tp_driver_attach_request_t *request)

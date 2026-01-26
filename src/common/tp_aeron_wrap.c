@@ -3,7 +3,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-int tp_publication_wrap(tp_publication_t **out, aeron_publication_t *pub)
+static char *tp_aeron_strdup(const char *value)
+{
+    size_t len;
+    char *copy;
+
+    if (NULL == value)
+    {
+        return NULL;
+    }
+
+    len = strlen(value);
+    copy = (char *)malloc(len + 1);
+    if (NULL == copy)
+    {
+        return NULL;
+    }
+
+    memcpy(copy, value, len + 1);
+    return copy;
+}
+
+int tp_publication_wrap(tp_publication_t **out, aeron_publication_t *pub, const char *channel, int32_t stream_id)
 {
     if (NULL == out || NULL == pub)
     {
@@ -19,11 +40,22 @@ int tp_publication_wrap(tp_publication_t **out, aeron_publication_t *pub)
     }
 
     wrapper->aeron = pub;
+    wrapper->stream_id = stream_id;
+    if (channel)
+    {
+        wrapper->channel = tp_aeron_strdup(channel);
+        if (NULL == wrapper->channel)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_publication_wrap: channel alloc failed");
+            free(wrapper);
+            return -1;
+        }
+    }
     *out = wrapper;
     return 0;
 }
 
-int tp_subscription_wrap(tp_subscription_t **out, aeron_subscription_t *sub)
+int tp_subscription_wrap(tp_subscription_t **out, aeron_subscription_t *sub, const char *channel, int32_t stream_id)
 {
     if (NULL == out || NULL == sub)
     {
@@ -39,6 +71,17 @@ int tp_subscription_wrap(tp_subscription_t **out, aeron_subscription_t *sub)
     }
 
     wrapper->aeron = sub;
+    wrapper->stream_id = stream_id;
+    if (channel)
+    {
+        wrapper->channel = tp_aeron_strdup(channel);
+        if (NULL == wrapper->channel)
+        {
+            TP_SET_ERR(ENOMEM, "%s", "tp_subscription_wrap: channel alloc failed");
+            free(wrapper);
+            return -1;
+        }
+    }
     *out = wrapper;
     return 0;
 }
@@ -100,6 +143,8 @@ void tp_publication_close(tp_publication_t **pub)
         (*pub)->aeron = NULL;
     }
 
+    free((*pub)->channel);
+    (*pub)->channel = NULL;
     free(*pub);
     *pub = NULL;
 }
@@ -117,6 +162,8 @@ void tp_subscription_close(tp_subscription_t **sub)
         (*sub)->aeron = NULL;
     }
 
+    free((*sub)->channel);
+    (*sub)->channel = NULL;
     free(*sub);
     *sub = NULL;
 }

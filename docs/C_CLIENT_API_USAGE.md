@@ -27,6 +27,8 @@ tp_context_set_control_channel(ctx, "aeron:ipc", 1000);
 tp_context_set_descriptor_channel(ctx, "aeron:ipc", 1100);
 tp_context_set_qos_channel(ctx, "aeron:ipc", 1200);
 tp_context_set_metadata_channel(ctx, "aeron:ipc", 1300);
+// Or use defaults from docs/STREAM_ID_CONVENTIONS.md:
+// tp_context_set_default_channels(ctx, "aeron:ipc", 1001);
 const char *allowed_paths[] = { "/dev/shm", "/tmp" };
 tp_context_set_allowed_paths(ctx, allowed_paths, 2);
 
@@ -77,6 +79,25 @@ while (running)
     tp_client_do_work(client);
 }
 ```
+
+### 1.2 Async Add + Registration IDs (Aeron-style)
+
+Async add operations return registration IDs once the underlying Aeron command is queued. Use these accessors to correlate lifecycle events:
+
+```c
+tp_async_add_publication_t *async_pub = NULL;
+tp_publication_t *pub = NULL;
+
+tp_client_async_add_publication(client, "aeron:ipc", 1000, &async_pub);
+int64_t reg_id = tp_client_async_add_publication_registration_id(async_pub);
+
+while (tp_client_async_add_publication_poll(&pub, async_pub) == 0)
+{
+    tp_client_do_work(client);
+}
+```
+
+Registration IDs return `TP_NULL_REGISTRATION_ID` until Aeron assigns one.
 
 ## 2. Discovery → Consumer (Driver Model)
 
@@ -192,6 +213,7 @@ Notes:
 - Driver assigns `nodeId` when `desiredNodeId` is not specified; this is available in `tp_driver_attach_info_t.node_id`.
 - `tp_frame_metadata_t.timestamp_ns` is capture time for `SlotHeader.timestamp_ns`. If it is `0` or `TP_NULL_U64`, the producer fills `SlotHeader.timestamp_ns` with `tp_clock_now_ns()`.
 - `FrameDescriptor.timestamp_ns` is null by default. Enable publish-time timestamps with `tp_producer_context_set_publish_descriptor_timestamp(&prod_ctx, true)` when needed.
+- For async driver attach, the correlation ID is available via `tp_driver_attach_async_correlation_id`.
 
 ## 5. Zero-Copy Try-Claim
 

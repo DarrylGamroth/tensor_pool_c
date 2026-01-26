@@ -56,29 +56,28 @@ clear lifecycle semantics and consistent naming.
 - [x] Add `tp_client_main_do_work` wrapper to match Aeron `aeron_main_do_work`.
 
 ## Phase 3: Naming & Consistency Pass
-- [ ] Standardize naming across public API:
+- [x] Standardize naming across public API:
   - `*_context_*` for lifecycle config, `*_config_*` for per-attach inputs.
   - `require_*` for validation requirements, `use_*` for runtime toggles.
   - `*_offer`, `*_try_claim`, `*_commit`, `*_poll` aligned with Aeron.
-- [ ] Align error messages and return codes with Aeron conventions.
-- [ ] Add consistent lifecycle APIs (`*_close`) and ownership rules for all public objects.
-- [ ] Add `*_constants` accessors (publication/subscription) to expose channel/stream metadata
+- [x] Align error messages and return codes with Aeron conventions.
+- [x] Add consistent lifecycle APIs (`*_close`) and ownership rules for all public objects.
+- [x] Add `*_constants` accessors (publication/subscription) to expose channel/stream metadata
   without leaking Aeron types.
-- [ ] Expose idle strategy configuration for `tp_agent_runner` (sleep/yield/busy).
-- [ ] Add `*_get_registration_id` accessors for async operations (Aeron-style).
-- [ ] Standardize poll return semantics to `0/1/-1` across all pollers and async helpers.
-- [ ] Add minimal client defaults API to avoid repeated channel setup (Aeron sample-style).
-- [ ] Add `*_get_registration_id` for all async operations (driver attach/detach, discovery attach, etc).
+- [x] Expose idle strategy configuration for `tp_agent_runner` (sleep/yield/busy).
+- [x] Add async registration/correlation accessors (Aeron-style).
+- [x] Standardize async poll return semantics to `0/1/-1`; fragment pollers return fragment counts.
+- [x] Add minimal client defaults API to avoid repeated channel setup (Aeron sample-style).
 
 ## Phase 4: Public vs Private Header Refactor
-- [ ] Move internal-only headers out of `include/tensor_pool`:
+- [x] Move internal-only headers out of `include/tensor_pool` (now under `src/internal`):
   - `tp_client_conductor.h`, `tp_client_conductor_agent.h`
   - `tp_aeron.h` (client wrapper)
   - `tp_consumer_manager.h`, `tp_consumer_registry.h`
   - `tp_control_adapter.h`, `tp_control_poller.h`
   - `tp_metadata_poller.h`, `tp_progress_poller.h`, `tp_qos.h`
-- [ ] Update `tp.h` to only include public headers.
-- [ ] Update CMake install/export lists to expose public headers only.
+- [x] Update `tp.h` to only include public headers.
+- [x] Update CMake install/export lists to expose public headers only.
 
 ## Public vs Private Inventory (Aeron-style)
 
@@ -95,11 +94,19 @@ clear lifecycle semantics and consistent naming.
 - Direct use of `aeron_*` types in public headers
 
 ## Phase 5: Migration & Examples
-- [ ] Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
+- [x] Merge `docs/HELPER_API_DRAFT.md` into this plan and remove the standalone draft.
 - [ ] Update examples to use the new public API names and async + poll patterns.
 - [ ] Update `docs/C_CLIENT_API_USAGE.md` to highlight the async model first.
 - [ ] Update `docs/AERON_LIKE_API_PROPOSAL.md` to reflect the new public API.
 - [ ] Add a migration table old→new API names (no backward compatibility).
+
+### Helper API Candidates (merged)
+- Driver attach config helpers: `tp_driver_attach_producer_config`, `tp_driver_attach_consumer_config`.
+- Driver detach helper: `tp_driver_detach_active`.
+- Producer/consumer attach wrappers: `tp_producer_attach_driver_async/poll`, `tp_consumer_attach_driver_async/poll`.
+- Optional blocking wrappers: `tp_producer_attach_driver`, `tp_consumer_attach_driver`.
+- Client defaults: `tp_context_set_default_channels` (standard streams from `docs/STREAM_ID_CONVENTIONS.md`).
+- Connection wait helpers: `tp_publication_wait_connected`, `tp_subscription_wait_connected`.
 
 ## Phase 6: Tests + Traceability
 - [x] Add tests for new async + poll functions (success, timeout, error paths).
@@ -119,7 +126,7 @@ clear lifecycle semantics and consistent naming.
 
 ## Checklist (Tracking)
 - [x] Opaque handles for `tp_client_t`, `tp_producer_t`, `tp_consumer_t`, `tp_driver_client_t`.
-- [x] Internal struct definitions moved to `include/tensor_pool/internal/` headers.
+- [x] Internal struct definitions moved to `src/internal/` headers.
 - [x] Public accessors for producer/consumer/driver handles.
 - [x] `tp_client_start` starts a conductor agent when `use_agent_invoker` is false.
 - [x] Update examples/tools/tests to use pointer-based opaque APIs.
@@ -128,12 +135,12 @@ clear lifecycle semantics and consistent naming.
 - [x] Run coverage + fuzzing for the new API work and record results.
 - [x] Add async + poll attach APIs for producer/consumer and align naming.
 - [x] Decide and implement `tp_context_t` opaque lifecycle and context getters.
-- [ ] Standardize poll return semantics (`0/1/-1`) across all pollers/helpers.
-- [ ] Add registration-id accessors for all async operations.
-- [ ] Add minimal client defaults API (Aeron sample-style).
-- [ ] Move internal-only headers out of public install surface and update `tp.h`.
-- [ ] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user docs.
-- [ ] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md`.
+- [x] Standardize async poll return semantics (`0/1/-1`) across async helpers.
+- [x] Add registration/correlation accessors for async operations.
+- [x] Add minimal client defaults API (Aeron sample-style).
+- [x] Move internal-only headers out of public install surface and update `tp.h`.
+- [x] Merge `docs/HELPER_API_DRAFT.md` into this plan and update user docs.
+- [x] Update `docs/C_CLIENT_API_USAGE.md` and `docs/AERON_LIKE_API_PROPOSAL.md`.
 - [ ] Expand integration coverage for agent-invoker vs background agent and async wrappers.
 - [ ] Remove/rename old APIs (breaking changes) and add migration guide.
 

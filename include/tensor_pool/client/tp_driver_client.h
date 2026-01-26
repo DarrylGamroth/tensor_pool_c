@@ -143,9 +143,12 @@ int tp_driver_attach_async(
     const tp_driver_attach_request_t *request,
     tp_async_attach_t **out);
 int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out);
+int64_t tp_driver_attach_async_correlation_id(const tp_async_attach_t *async);
+uint32_t tp_driver_attach_async_client_id(const tp_async_attach_t *async);
 
 int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out);
 int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out);
+int64_t tp_driver_detach_async_correlation_id(const tp_async_detach_t *async);
 
 int tp_driver_attach(
     tp_driver_client_t *client,

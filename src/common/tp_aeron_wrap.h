@@ -22,11 +22,15 @@ tp_async_status_t;
 struct tp_publication_stct
 {
     aeron_publication_t *aeron;
+    char *channel;
+    int32_t stream_id;
 };
 
 struct tp_subscription_stct
 {
     aeron_subscription_t *aeron;
+    char *channel;
+    int32_t stream_id;
 };
 
 struct tp_fragment_assembler_stct
@@ -58,8 +62,8 @@ struct tp_async_add_subscription_stct
     struct tp_async_add_subscription_stct *next;
 };
 
-int tp_publication_wrap(tp_publication_t **out, aeron_publication_t *pub);
-int tp_subscription_wrap(tp_subscription_t **out, aeron_subscription_t *sub);
+int tp_publication_wrap(tp_publication_t **out, aeron_publication_t *pub, const char *channel, int32_t stream_id);
+int tp_subscription_wrap(tp_subscription_t **out, aeron_subscription_t *sub, const char *channel, int32_t stream_id);
 int tp_fragment_assembler_wrap(tp_fragment_assembler_t **out, aeron_fragment_assembler_t *assembler);
 int tp_fragment_assembler_create(tp_fragment_assembler_t **out, aeron_fragment_handler_t handler, void *clientd);
 

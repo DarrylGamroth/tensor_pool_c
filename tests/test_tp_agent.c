@@ -26,8 +26,19 @@ static void test_agent_runner_manual(void)
     tp_test_agent_state_t state = {0};
     tp_agent_runner_t *runner = NULL;
     int work = 0;
+    tp_agent_idle_strategy_config_t config;
 
-    assert(tp_agent_runner_init(&runner, "tp-test-agent", &state, tp_test_agent_do_work, NULL, 1000) == 0);
+    memset(&config, 0, sizeof(config));
+    config.sleep_ns = 1000;
+
+    assert(tp_agent_runner_init(
+        &runner,
+        "tp-test-agent",
+        &state,
+        tp_test_agent_do_work,
+        NULL,
+        TP_AGENT_IDLE_SLEEPING,
+        &config) == 0);
     work = tp_agent_runner_do_work(runner);
     assert(work == 1);
     tp_agent_runner_idle(runner, work);

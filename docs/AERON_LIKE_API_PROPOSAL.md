@@ -46,6 +46,7 @@ void tp_context_set_control_channel(tp_context_t *ctx, const char *channel, int3
 void tp_context_set_descriptor_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_context_set_qos_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
 void tp_context_set_metadata_channel(tp_context_t *ctx, const char *channel, int32_t stream_id);
+int tp_context_set_default_channels(tp_context_t *ctx, const char *channel, int32_t announce_stream_id);
 void tp_context_set_driver_timeout_ns(tp_context_t *ctx, uint64_t value);
 void tp_context_set_keepalive_interval_ns(tp_context_t *ctx, uint64_t value);
 void tp_context_set_idle_sleep_duration_ns(tp_context_t *ctx, uint64_t value);
@@ -72,26 +73,34 @@ int tp_client_async_add_publication(
     tp_client_t *client,
     const char *channel,
     int32_t stream_id,
-    aeron_async_add_publication_t **out);
+    tp_async_add_publication_t **out);
 int tp_client_async_add_publication_poll(
-    aeron_publication_t **publication,
-    aeron_async_add_publication_t *async_add);
+    tp_publication_t **publication,
+    tp_async_add_publication_t *async_add);
+int64_t tp_client_async_add_publication_registration_id(const tp_async_add_publication_t *async_add);
 
 int tp_client_async_add_subscription(
     tp_client_t *client,
     const char *channel,
     int32_t stream_id,
-    aeron_on_available_image_t on_available,
-    void *available_clientd,
-    aeron_on_unavailable_image_t on_unavailable,
-    void *unavailable_clientd,
-    aeron_async_add_subscription_t **out);
+    tp_async_add_subscription_t **out);
 int tp_client_async_add_subscription_poll(
-    aeron_subscription_t **subscription,
-    aeron_async_add_subscription_t *async_add);
+    tp_subscription_t **subscription,
+    tp_async_add_subscription_t *async_add);
+int64_t tp_client_async_add_subscription_registration_id(const tp_async_add_subscription_t *async_add);
 ```
 
 Apps should not call Aeron APIs directly; they use TensorPool wrappers.
+Registration IDs return `TP_NULL_REGISTRATION_ID` until Aeron assigns one.
+
+Channel/stream metadata is exposed without Aeron types:
+
+```c
+const char *tp_publication_channel(const tp_publication_t *pub);
+int32_t tp_publication_stream_id(const tp_publication_t *pub);
+const char *tp_subscription_channel(const tp_subscription_t *sub);
+int32_t tp_subscription_stream_id(const tp_subscription_t *sub);
+```
 
 ### 3.3 Common enums (no SBE leakage)
 
@@ -124,6 +133,9 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 int tp_driver_keepalive(tp_driver_client_t *driver, uint64_t timestamp_ns);
 int tp_driver_detach_async(tp_driver_client_t *driver, tp_async_detach_t **out);
 int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out);
+int64_t tp_driver_attach_async_correlation_id(const tp_async_attach_t *async);
+uint32_t tp_driver_attach_async_client_id(const tp_async_attach_t *async);
+int64_t tp_driver_detach_async_correlation_id(const tp_async_detach_t *async);
 
 // Event poller (lease revoked / shutdown / detach response)
 typedef struct tp_driver_event_poller_stct tp_driver_event_poller_t;
@@ -134,6 +146,7 @@ int tp_driver_event_poll(tp_driver_event_poller_t *poller, int fragment_limit);
 Notes:
 - Keepalive should reference stored lease/stream/client/role state in `tp_driver_client_t` to reduce boilerplate.
 - Async API mirrors Aeron add semantics and avoids blocking.
+- Async correlation IDs are exposed for diagnostics and tracing.
 
 ## 5. Producer API (Aeron-like)
 

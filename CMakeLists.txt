@@ -287,6 +287,7 @@ target_include_directories(tensor_pool
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
     PRIVATE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/src/common>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/src/internal>"
 )
 
 target_link_libraries(tensor_pool PUBLIC ${AERON_TARGET})
@@ -358,6 +359,7 @@ add_executable(tensor_pool_tests
     tests/test_tp_supervisor.c)
 target_link_libraries(tensor_pool_tests PRIVATE tensor_pool ${AERON_TARGET})
 target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/common")
+target_include_directories(tensor_pool_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src/internal")
 target_compile_definitions(tensor_pool_tests PRIVATE TP_TESTING=1)
 target_compile_definitions(tensor_pool PRIVATE TP_TESTING=1)
 if (TARGET aeron::aeron_driver_static)
@@ -424,7 +426,9 @@ target_link_libraries(tp_example_producer_nodriver PRIVATE tensor_pool tp_exampl
 target_link_libraries(tp_example_consumer_driver PRIVATE tensor_pool tp_example_util)
 target_link_libraries(tp_example_consumer_nodriver PRIVATE tensor_pool tp_example_util)
 target_link_libraries(tp_example_join_barrier PRIVATE tensor_pool tp_example_util)
-set(TP_INTERNAL_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/src/common")
+set(TP_INTERNAL_INCLUDE_DIR
+    "${CMAKE_CURRENT_LIST_DIR}/src/common"
+    "${CMAKE_CURRENT_LIST_DIR}/src/internal")
 target_include_directories(tp_example_producer_driver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 target_include_directories(tp_example_producer_nodriver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")
 target_include_directories(tp_example_consumer_driver PRIVATE "${TP_INTERNAL_INCLUDE_DIR}")

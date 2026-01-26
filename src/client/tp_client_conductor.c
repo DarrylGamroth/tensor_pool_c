@@ -373,7 +373,7 @@ static void tp_client_conductor_poll_pending(tp_client_conductor_t *conductor)
             TP_SET_ERR(aeron_errcode(), "tp_client_conductor_add_publication_poll: %s", aeron_errmsg());
             tp_async_publication_fail(async);
         }
-        else if (tp_publication_wrap(&async->publication, raw_pub) < 0)
+        else if (tp_publication_wrap(&async->publication, raw_pub, async->channel, async->stream_id) < 0)
         {
             aeron_publication_close(raw_pub, NULL, NULL);
             tp_async_publication_fail(async);
@@ -405,7 +405,7 @@ static void tp_client_conductor_poll_pending(tp_client_conductor_t *conductor)
             TP_SET_ERR(aeron_errcode(), "tp_client_conductor_add_subscription_poll: %s", aeron_errmsg());
             tp_async_subscription_fail(async);
         }
-        else if (tp_subscription_wrap(&async->subscription, raw_sub) < 0)
+        else if (tp_subscription_wrap(&async->subscription, raw_sub, async->channel, async->stream_id) < 0)
         {
             aeron_subscription_close(raw_sub, NULL, NULL);
             tp_async_subscription_fail(async);

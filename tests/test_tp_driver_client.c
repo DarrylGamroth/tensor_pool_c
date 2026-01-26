@@ -1095,6 +1095,49 @@ static void test_driver_id_generators(void)
     assert(client_a != client_b);
 }
 
+static void test_driver_async_accessors(void)
+{
+    tp_driver_client_t client;
+    tp_async_attach_t *attach_async = NULL;
+    tp_async_detach_t *detach_async = NULL;
+    tp_driver_attach_request_t request;
+    int result = -1;
+
+    memset(&client, 0, sizeof(client));
+    memset(&request, 0, sizeof(request));
+
+    request.stream_id = 1;
+    request.role = tensor_pool_role_PRODUCER;
+
+    if (tp_driver_attach_async(&client, &request, &attach_async) < 0 || NULL == attach_async)
+    {
+        goto cleanup;
+    }
+
+    assert(tp_driver_attach_async_correlation_id(attach_async) == attach_async->request.correlation_id);
+    assert(tp_driver_attach_async_client_id(attach_async) == attach_async->request.client_id);
+
+    if (tp_driver_detach_async(&client, &detach_async) < 0 || NULL == detach_async)
+    {
+        goto cleanup;
+    }
+
+    assert(tp_driver_detach_async_correlation_id(detach_async) == detach_async->response.correlation_id);
+
+    result = 0;
+
+cleanup:
+    if (attach_async)
+    {
+        aeron_free(attach_async);
+    }
+    if (detach_async)
+    {
+        aeron_free(detach_async);
+    }
+    assert(result == 0);
+}
+
 void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
@@ -1120,5 +1163,6 @@ void tp_test_driver_client_decoders(void)
     test_driver_client_init_errors();
     test_driver_client_async_errors();
     test_driver_attach_async_normalizes_ids();
+    test_driver_async_accessors();
     test_driver_id_generators();
 }

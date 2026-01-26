@@ -13,6 +13,7 @@
 #include "tensor_pool/tp_error.h"
 #include "tensor_pool/tp_types.h"
 #include "tensor_pool/internal/tp_context.h"
+#include "tensor_pool/internal/tp_aeron.h"
 
 #include "tp_aeron_wrap.h"
 

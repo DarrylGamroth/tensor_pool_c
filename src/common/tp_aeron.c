@@ -106,7 +106,7 @@ int tp_aeron_add_publication(
         {
             return -1;
         }
-        if (raw_pub && tp_publication_wrap(pub, raw_pub) < 0)
+        if (raw_pub && tp_publication_wrap(pub, raw_pub, channel, stream_id) < 0)
         {
             aeron_publication_close(raw_pub, NULL, NULL);
             return -1;
@@ -156,7 +156,7 @@ int tp_aeron_add_subscription(
         {
             return -1;
         }
-        if (raw_sub && tp_subscription_wrap(sub, raw_sub) < 0)
+        if (raw_sub && tp_subscription_wrap(sub, raw_sub, channel, stream_id) < 0)
         {
             aeron_subscription_close(raw_sub, NULL, NULL);
             return -1;
@@ -185,6 +185,26 @@ int32_t tp_publication_stream_id(const tp_publication_t *pub)
     }
 
     return aeron_publication_stream_id(tp_publication_handle((tp_publication_t *)pub));
+}
+
+const char *tp_subscription_channel(const tp_subscription_t *sub)
+{
+    if (NULL == sub)
+    {
+        return NULL;
+    }
+
+    return sub->channel;
+}
+
+int32_t tp_subscription_stream_id(const tp_subscription_t *sub)
+{
+    if (NULL == sub)
+    {
+        return -1;
+    }
+
+    return sub->stream_id;
 }
 
 int64_t tp_publication_channel_status(const tp_publication_t *pub)

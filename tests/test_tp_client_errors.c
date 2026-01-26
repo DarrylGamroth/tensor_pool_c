@@ -1,5 +1,6 @@
 #include "tensor_pool/internal/tp_client_internal.h"
 #include "tensor_pool/internal/tp_driver_client_internal.h"
+#include "tensor_pool/tp_types.h"
 
 #include <assert.h>
 #include <string.h>
@@ -58,9 +59,11 @@ static void test_client_async_add_nulls(void)
 
     assert(tp_client_async_add_publication(&client, NULL, 10, &pub) < 0);
     assert(tp_client_async_add_publication(&client, "aeron:ipc", 10, NULL) < 0);
+    assert(tp_client_async_add_publication_registration_id(NULL) == TP_NULL_REGISTRATION_ID);
 
     assert(tp_client_async_add_subscription(&client, NULL, 10, &sub) < 0);
     assert(tp_client_async_add_subscription(&client, "aeron:ipc", 10, NULL) < 0);
+    assert(tp_client_async_add_subscription_registration_id(NULL) == TP_NULL_REGISTRATION_ID);
 }
 
 void tp_test_client_errors(void)

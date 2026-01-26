@@ -54,6 +54,7 @@ int32_t tp_context_get_control_stream_id(const tp_context_t *context);
 int32_t tp_context_get_announce_stream_id(const tp_context_t *context);
 int32_t tp_context_get_qos_stream_id(const tp_context_t *context);
 int32_t tp_context_get_metadata_stream_id(const tp_context_t *context);
+int tp_context_set_default_channels(tp_context_t *context, const char *channel, int32_t announce_stream_id);
 void tp_context_set_allowed_paths(tp_context_t *context, const char **paths, size_t length);
 void tp_context_set_driver_timeout_ns(tp_context_t *context, uint64_t value);
 uint64_t tp_context_get_driver_timeout_ns(const tp_context_t *context);

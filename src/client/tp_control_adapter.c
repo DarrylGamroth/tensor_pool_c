@@ -1060,7 +1060,7 @@ int tp_control_subscription_init(
         {
             return -1;
         }
-        if (raw_sub && tp_subscription_wrap(&control->subscription, raw_sub) < 0)
+        if (raw_sub && tp_subscription_wrap(&control->subscription, raw_sub, channel, stream_id) < 0)
         {
             aeron_subscription_close(raw_sub, NULL, NULL);
             return -1;

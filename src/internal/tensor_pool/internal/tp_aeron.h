@@ -6,17 +6,11 @@
 
 #include "tensor_pool/tp_context.h"
 #include "tensor_pool/tp_handles.h"
+#include "tensor_pool/common/tp_aeron_client.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct tp_aeron_client_stct
-{
-    void *context;
-    void *aeron;
-}
-tp_aeron_client_t;
 
 int tp_aeron_client_init(tp_aeron_client_t *client, const tp_context_t *context);
 int tp_aeron_client_close(tp_aeron_client_t *client);

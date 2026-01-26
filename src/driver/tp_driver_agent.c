@@ -29,15 +29,22 @@ int tp_driver_agent_init(tp_driver_agent_t *agent, tp_driver_t *driver, uint64_t
     memset(agent, 0, sizeof(*agent));
     agent->driver = driver;
 
-    if (tp_agent_runner_init(
-            &agent->runner,
-            "tp-driver",
-            driver,
-            tp_driver_agent_do_work_adapter,
-            NULL,
-            idle_sleep_ns) < 0)
     {
-        return -1;
+        tp_agent_idle_strategy_config_t config;
+        memset(&config, 0, sizeof(config));
+        config.sleep_ns = idle_sleep_ns;
+
+        if (tp_agent_runner_init(
+                &agent->runner,
+                "tp-driver",
+                driver,
+                tp_driver_agent_do_work_adapter,
+                NULL,
+                TP_AGENT_IDLE_SLEEPING,
+                &config) < 0)
+        {
+            return -1;
+        }
     }
 
     return 0;
