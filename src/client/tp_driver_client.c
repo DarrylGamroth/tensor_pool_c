@@ -920,6 +920,81 @@ int tp_driver_attach_async(
     return 0;
 }
 
+int tp_driver_attach_request_init(tp_driver_attach_request_t *request, uint32_t stream_id, uint8_t role)
+{
+    if (NULL == request)
+    {
+        TP_SET_ERR(EINVAL, "%s", "tp_driver_attach_request_init: null request");
+        return -1;
+    }
+
+    memset(request, 0, sizeof(*request));
+    request->stream_id = stream_id;
+    request->role = role;
+    request->expected_layout_version = TP_LAYOUT_VERSION;
+    request->publish_mode = TP_PUBLISH_MODE_EXISTING_OR_CREATE;
+    request->require_hugepages = TP_HUGEPAGES_UNSPECIFIED;
+    request->desired_node_id = TP_NULL_U32;
+    return 0;
+}
+
+void tp_driver_attach_request_set_client_id(tp_driver_attach_request_t *request, uint32_t client_id)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+    request->client_id = client_id;
+}
+
+void tp_driver_attach_request_set_publish_mode(tp_driver_attach_request_t *request, uint8_t mode)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+    request->publish_mode = mode;
+}
+
+void tp_driver_attach_request_set_expected_layout_version(tp_driver_attach_request_t *request, uint32_t version)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+    request->expected_layout_version = version;
+}
+
+void tp_driver_attach_request_set_hugepages(tp_driver_attach_request_t *request, uint8_t policy)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+    request->require_hugepages = policy;
+}
+
+void tp_driver_attach_request_set_desired_node_id(tp_driver_attach_request_t *request, uint32_t node_id)
+{
+    if (NULL == request)
+    {
+        return;
+    }
+    request->desired_node_id = node_id;
+}
+
+int tp_driver_attach_async_simple(tp_driver_client_t *client, uint32_t stream_id, uint8_t role, tp_async_attach_t **out)
+{
+    tp_driver_attach_request_t request;
+
+    if (tp_driver_attach_request_init(&request, stream_id, role) < 0)
+    {
+        return -1;
+    }
+
+    return tp_driver_attach_async(client, &request, out);
+}
+
 int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out)
 {
     int fragments;

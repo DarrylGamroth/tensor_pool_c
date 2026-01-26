@@ -1151,6 +1151,33 @@ static void test_driver_attach_errors(void)
     assert(tp_driver_attach((tp_driver_client_t *)1, &request, NULL, 0) < 0);
 }
 
+static void test_driver_attach_request_builder(void)
+{
+    tp_driver_attach_request_t request;
+
+    assert(tp_driver_attach_request_init(NULL, 1, TP_ROLE_PRODUCER) < 0);
+    assert(tp_driver_attach_request_init(&request, 10, TP_ROLE_PRODUCER) == 0);
+    assert(request.stream_id == 10);
+    assert(request.role == TP_ROLE_PRODUCER);
+    assert(request.client_id == 0);
+    assert(request.expected_layout_version == TP_LAYOUT_VERSION);
+    assert(request.publish_mode == TP_PUBLISH_MODE_EXISTING_OR_CREATE);
+    assert(request.require_hugepages == TP_HUGEPAGES_UNSPECIFIED);
+    assert(request.desired_node_id == TP_NULL_U32);
+
+    tp_driver_attach_request_set_client_id(&request, 42);
+    tp_driver_attach_request_set_publish_mode(&request, TP_PUBLISH_MODE_REQUIRE_EXISTING);
+    tp_driver_attach_request_set_expected_layout_version(&request, 3);
+    tp_driver_attach_request_set_hugepages(&request, TP_HUGEPAGES_HUGEPAGES);
+    tp_driver_attach_request_set_desired_node_id(&request, 99);
+
+    assert(request.client_id == 42);
+    assert(request.publish_mode == TP_PUBLISH_MODE_REQUIRE_EXISTING);
+    assert(request.expected_layout_version == 3);
+    assert(request.require_hugepages == TP_HUGEPAGES_HUGEPAGES);
+    assert(request.desired_node_id == 99);
+}
+
 void tp_test_driver_client_decoders(void)
 {
     test_decode_attach_response_valid();
@@ -1179,4 +1206,5 @@ void tp_test_driver_client_decoders(void)
     test_driver_async_accessors();
     test_driver_id_generators();
     test_driver_attach_errors();
+    test_driver_attach_request_builder();
 }

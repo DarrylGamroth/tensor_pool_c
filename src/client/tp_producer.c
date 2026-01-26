@@ -615,6 +615,29 @@ int tp_producer_context_init(tp_producer_context_t *ctx)
     return 0;
 }
 
+int tp_producer_context_init_default(tp_producer_context_t *ctx, uint32_t stream_id, uint32_t producer_id, bool use_driver)
+{
+    if (tp_producer_context_init(ctx) < 0)
+    {
+        return -1;
+    }
+
+    ctx->stream_id = stream_id;
+    ctx->producer_id = producer_id;
+    ctx->use_driver = use_driver;
+    ctx->use_conductor_polling = false;
+
+    if (use_driver)
+    {
+        if (tp_driver_attach_request_init(&ctx->driver_request, stream_id, TP_ROLE_PRODUCER) < 0)
+        {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 void tp_producer_context_set_use_conductor_polling(tp_producer_context_t *ctx, bool enabled)
 {
     if (NULL == ctx)
@@ -1085,6 +1108,23 @@ cleanup:
         tp_producer_close(instance);
     }
     return result;
+}
+
+int tp_producer_init_simple(
+    tp_producer_t **producer,
+    tp_client_t *client,
+    uint32_t stream_id,
+    uint32_t producer_id,
+    bool use_driver)
+{
+    tp_producer_context_t ctx;
+
+    if (tp_producer_context_init_default(&ctx, stream_id, producer_id, use_driver) < 0)
+    {
+        return -1;
+    }
+
+    return tp_producer_init(producer, client, &ctx);
 }
 
 static int tp_producer_attach_config(tp_producer_t *producer, const tp_producer_config_t *config)

@@ -121,3 +121,14 @@ These wrappers simply pass `consumer` as the `clientd` argument.
 - Removing the low‑level APIs (we keep them for power users and tests).
 - Changing async poll semantics (remain `0/1/-1`).
 - Hiding `void *clientd` from the callback model (we add helpers instead).
+
+## Implementation Notes (Completed)
+
+Implemented convenience helpers:
+- `tp_driver_attach_request_init` + setters (`tp_driver_attach_request_set_*`) and `tp_driver_attach_async_simple`.
+- `tp_consumer_context_init_default`, `tp_consumer_init_simple`.
+- `tp_producer_context_init_default`, `tp_producer_init_simple`.
+- `tp_consumer_set_descriptor_handler_self`, `tp_consumer_set_progress_handler_self`.
+
+Follow-up:
+- Update `docs/C_CLIENT_API_USAGE.md` to showcase the new helpers first. (done)

@@ -1,4 +1,6 @@
 #include "tensor_pool/tp_client.h"
+#include "tensor_pool/tp_consumer.h"
+#include "tensor_pool/tp_producer.h"
 #include "tensor_pool/tp_log.h"
 
 #include "aeronc.h"
@@ -134,4 +136,39 @@ void tp_test_client_context_setters(void)
     assert(tp_context_get_use_agent_invoker(ctx));
 
     assert(tp_context_close(ctx) == 0);
+
+    {
+        tp_consumer_context_t consumer_ctx;
+        tp_producer_context_t producer_ctx;
+
+        assert(tp_consumer_context_init_default(&consumer_ctx, 100, 7, true) == 0);
+        assert(consumer_ctx.stream_id == 100);
+        assert(consumer_ctx.consumer_id == 7);
+        assert(consumer_ctx.use_driver);
+        assert(!consumer_ctx.use_conductor_polling);
+        assert(consumer_ctx.driver_request.stream_id == 100);
+        assert(consumer_ctx.driver_request.role == TP_ROLE_CONSUMER);
+        assert(consumer_ctx.driver_request.expected_layout_version == TP_LAYOUT_VERSION);
+        assert(consumer_ctx.driver_request.publish_mode == TP_PUBLISH_MODE_EXISTING_OR_CREATE);
+
+        assert(tp_consumer_context_init_default(&consumer_ctx, 101, 8, false) == 0);
+        assert(consumer_ctx.stream_id == 101);
+        assert(consumer_ctx.consumer_id == 8);
+        assert(!consumer_ctx.use_driver);
+
+        assert(tp_producer_context_init_default(&producer_ctx, 200, 9, true) == 0);
+        assert(producer_ctx.stream_id == 200);
+        assert(producer_ctx.producer_id == 9);
+        assert(producer_ctx.use_driver);
+        assert(!producer_ctx.use_conductor_polling);
+        assert(producer_ctx.driver_request.stream_id == 200);
+        assert(producer_ctx.driver_request.role == TP_ROLE_PRODUCER);
+        assert(producer_ctx.driver_request.expected_layout_version == TP_LAYOUT_VERSION);
+        assert(producer_ctx.driver_request.publish_mode == TP_PUBLISH_MODE_EXISTING_OR_CREATE);
+
+        assert(tp_producer_context_init_default(&producer_ctx, 201, 10, false) == 0);
+        assert(producer_ctx.stream_id == 201);
+        assert(producer_ctx.producer_id == 10);
+        assert(!producer_ctx.use_driver);
+    }
 }

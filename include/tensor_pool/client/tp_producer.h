@@ -115,6 +115,7 @@ typedef struct tp_frame_progress_stct
 tp_frame_progress_t;
 
 int tp_producer_context_init(tp_producer_context_t *ctx);
+int tp_producer_context_init_default(tp_producer_context_t *ctx, uint32_t stream_id, uint32_t producer_id, bool use_driver);
 void tp_producer_context_set_use_conductor_polling(tp_producer_context_t *ctx, bool enabled);
 void tp_producer_context_set_fixed_pool_mode(tp_producer_context_t *ctx, bool enabled);
 void tp_producer_context_set_drop_unconnected_descriptors(tp_producer_context_t *ctx, bool enabled);
@@ -128,6 +129,12 @@ void tp_producer_context_set_payload_flush(
     void *clientd);
 
 int tp_producer_init(tp_producer_t **producer, tp_client_t *client, const tp_producer_context_t *ctx);
+int tp_producer_init_simple(
+    tp_producer_t **producer,
+    tp_client_t *client,
+    uint32_t stream_id,
+    uint32_t producer_id,
+    bool use_driver);
 int tp_producer_attach(tp_producer_t *producer, const tp_producer_config_t *config);
 int64_t tp_producer_offer_frame(tp_producer_t *producer, const tp_frame_t *frame, tp_frame_metadata_t *meta);
 int64_t tp_producer_try_claim(tp_producer_t *producer, size_t length, tp_buffer_claim_t *claim);

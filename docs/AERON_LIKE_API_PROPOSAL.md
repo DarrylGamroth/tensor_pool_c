@@ -664,10 +664,8 @@ tp_async_attach_t *attach_async = NULL;
 tp_driver_attach_info_t attach_info;
 
 tp_driver_client_init(&driver, &client);
-tp_driver_attach_request_init(&attach_req);
-attach_req.client_id = 42;
-attach_req.stream_id = consumer_ctx.stream_id;
-attach_req.role = TP_ROLE_CONSUMER;
+tp_driver_attach_request_init(&attach_req, consumer_ctx.stream_id, TP_ROLE_CONSUMER);
+tp_driver_attach_request_set_client_id(&attach_req, 42);
 
 tp_driver_attach_async(&driver, &attach_req, &attach_async);
 while (tp_driver_attach_poll(attach_async, &attach_info) == 0)

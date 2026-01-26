@@ -146,6 +146,15 @@ int tp_driver_attach_poll(tp_async_attach_t *async, tp_driver_attach_info_t *out
 int64_t tp_driver_attach_async_correlation_id(const tp_async_attach_t *async);
 uint32_t tp_driver_attach_async_client_id(const tp_async_attach_t *async);
 
+int tp_driver_attach_request_init(tp_driver_attach_request_t *request, uint32_t stream_id, uint8_t role);
+void tp_driver_attach_request_set_client_id(tp_driver_attach_request_t *request, uint32_t client_id);
+void tp_driver_attach_request_set_publish_mode(tp_driver_attach_request_t *request, uint8_t mode);
+void tp_driver_attach_request_set_expected_layout_version(tp_driver_attach_request_t *request, uint32_t version);
+void tp_driver_attach_request_set_hugepages(tp_driver_attach_request_t *request, uint8_t policy);
+void tp_driver_attach_request_set_desired_node_id(tp_driver_attach_request_t *request, uint32_t node_id);
+
+int tp_driver_attach_async_simple(tp_driver_client_t *client, uint32_t stream_id, uint8_t role, tp_async_attach_t **out);
+
 int tp_driver_detach_async(tp_driver_client_t *client, tp_async_detach_t **out);
 int tp_driver_detach_poll(tp_async_detach_t *async, tp_driver_detach_info_t *out);
 int64_t tp_driver_detach_async_correlation_id(const tp_async_detach_t *async);

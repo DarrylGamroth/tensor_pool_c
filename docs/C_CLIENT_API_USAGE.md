@@ -171,6 +171,18 @@ tp_driver_client_close(driver);
 
 The async poll returns `0` until complete, `1` on success, and `-1` on error. The blocking wrapper `tp_driver_attach` is a convenience helper built on top of the async calls.
 
+Convenience builder and simple async variant:
+
+```c
+tp_driver_attach_request_t req;
+tp_driver_attach_request_init(&req, 10000, TP_ROLE_CONSUMER);
+tp_driver_attach_request_set_client_id(&req, 42);
+
+tp_driver_attach_async(driver, &req, &async);
+// or:
+tp_driver_attach_async_simple(driver, 10000, TP_ROLE_CONSUMER, &async);
+```
+
 ### 2.2 Driver Attach Helpers (Producer/Consumer Config)
 
 ```c
@@ -230,7 +242,7 @@ consumer_ctx.hello.descriptor_channel = "aeron:ipc";
 consumer_ctx.hello.descriptor_stream_id = 31001;
 
 tp_consumer_init(&consumer, client, &consumer_ctx);
-tp_consumer_set_descriptor_handler(consumer, on_descriptor, consumer);
+tp_consumer_set_descriptor_handler_self(consumer, on_descriptor);
 
 while (running)
 {
@@ -252,6 +264,13 @@ if (tp_consumer_reattach_due(consumer, (uint64_t)tp_clock_now_ns()))
 {
     tp_consumer_attach(consumer, NULL);
 }
+```
+
+Simplified init (no custom channels):
+
+```c
+tp_consumer_init_simple(&consumer, client, 10000, 42, true);
+tp_consumer_set_descriptor_handler_self(consumer, on_descriptor);
 ```
 
 ## 4. Producer: Driver Model
@@ -292,6 +311,12 @@ Notes:
 - `tp_frame_metadata_t.timestamp_ns` is capture time for `SlotHeader.timestamp_ns`. If it is `0` or `TP_NULL_U64`, the producer fills `SlotHeader.timestamp_ns` with `tp_clock_now_ns()`.
 - `FrameDescriptor.timestamp_ns` is null by default. Enable publish-time timestamps with `tp_producer_context_set_publish_descriptor_timestamp(&prod_ctx, true)` when needed.
 - For async driver attach, the correlation ID is available via `tp_driver_attach_async_correlation_id`.
+
+Simplified init (no custom channels):
+
+```c
+tp_producer_init_simple(&producer, client, 10000, 7, true);
+```
 
 ## 5. Zero-Copy Try-Claim
 
@@ -513,7 +538,7 @@ static void on_progress(void *clientd, const tp_frame_progress_t *evt)
     // Handle progress update.
 }
 
-tp_consumer_set_progress_handler(consumer, on_progress, NULL);
+tp_consumer_set_progress_handler_self(consumer, on_progress);
 tp_consumer_poll_progress(consumer, 10);
 ```
 

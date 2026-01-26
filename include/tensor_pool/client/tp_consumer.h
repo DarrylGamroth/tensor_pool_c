@@ -93,13 +93,21 @@ typedef struct tp_frame_view_stct
 tp_frame_view_t;
 
 int tp_consumer_context_init(tp_consumer_context_t *ctx);
+int tp_consumer_context_init_default(tp_consumer_context_t *ctx, uint32_t stream_id, uint32_t consumer_id, bool use_driver);
 void tp_consumer_context_set_use_conductor_polling(tp_consumer_context_t *ctx, bool enabled);
 int tp_consumer_init(tp_consumer_t **consumer, tp_client_t *client, const tp_consumer_context_t *context);
+int tp_consumer_init_simple(
+    tp_consumer_t **consumer,
+    tp_client_t *client,
+    uint32_t stream_id,
+    uint32_t consumer_id,
+    bool use_driver);
 int tp_consumer_attach(tp_consumer_t *consumer, const tp_consumer_config_t *config);
 void tp_consumer_schedule_reattach(tp_consumer_t *consumer, uint64_t now_ns);
 int tp_consumer_reattach_due(const tp_consumer_t *consumer, uint64_t now_ns);
 void tp_consumer_clear_reattach(tp_consumer_t *consumer);
 void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler, void *clientd);
+void tp_consumer_set_descriptor_handler_self(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler);
 int tp_consumer_read_frame(tp_consumer_t *consumer, uint64_t seq, tp_frame_view_t *out);
 int tp_consumer_validate_progress(const tp_consumer_t *consumer, const tp_frame_progress_t *progress);
 int tp_consumer_get_drop_counts(const tp_consumer_t *consumer, uint64_t *drops_gap, uint64_t *drops_late, uint64_t *last_seq_seen);
@@ -108,6 +116,7 @@ int tp_consumer_attach_driver_poll(tp_consumer_t *consumer, tp_async_attach_t *a
 int tp_consumer_poll_descriptors(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_poll_control(tp_consumer_t *consumer, int fragment_limit);
 int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_handler_t handler, void *clientd);
+void tp_consumer_set_progress_handler_self(tp_consumer_t *consumer, tp_frame_progress_handler_t handler);
 int tp_consumer_poll_progress(tp_consumer_t *consumer, int fragment_limit);
 tp_subscription_t *tp_consumer_descriptor_subscription(tp_consumer_t *consumer);
 tp_subscription_t *tp_consumer_control_subscription(tp_consumer_t *consumer);

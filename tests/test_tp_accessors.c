@@ -71,9 +71,28 @@ static void test_driver_client_accessors(void)
     assert(tp_driver_client_publication(&driver) == publication);
 }
 
+static void test_consumer_handler_helpers(void)
+{
+    tp_consumer_t consumer;
+    tp_frame_descriptor_handler_t descriptor_handler = (tp_frame_descriptor_handler_t)0x1;
+    tp_frame_progress_handler_t progress_handler = (tp_frame_progress_handler_t)0x2;
+
+    memset(&consumer, 0, sizeof(consumer));
+    tp_consumer_set_descriptor_handler_self(&consumer, descriptor_handler);
+    assert(consumer.descriptor_handler == descriptor_handler);
+    assert(consumer.descriptor_clientd == &consumer);
+
+    consumer.client = (tp_client_t *)0x1;
+    consumer.progress_poller_initialized = true;
+    tp_consumer_set_progress_handler_self(&consumer, progress_handler);
+    assert(consumer.progress_handler == progress_handler);
+    assert(consumer.progress_clientd == &consumer);
+}
+
 void tp_test_accessors(void)
 {
     test_producer_accessors();
     test_consumer_accessors();
     test_driver_client_accessors();
+    test_consumer_handler_helpers();
 }

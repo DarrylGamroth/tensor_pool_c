@@ -910,6 +910,29 @@ int tp_consumer_context_init(tp_consumer_context_t *ctx)
     return 0;
 }
 
+int tp_consumer_context_init_default(tp_consumer_context_t *ctx, uint32_t stream_id, uint32_t consumer_id, bool use_driver)
+{
+    if (tp_consumer_context_init(ctx) < 0)
+    {
+        return -1;
+    }
+
+    ctx->stream_id = stream_id;
+    ctx->consumer_id = consumer_id;
+    ctx->use_driver = use_driver;
+    ctx->use_conductor_polling = false;
+
+    if (use_driver)
+    {
+        if (tp_driver_attach_request_init(&ctx->driver_request, stream_id, TP_ROLE_CONSUMER) < 0)
+        {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 void tp_consumer_context_set_use_conductor_polling(tp_consumer_context_t *ctx, bool enabled)
 {
     if (NULL == ctx)
@@ -1022,6 +1045,11 @@ void tp_consumer_set_descriptor_handler(tp_consumer_t *consumer, tp_frame_descri
     consumer->descriptor_clientd = clientd;
 }
 
+void tp_consumer_set_descriptor_handler_self(tp_consumer_t *consumer, tp_frame_descriptor_handler_t handler)
+{
+    tp_consumer_set_descriptor_handler(consumer, handler, consumer);
+}
+
 static int tp_consumer_poll_descriptors_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client);
 static int tp_consumer_poll_control_internal(tp_consumer_t *consumer, int fragment_limit, bool drive_client);
 
@@ -1093,6 +1121,32 @@ int tp_consumer_set_progress_handler(tp_consumer_t *consumer, tp_frame_progress_
     consumer->progress_poller.handlers.clientd = clientd;
     tp_progress_poller_set_consumer(&consumer->progress_poller, consumer);
     return 0;
+}
+
+void tp_consumer_set_progress_handler_self(tp_consumer_t *consumer, tp_frame_progress_handler_t handler)
+{
+    if (NULL == consumer)
+    {
+        return;
+    }
+    tp_consumer_set_progress_handler(consumer, handler, consumer);
+}
+
+int tp_consumer_init_simple(
+    tp_consumer_t **consumer,
+    tp_client_t *client,
+    uint32_t stream_id,
+    uint32_t consumer_id,
+    bool use_driver)
+{
+    tp_consumer_context_t ctx;
+
+    if (tp_consumer_context_init_default(&ctx, stream_id, consumer_id, use_driver) < 0)
+    {
+        return -1;
+    }
+
+    return tp_consumer_init(consumer, client, &ctx);
 }
 
 int tp_consumer_poll_progress(tp_consumer_t *consumer, int fragment_limit)
